@@ -5,30 +5,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Run
 
 ```sh
-odin run game/        # build + run
-odin check game/      # type-check only (no binary)
+odin run src/game/        # build + run
+odin check src/game/      # type-check only (no binary)
 ```
 
 No test framework — verify by running the game.
 
 ## Architecture
 
-Odin lang, SDL3 (`vendor:sdl3`). Single package `game/` with engine subpackage `game/engine/`.
+Odin lang, SDL3 (`vendor:sdl3`). Main package `src/game/`, reusable engine package `src/engine/` (imported via `"../engine"`).
 
 ### File layout
 
 | File | Purpose |
 |---|---|
 | `PLAYER.md` | Mermaid `stateDiagram-v2` of the player FSM — **keep in sync** when adding/removing states or transitions |
-| `game/main.odin` | Constants, `Game_State` struct, game lifecycle (`init`/`clean`), loop, rendering, `world_to_screen`/`world_to_screen_point` camera helpers |
-| `game/player.odin` | `Player_State` enum, `Player_Sensor` struct, FSM handlers, movement & collision helpers |
-| `game/level.odin` | `Tile_Kind` enum, `Level` struct, BMP loading (`sdl.LoadBMP`), greedy collider merging, tile rendering |
-| `game/engine/camera.odin` | `Camera` struct, follow + clamp within level bounds |
-| `game/engine/window.odin` | SDL3 window/renderer init, VSync, logical presentation (aspect ratio from primary display) |
-| `game/engine/clock.odin` | Frame timing, fixed timestep accumulator, frame-rate cap via `sdl.Delay`, dt capped at 0.1s |
-| `game/engine/input.odin` | Keyboard + gamepad input with action bindings, `is_down`/`is_pressed`/`axis` |
-| `game/engine/collider.odin` | AABB overlap check (`collider_check_rect_vs_rect`), single-axis dynamic resolve (`collider_resolve_dynamic_rect`) |
-| `game/engine/fsm.odin` | Generic parametric FSM with enter/update/exit handlers, tracks `previous` state |
+| `src/game/main.odin` | Constants, `Game_State` struct, game lifecycle (`init`/`clean`), loop, rendering, `world_to_screen`/`world_to_screen_point` camera helpers |
+| `src/game/player.odin` | `Player_State` enum, `Player_Sensor` struct, FSM handlers, movement & collision helpers |
+| `src/game/level.odin` | `Tile_Kind` enum, `Level` struct, BMP loading (`sdl.LoadBMP`), greedy collider merging, tile rendering |
+| `src/engine/camera.odin` | `Camera` struct, follow + clamp within level bounds |
+| `src/engine/window.odin` | SDL3 window/renderer init, VSync, logical presentation (aspect ratio from primary display) |
+| `src/engine/clock.odin` | Frame timing, fixed timestep accumulator, frame-rate cap via `sdl.Delay`, dt capped at 0.1s |
+| `src/engine/input.odin` | Keyboard + gamepad input with action bindings, `is_down`/`is_pressed`/`axis` |
+| `src/engine/collider.odin` | AABB overlap check (`collider_check_rect_vs_rect`), single-axis dynamic resolve (`collider_resolve_dynamic_rect`) |
+| `src/engine/fsm.odin` | Generic parametric FSM with enter/update/exit handlers, tracks `previous` state |
 
 ### Game loop (`main.odin`)
 

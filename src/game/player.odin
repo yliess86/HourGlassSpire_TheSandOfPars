@@ -1,7 +1,7 @@
 package game
 
 import "core:math"
-import engine "engine"
+import engine "../engine"
 
 // Player constants (meters, m/s, m/s²)
 PLAYER_COLOR_GROUNDED: [3]u8 : {0, 150, 255} // blue (base)
@@ -82,32 +82,16 @@ player_sensor: Player_Sensor
 // -- Init & Update
 
 player_init :: proc() {
-	player_fsm.handlers[.Grounded] = {
-		update = grounded_update,
-	}
-	player_fsm.handlers[.Airborne] = {
-		update = airborne_update,
-	}
-	player_fsm.handlers[.Wall_Slide] = {
-		update = wall_slide_update,
-	}
-	player_fsm.handlers[.Wall_Run] = {
-		update = wall_run_update,
-	}
-	player_fsm.handlers[.Dashing] = {
-		update = dashing_update,
-	}
-	player_fsm.handlers[.Dropping] = {
-		update = dropping_update,
-	}
-	player_fsm.handlers[.Back_Wall_Run] = {
-		update = back_wall_run_update,
-	}
-	player_fsm.handlers[.Back_Wall_Climb] = {
-		update = back_wall_climb_update,
-	}
-	player_fsm.handlers[.Back_Wall_Slide] = {
-		update = back_wall_slide_update,
+	player_fsm.handlers = {
+		.Grounded = {update = grounded_update},
+		.Airborne = {update = airborne_update},
+		.Wall_Slide = {update = wall_slide_update},
+		.Wall_Run = {update = wall_run_update},
+		.Dashing = {update = dashing_update},
+		.Dropping = {update = dropping_update},
+		.Back_Wall_Run = {update = back_wall_run_update},
+		.Back_Wall_Climb = {update = back_wall_climb_update},
+		.Back_Wall_Slide = {update = back_wall_slide_update},
 	}
 	engine.fsm_init(&player_fsm, &game, Player_State.Grounded)
 }
@@ -282,8 +266,8 @@ player_query_env :: proc() {
 		if overlap_x > 0 &&
 		   overlap_y > 0 &&
 		   overlap_y <= overlap_x &&
-		   diff.y > 0 &&// overlapping
-		   game.player_vel.y <= 0 { 	// min-depth is Y (vertical contact, not wall)// player above collider// not moving upward
+		   diff.y > 0 &&
+		   game.player_vel.y <= 0 { 	// overlapping// min-depth is Y (vertical contact, not wall)// player above collider// not moving upward
 			on_solid_ground = true
 			break
 		}

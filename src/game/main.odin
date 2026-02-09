@@ -2,7 +2,7 @@ package game
 
 import "core:fmt"
 import "core:math"
-import engine "engine"
+import engine "../engine"
 import sdl "vendor:sdl3"
 
 // Resolution & Scaling
