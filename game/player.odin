@@ -46,6 +46,9 @@ PLAYER_BACK_RUN_COOLDOWN: f32 : 0.4 // seconds
 PLAYER_BACK_CLIMB_SPEED: f32 : 500.0 / PPM // same as side wall run
 PLAYER_BACK_CLIMB_DECAY: f32 : 3.0 // same decay rate
 PLAYER_BACK_SLIDE_SPEED: f32 : 100.0 / PPM // same as side wall slide
+PLAYER_SLOPE_UPHILL_FACTOR: f32 : 0.86
+PLAYER_SLOPE_DOWNHILL_FACTOR: f32 : 1.15
+PLAYER_SLOPE_SNAP: f32 : 3.0 / PPM
 
 Player_State :: enum u8 {
 	Grounded,
@@ -60,13 +63,15 @@ Player_State :: enum u8 {
 }
 
 Player_Sensor :: struct {
-	on_ground:     bool, // any upward surface (ground + platform)
+	on_ground:     bool, // any upward surface (ground + platform + slope)
 	on_platform:   bool, // surface is a platform (for drop-through)
 	in_platform:   bool, // overlapping any platform (for Dropping exit)
 	on_left_wall:  bool,
 	on_right_wall: bool,
 	on_wall:       bool,
 	on_back_wall:  bool, // overlapping a back wall collider
+	on_slope:      bool,
+	slope_dir:     f32, // +1 rises right, -1 rises left, 0 flat
 	wall_l_snap_x: f32, // inner edge X of detected left wall + PLAYER_SIZE/2
 	wall_r_snap_x: f32, // inner edge X of detected right wall - PLAYER_SIZE/2
 }
@@ -185,6 +190,25 @@ player_fixed_update :: proc(dt: f32) {
 		}
 	}
 
+	// ── 3c. Slope resolve ───────────────────────────────────────────
+	player_resolve_slopes()
+
+	// ── 3d. Re-resolve walls after slope push ───────────────────────
+	// Slope resolve may push player into adjacent wall colliders
+	player_sync_collider()
+	for &c in game.level.wall_colliders {
+		resolved, _ := engine.collider_resolve_dynamic_rect(
+			&game.player_collider,
+			c,
+			0, // no velocity — just fix overlap
+			0,
+		)
+		if resolved {
+			game.player_pos.x = game.player_collider.pos.x
+			game.player_vel.x = 0
+		}
+	}
+
 	// ── 4. Finalize ─────────────────────────────────────────────────
 	// Sensors (for next frame's FSM decisions)
 	player_query_env()
@@ -251,8 +275,15 @@ player_query_env :: proc() {
 
 	on_solid_ground := false
 	for c in game.level.ground_colliders {
-		hit := engine.collider_resolve_rect_vs_rect(ground_sensor, c)
-		if hit.is_hit && hit.normal.y > 0 && game.player_vel.y <= 0 {
+		diff := ground_sensor.pos - c.pos
+		half_sum := 0.5 * (ground_sensor.size + c.size)
+		overlap_x := half_sum.x - math.abs(diff.x)
+		overlap_y := half_sum.y - math.abs(diff.y)
+		if overlap_x > 0 &&
+		   overlap_y > 0 &&
+		   overlap_y <= overlap_x &&
+		   diff.y > 0 &&// overlapping
+		   game.player_vel.y <= 0 { 	// min-depth is Y (vertical contact, not wall)// player above collider// not moving upward
 			on_solid_ground = true
 			break
 		}
@@ -297,7 +328,12 @@ player_query_env :: proc() {
 		}
 	}
 
-	player_sensor.on_ground = on_solid_ground || player_sensor.on_platform
+	// Slope sensor — trust the resolve result (computed earlier this frame)
+	player_sensor.on_slope = game.player_on_slope
+	player_sensor.slope_dir = game.player_slope_dir
+
+	player_sensor.on_ground =
+		on_solid_ground || player_sensor.on_platform || player_sensor.on_slope
 
 	// Back wall sensor: overlap check with player collider
 	player_sensor.on_back_wall = false
@@ -310,6 +346,54 @@ player_query_env :: proc() {
 
 }
 
+player_resolve_slopes :: proc() {
+	game.player_on_slope = false
+
+	// Floor slopes
+	player_sync_collider()
+	for s in game.level.slope_colliders {
+		if !engine.collider_slope_is_floor(s) do continue
+		resolved, slope_dir := engine.collider_resolve_rect_vs_slope(&game.player_collider, s)
+		if resolved {
+			game.player_pos.y = game.player_collider.pos.y - PLAYER_SIZE / 2
+			if game.player_vel.y < 0 do game.player_vel.y = 0
+			game.player_on_slope = true
+			game.player_slope_dir = slope_dir
+		}
+	}
+
+	// Ceiling slopes (re-sync after floor push)
+	player_sync_collider()
+	for s in game.level.slope_colliders {
+		if engine.collider_slope_is_floor(s) do continue
+		resolved, _ := engine.collider_resolve_rect_vs_slope(&game.player_collider, s)
+		if resolved {
+			game.player_pos.y = game.player_collider.pos.y - PLAYER_SIZE / 2
+			if game.player_vel.y > 0 do game.player_vel.y = 0
+		}
+	}
+
+	// Downhill snap: if slightly above a slope and not rising, snap down
+	if !game.player_on_slope && game.player_vel.y <= 0 {
+		for s in game.level.slope_colliders {
+			if !engine.collider_slope_is_floor(s) do continue
+			half_w := PLAYER_SIZE / 2
+			if game.player_pos.x + half_w < s.base_x || game.player_pos.x - half_w > s.base_x + s.span do continue
+			sample_x :=
+				game.player_pos.x + half_w if s.kind == .Right else game.player_pos.x - half_w
+			surface_y := engine.collider_slope_surface_y(s, sample_x)
+			gap := game.player_pos.y - surface_y
+			if gap > 0 && gap < PLAYER_SLOPE_SNAP {
+				game.player_pos.y = surface_y
+				player_sync_collider()
+				if game.player_vel.y < 0 do game.player_vel.y = 0
+				game.player_on_slope = true
+				game.player_slope_dir = 1 if s.kind == .Right else -1
+				break
+			}
+		}
+	}
+}
 
 player_check_dash :: proc() -> bool {
 	if game.input.is_pressed[.DASH] && game.player_dash_cooldown_timer <= 0 {
@@ -377,7 +461,18 @@ player_get_color :: proc() -> [3]u8 {
 // - Airborne: !on_ground (fell off edge)
 grounded_update :: proc(ctx: ^Game_State, dt: f32) -> Maybe(Player_State) {
 	player_apply_movement(dt)
-	ctx.player_vel.y = 0 // stay flush — no gravity dip while grounded
+
+	// Slope speed modifiers
+	if player_sensor.on_slope {
+		moving_uphill := math.sign(ctx.player_vel.x) == player_sensor.slope_dir
+		if moving_uphill {
+			ctx.player_vel.x *= PLAYER_SLOPE_UPHILL_FACTOR
+		} else if ctx.player_vel.x != 0 {
+			ctx.player_vel.x *= PLAYER_SLOPE_DOWNHILL_FACTOR
+		}
+	}
+
+	ctx.player_vel.y = 0 // stay flush — slope snap handles downhill contact
 	ctx.player_wall_run_cooldown_timer = 0
 	ctx.player_back_run_used = false
 	ctx.player_back_climb_cooldown = 0

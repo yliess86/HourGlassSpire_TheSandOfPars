@@ -27,7 +27,7 @@ Odin lang, SDL3 (`vendor:sdl3`). Single package `game/` with engine subpackage `
 | `game/engine/window.odin` | SDL3 window/renderer init, VSync, logical presentation (aspect ratio from primary display) |
 | `game/engine/clock.odin` | Frame timing, fixed timestep accumulator, frame-rate cap via `sdl.Delay`, dt capped at 0.1s |
 | `game/engine/input.odin` | Keyboard + gamepad input with action bindings, `is_down`/`is_pressed`/`axis` |
-| `game/engine/collider.odin` | AABB overlap check, min-depth resolve (`collider_resolve_rect_vs_rect`), single-axis dynamic resolve (`collider_resolve_dynamic_rect`) |
+| `game/engine/collider.odin` | AABB overlap check (`collider_check_rect_vs_rect`), single-axis dynamic resolve (`collider_resolve_dynamic_rect`) |
 | `game/engine/fsm.odin` | Generic parametric FSM with enter/update/exit handlers, tracks `previous` state |
 
 ### Game loop (`main.odin`)
@@ -96,21 +96,34 @@ Each FSM state handler has a doc comment block immediately above it describing t
 | | Grounded | on_ground |
 | | Back_Wall_Climb | WALL_RUN && cooldown ready |
 
-Update order in `player_fixed_update`: tick timers → buffer jump → track dash dir → FSM dispatch → **separated-axis physics** → sensor query → impact detection → visual deformation.
+Update order in `player_fixed_update`: tick timers → buffer jump → track dash dir → FSM dispatch → **separated-axis physics** → **slope resolve** → sensor query → impact detection → visual deformation.
 
-Physics uses a **separated-axis solver** (`collider_resolve_dynamic_rect`): Move X → Resolve X (walls) → Move Y → Resolve Y (ground/ceiling, then one-way platforms). Each axis integrates velocity, then resolves collisions inline — no separate integration step at the end.
+Physics uses a **separated-axis solver** (`collider_resolve_dynamic_rect`): Move X → Resolve X (walls) → Move Y → Resolve Y (ground/ceiling, then one-way platforms) → Slope resolve. Each axis integrates velocity, then resolves collisions inline — no separate integration step at the end.
 
 | Resolve step | Axis | Colliders | Notes |
 |---|---|---|---|
 | X walls | 0 | `level.wall_colliders` | Always resolved (including Wall_Slide/Wall_Run) |
 | Y solids | 1 | `level.ground_colliders` | Handles both floor and ceiling via direction check |
 | Y platforms | 1 | `level.platform_colliders` | One-way: skipped during `Dropping`, requires `vel.y <= 0` and `start_pos.y >= platform_top` |
+| Slopes | post | `level.slope_tiles` | Heightmap-based: floor slopes push up, ceiling slopes push down. Downhill snap prevents bouncing |
 
-`Player_Sensor` struct (`player_sensor`) caches per-frame environment queries (on_ground, on_platform, in_platform, on_left/right_wall, on_wall) — queried **after** collision resolution so sensors reflect the resolved position. Used by all state handlers on the next frame.
+`Player_Sensor` struct (`player_sensor`) caches per-frame environment queries (on_ground, on_platform, in_platform, on_slope, on_left/right_wall, on_wall) — queried **after** collision resolution so sensors reflect the resolved position. `on_ground` includes slopes. Used by all state handlers on the next frame.
 
 ### Level (`level.odin`)
 
-Levels loaded from BMP files (1 pixel = 1 tile, `TILE_PX :: 8` pixels = `TILE_SIZE = 0.5m`). `sdl.LoadBMP` reads the image; pixels are mapped to `Tile_Kind` via a color palette. Greedy row-merge converts the tile grid into minimal `Collider_Rect` arrays (`ground_colliders`, `wall_colliders`, `platform_colliders`). Solid tiles go into both ground and wall arrays (axis-locked resolve passes handle the distinction). Level defines its own dimensions; the camera scrolls within them.
+Levels loaded from BMP files (1 pixel = 1 tile, `TILE_PX :: 8` pixels = `TILE_SIZE = 0.5m`). `sdl.LoadBMP` reads the image; pixels are mapped to `Tile_Kind` via a color palette. Greedy row-merge converts the tile grid into minimal `Collider_Rect` arrays (`ground_colliders`, `wall_colliders`, `platform_colliders`). Solid tiles go into both ground and wall arrays (axis-locked resolve passes handle the distinction). Slope tiles are stored individually as `Slope_Tile` in `slope_tiles` (not merged). Level defines its own dimensions; the camera scrolls within them.
+
+### Slopes (`level.odin`, `player.odin`)
+
+45° slope tiles in 4 variants: `Slope_Right` (floor /), `Slope_Left` (floor \), `Slope_Ceil_Left` (ceiling /), `Slope_Ceil_Right` (ceiling \). BMP palette: red `{255,0,0}`, blue `{0,0,255}`, dark red `{128,0,0}`, dark blue `{0,0,128}`.
+
+`slope_surface_y(slope, world_x)` computes the surface height at any X within the tile. Floor slopes push the player up; ceiling slopes push down. Collision runs as a post-processing step after AABB resolve (`player_resolve_slopes`). Floor slope sampling uses the most-restrictive edge (leading edge going uphill) for robust handling of players wider than one tile.
+
+Downhill snap (`PLAYER_SLOPE_SNAP`) prevents bouncing when walking downhill by snapping the player to the surface if they were on a slope last frame and are now slightly above one.
+
+Speed modifiers in `grounded_update`: `PLAYER_SLOPE_UPHILL_FACTOR` (0.75×) slows uphill, `PLAYER_SLOPE_DOWNHILL_FACTOR` (1.25×) speeds downhill.
+
+Slopes render as filled triangles via `sdl.RenderGeometry` using `COLOR_TILE_SOLID`.
 
 ### Camera (`engine/camera.odin`)
 
@@ -150,7 +163,7 @@ Toggle with **F3** (`DEBUG` action). Rendered in `game_render_debug()`.
 
 | Overlay | Color | Description |
 |---|---|---|
-| Collider outlines | Green | AABB wireframes for all colliders |
+| Collider outlines | Green | AABB wireframes for all colliders + slope diagonals and bounding boxes |
 | Wall sensor | Yellow | Player wall-jump detection zone |
 | Element anchors | White | Cross at `.pos` center of every level collider |
 | Player position | Magenta | Cross at `player_pos` (bottom-center) |
@@ -159,7 +172,7 @@ Toggle with **F3** (`DEBUG` action). Rendered in `game_render_debug()`.
 | FSM current state | White | Text centered above player via `sdl.RenderDebugText` |
 | FSM previous state | Muted gray | Text centered below current state label |
 | FPS counter | White | Top-left corner, `1.0 / dt` |
-| Sensor readout | White | Top-right corner, ground/platform/in_plat/wall_l/wall_r booleans |
+| Sensor readout | White | Top-right corner, ground/platform/in_plat/wall_l/wall_r/on_slope/slope_dir booleans |
 
 Constants prefixed `COLOR_DEBUG_*` (colors) and `DEBUG_*` (sizes/scales).
 

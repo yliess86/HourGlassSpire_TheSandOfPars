@@ -95,6 +95,10 @@ Game_State :: struct {
 	player_back_run_used:           bool,
 	player_back_climb_timer:        f32,
 	player_back_climb_cooldown:     f32,
+	// Player Slope
+	player_on_slope:                bool,
+	player_slope_dir:               f32, // +1 rises right, -1 rises left
+
 	// Player Visual
 	player_visual_look:             [2]f32,
 	player_run_anim_timer:          f32,
@@ -314,6 +318,34 @@ game_render_debug :: proc() {
 		sdl.RenderRect(game.win.renderer, &rect)
 	}
 
+	// Slope colliders (green diagonal + bounding box)
+	sdl.SetRenderDrawColor(
+		game.win.renderer,
+		COLOR_DEBUG_COLLIDER.r,
+		COLOR_DEBUG_COLLIDER.g,
+		COLOR_DEBUG_COLLIDER.b,
+		255,
+	)
+	for s in game.level.slope_colliders {
+		// Bounding box
+		bl := [2]f32{s.base_x, s.base_y}
+		rect := world_to_screen(bl, {s.span, s.span})
+		sdl.RenderRect(game.win.renderer, &rect)
+		// Diagonal line (slope surface)
+		p0, p1: [2]f32
+		switch s.kind {
+		case .Right, .Ceil_Left:
+			p0 = {s.base_x, s.base_y}
+			p1 = {s.base_x + s.span, s.base_y + s.span}
+		case .Left, .Ceil_Right:
+			p0 = {s.base_x, s.base_y + s.span}
+			p1 = {s.base_x + s.span, s.base_y}
+		}
+		sp0 := world_to_screen_point(p0)
+		sp1 := world_to_screen_point(p1)
+		sdl.RenderLine(game.win.renderer, sp0.x, sp0.y, sp1.x, sp1.y)
+	}
+
 	// -- Wall sensor (yellow) --
 	sdl.SetRenderDrawColor(
 		game.win.renderer,
@@ -479,6 +511,8 @@ game_render_debug :: proc() {
 		{"wall_l:    ", fmt.ctprintf("%v", player_sensor.on_left_wall)},
 		{"wall_r:    ", fmt.ctprintf("%v", player_sensor.on_right_wall)},
 		{"back_wall: ", fmt.ctprintf("%v", player_sensor.on_back_wall)},
+		{"on_slope:  ", fmt.ctprintf("%v", player_sensor.on_slope)},
+		{"slope_dir: ", fmt.ctprintf("%.0f", player_sensor.slope_dir)},
 		{"wr_timer:  ", fmt.ctprintf("%.2f", game.player_wall_run_timer)},
 		{"wr_cd:     ", fmt.ctprintf("%.2f", game.player_wall_run_cooldown_timer)},
 		{"coyote:    ", fmt.ctprintf("%.2f", game.player_coyote_timer)},
