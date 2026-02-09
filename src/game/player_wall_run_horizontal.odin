@@ -1,7 +1,16 @@
 package game
 
 player_wall_run_horizontal_init :: proc() {
-	player_fsm.handlers[.Wall_Run_Horizontal] = {update = player_wall_run_horizontal_update}
+	player_fsm.handlers[.Wall_Run_Horizontal] = {
+		enter  = player_wall_run_horizontal_enter,
+		update = player_wall_run_horizontal_update,
+	}
+}
+
+player_wall_run_horizontal_enter :: proc(ctx: ^Game_State) {
+	ctx.player_wall_run_used = true
+	ctx.player_wall_run_timer = 0
+	ctx.player_wall_run_dir = ctx.player_dash_dir
 }
 
 // Wall_Run_Horizontal — horizontal parabolic arc along a back wall. Direction-locked.
@@ -12,7 +21,6 @@ player_wall_run_horizontal_init :: proc() {
 // - Airborne: vel.y < -WALL_SLIDE_SPEED (falling fast)
 // - Airborne: on_side_wall (hit side wall)
 player_wall_run_horizontal_update :: proc(ctx: ^Game_State, dt: f32) -> Maybe(Player_State) {
-	ctx.player_wall_run_used = true
 	ctx.player_wall_run_timer += dt
 	ctx.player_vel.x = PLAYER_WALL_RUN_HORIZONTAL_SPEED * ctx.player_wall_run_dir
 	ctx.player_vel.y =
@@ -25,10 +33,11 @@ player_wall_run_horizontal_update :: proc(ctx: ^Game_State, dt: f32) -> Maybe(Pl
 		return .Airborne
 	}
 
-	if player_check_dash() do return .Dashing
+	if game.input.is_pressed[.DASH] && game.player_dash_cooldown_timer <= 0 do return .Dashing
 	if !player_sensor.on_back_wall do return .Airborne
 	if player_sensor.on_ground do return .Grounded
 	if ctx.player_vel.y < -PLAYER_WALL_SLIDE_SPEED do return .Airborne
 	if player_sensor.on_side_wall do return .Airborne
+
 	return nil
 }

@@ -3,7 +3,15 @@ package game
 import "core:math"
 
 player_dashing_init :: proc() {
-	player_fsm.handlers[.Dashing] = {update = player_dashing_update}
+	player_fsm.handlers[.Dashing] = {
+		enter  = player_dashing_enter,
+		update = player_dashing_update,
+	}
+}
+
+player_dashing_enter :: proc(ctx: ^Game_State) {
+	ctx.player_dash_active_timer = PLAYER_DASH_DURATION
+	ctx.player_dash_cooldown_timer = PLAYER_DASH_COOLDOWN
 }
 
 // Dashing — direction-locked horizontal burst. Zero gravity. Transitions on timer expiry.
@@ -17,16 +25,8 @@ player_dashing_update :: proc(ctx: ^Game_State, dt: f32) -> Maybe(Player_State) 
 		player_apply_movement(dt)
 		if player_sensor.on_ground do return .Grounded
 		if player_sensor.on_side_wall {
-			if math.abs(ctx.player_vel.x) > PLAYER_IMPACT_THRESHOLD {
-				player_trigger_impact(math.abs(ctx.player_vel.x), {1, 0})
-			}
-			if ctx.input.is_down[.WALL_RUN] &&
-			   ctx.player_wall_run_cooldown_timer <= 0 &&
-			   !ctx.player_wall_run_used &&
-			   ctx.player_vel.y > 0 {
-				ctx.player_wall_run_timer = 0
-				return .Wall_Run_Vertical
-			}
+			if math.abs(ctx.player_vel.x) > PLAYER_IMPACT_THRESHOLD do player_trigger_impact(math.abs(ctx.player_vel.x), {1, 0})
+			if ctx.input.is_down[.WALL_RUN] && ctx.player_wall_run_cooldown_timer <= 0 && !ctx.player_wall_run_used && ctx.player_vel.y > 0 do return .Wall_Run_Vertical
 			if ctx.input.is_down[.SLIDE] do return .Wall_Slide
 		}
 		return .Airborne

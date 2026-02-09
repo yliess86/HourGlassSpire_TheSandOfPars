@@ -22,13 +22,13 @@ Odin lang, SDL3 (`vendor:sdl3`). Main package `src/game/`, reusable engine packa
 | `PLAYER.md` | Mermaid `stateDiagram-v2` of the player FSM — **keep in sync** when adding/removing states or transitions |
 | `src/game/main.odin` | Constants, `Game_State` struct, game lifecycle (`init`/`clean`), loop, rendering, `world_to_screen`/`world_to_screen_point` camera helpers |
 | `src/game/player.odin` | `Player_State` enum, `Player_Sensor` struct, `player_init`, movement & collision helpers |
-| `src/game/player_grounded.odin` | `player_grounded_init` + `player_grounded_update` |
+| `src/game/player_grounded.odin` | `player_grounded_init` + `player_grounded_enter` + `player_grounded_update` |
 | `src/game/player_airborne.odin` | `player_airborne_init` + `player_airborne_update` |
-| `src/game/player_dashing.odin` | `player_dashing_init` + `player_dashing_update` |
+| `src/game/player_dashing.odin` | `player_dashing_init` + `player_dashing_enter` + `player_dashing_update` |
 | `src/game/player_dropping.odin` | `player_dropping_init` + `player_dropping_update` |
 | `src/game/player_wall_slide.odin` | `player_wall_slide_init` + `player_wall_slide_update` |
-| `src/game/player_wall_run_vertical.odin` | `player_wall_run_vertical_init` + `player_wall_run_vertical_update` |
-| `src/game/player_wall_run_horizontal.odin` | `player_wall_run_horizontal_init` + `player_wall_run_horizontal_update` |
+| `src/game/player_wall_run_vertical.odin` | `player_wall_run_vertical_init` + `player_wall_run_vertical_enter` + `player_wall_run_vertical_update` + `player_wall_run_vertical_exit` |
+| `src/game/player_wall_run_horizontal.odin` | `player_wall_run_horizontal_init` + `player_wall_run_horizontal_enter` + `player_wall_run_horizontal_update` |
 | `src/game/debug.odin` | Debug drawing helpers (`debug_collider_rect`, `debug_point`, `debug_vector`, `debug_text`, etc.), debug constants |
 | `src/game/level.odin` | `Tile_Kind` enum, `Level` struct, BMP loading (`sdl.LoadBMP`), greedy collider merging, tile rendering |
 | `src/engine/camera.odin` | `Camera` struct, follow + clamp within level bounds |
@@ -50,9 +50,9 @@ Global `game: Game_State` struct holds all state. No ECS.
 ### Player FSM (`player.odin`)
 
 Player states: `Grounded`, `Airborne`, `Dashing`, `Dropping`, `Wall_Run_Horizontal`, `Wall_Slide`, `Wall_Run_Vertical`.
-Uses generic `engine.FSM(Game_State, Player_State)` via `player_fsm` — each state has an `update` handler returning `Maybe(Player_State)` to signal transitions (nil = stay). `fsm_transition` prevents self-transitions (same-state returns are no-ops). Currently no enter/exit handlers are wired.
+Uses generic `engine.FSM(Game_State, Player_State)` via `player_fsm` — each state has an `update` handler returning `Maybe(Player_State)` to signal transitions (nil = stay). `fsm_transition` prevents self-transitions (same-state returns are no-ops). Enter/exit handlers are wired for states that need setup/teardown: `Grounded` (enter: reset wall run cooldown/used), `Dashing` (enter: set dash timers), `Wall_Run_Vertical` (enter: set wall_run_used/timer; exit: set wall run cooldown), `Wall_Run_Horizontal` (enter: set wall_run_used/timer/dir).
 
-Each state lives in its own file (`player_<state>.odin`) with a `player_<state>_init` proc (registers the handler on `player_fsm`) and a `player_<state>_update` proc. `player_init` calls all init procs then `fsm_init`.
+Each state lives in its own file (`player_<state>.odin`) with a `player_<state>_init` proc (registers handlers on `player_fsm`) and a `player_<state>_update` proc, plus optional `player_<state>_enter` / `player_<state>_exit` procs. `player_init` calls all init procs then `fsm_init`.
 
 Each FSM state handler has a doc comment block immediately above it describing the state's behavior and listing all exit transitions with their conditions. When modifying a state handler, always keep its doc comment in sync with the implementation. Also update the Mermaid diagram in `PLAYER.md` whenever states or transitions change.
 

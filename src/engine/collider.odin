@@ -8,6 +8,20 @@ Collider_Rect :: struct {
 	size: [2]f32,
 }
 
+Collider_Slope_Kind :: enum u8 {
+	Right, // floor /   — rises left→right
+	Left, // floor \   — rises right→left
+	Ceil_Left, // ceiling / — solid below-right
+	Ceil_Right, // ceiling \ — solid below-left
+}
+
+Collider_Slope :: struct {
+	kind:   Collider_Slope_Kind,
+	base_x: f32, // left edge X of bounding square
+	base_y: f32, // bottom edge Y of bounding square
+	span:   f32, // side length (N * tile_size)
+}
+
 
 collider_check_rect_vs_rect :: proc(a, b: Collider_Rect) -> bool {
 	abs_diff := linalg.abs(a.pos - b.pos)
@@ -23,7 +37,10 @@ collider_resolve_dynamic_rect :: proc(
 	static_rect: Collider_Rect,
 	vel_on_axis: f32,
 	axis: int,
-) -> (resolved: bool, normal: f32) {
+) -> (
+	resolved: bool,
+	normal: f32,
+) {
 	diff := dynamic_rect.pos - static_rect.pos
 	abs_diff: [2]f32 = {math.abs(diff.x), math.abs(diff.y)}
 	half_sum := 0.5 * (dynamic_rect.size + static_rect.size)
@@ -47,22 +64,6 @@ collider_resolve_dynamic_rect :: proc(
 	dynamic_rect.pos[axis] += overlap * push_dir
 
 	return true, push_dir
-}
-
-// -- Slopes --
-
-Collider_Slope_Kind :: enum u8 {
-	Right,      // floor /   — rises left→right
-	Left,       // floor \   — rises right→left
-	Ceil_Left,  // ceiling / — solid below-right
-	Ceil_Right, // ceiling \ — solid below-left
-}
-
-Collider_Slope :: struct {
-	kind:   Collider_Slope_Kind,
-	base_x: f32, // left edge X of bounding square
-	base_y: f32, // bottom edge Y of bounding square
-	span:   f32, // side length (N * tile_size)
 }
 
 // Surface Y at a given world X (clamped to slope range)
@@ -102,13 +103,18 @@ collider_check_rect_vs_slope :: proc(r: Collider_Rect, s: Collider_Slope) -> boo
 collider_resolve_rect_vs_slope :: proc(
 	rect: ^Collider_Rect,
 	slope: Collider_Slope,
-) -> (resolved: bool, slope_dir: f32) {
+) -> (
+	resolved: bool,
+	slope_dir: f32,
+) {
 	// Sample at uphill edge for floor slopes to prevent corner clipping
 	sample_x := rect.pos.x
 	switch slope.kind {
-	case .Right:                    sample_x = rect.pos.x + rect.size.x / 2 // uphill edge
-	case .Left:                     sample_x = rect.pos.x - rect.size.x / 2 // uphill edge
-	case .Ceil_Left, .Ceil_Right:   // center is fine for ceilings
+	case .Right:
+		sample_x = rect.pos.x + rect.size.x / 2 // uphill edge
+	case .Left:
+		sample_x = rect.pos.x - rect.size.x / 2 // uphill edge
+	case .Ceil_Left, .Ceil_Right: // center is fine for ceilings
 	}
 
 	// Range check: floor slopes use rect-overlap so the slope activates when the
@@ -117,13 +123,9 @@ collider_resolve_rect_vs_slope :: proc(
 	if collider_slope_is_floor(slope) {
 		rect_left := rect.pos.x - rect.size.x / 2
 		rect_right := rect.pos.x + rect.size.x / 2
-		if rect_right < slope.base_x || rect_left > slope.base_x + slope.span {
-			return false, 0
-		}
+		if rect_right < slope.base_x || rect_left > slope.base_x + slope.span do return false, 0
 	} else {
-		if rect.pos.x < slope.base_x || rect.pos.x > slope.base_x + slope.span {
-			return false, 0
-		}
+		if rect.pos.x < slope.base_x || rect.pos.x > slope.base_x + slope.span do return false, 0
 	}
 	surface_y := collider_slope_surface_y(slope, sample_x)
 	switch slope.kind {

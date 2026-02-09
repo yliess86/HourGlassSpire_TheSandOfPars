@@ -3,7 +3,9 @@ package game
 import "core:math"
 
 player_wall_slide_init :: proc() {
-	player_fsm.handlers[.Wall_Slide] = {update = player_wall_slide_update}
+	player_fsm.handlers[.Wall_Slide] = {
+		update = player_wall_slide_update,
+	}
 }
 
 // Wall_Slide — sliding down a wall (side or back). Clamps fall speed, dampens X.
@@ -33,9 +35,10 @@ player_wall_slide_update :: proc(ctx: ^Game_State, dt: f32) -> Maybe(Player_Stat
 		return .Airborne
 	}
 
-	if player_check_dash() do return .Dashing
+	if game.input.is_pressed[.DASH] && game.player_dash_cooldown_timer <= 0 do return .Dashing
 	if player_sensor.on_ground do return .Grounded
 	if !player_sensor.on_side_wall && !player_sensor.on_back_wall do return .Airborne
 	if player_sensor.on_back_wall && !player_sensor.on_side_wall && !ctx.input.is_down[.SLIDE] do return .Airborne
+
 	return nil
 }

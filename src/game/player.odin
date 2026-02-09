@@ -35,16 +35,6 @@ PLAYER_WALL_RUN_HORIZONTAL_SPEED: f32 : 350.0 / PPM // horizontal speed
 PLAYER_WALL_RUN_VERTICAL_SPEED: f32 : 500.0 / PPM // initial upward speed
 PLAYER_WALL_SLIDE_SPEED: f32 : 100.0 / PPM // same as side wall slide
 
-Player_State :: enum u8 {
-	Airborne,
-	Dashing,
-	Dropping,
-	Grounded,
-	Wall_Run_Horizontal,
-	Wall_Run_Vertical,
-	Wall_Slide,
-}
-
 PLAYER_COLOR := [Player_State][3]u8 {
 	.Airborne            = {80, 200, 255},
 	.Dashing             = {255, 50, 200},
@@ -53,6 +43,16 @@ PLAYER_COLOR := [Player_State][3]u8 {
 	.Wall_Run_Horizontal = {255, 100, 60},
 	.Wall_Run_Vertical   = {255, 100, 60},
 	.Wall_Slide          = {255, 140, 60},
+}
+
+Player_State :: enum u8 {
+	Airborne,
+	Dashing,
+	Dropping,
+	Grounded,
+	Wall_Run_Horizontal,
+	Wall_Run_Vertical,
+	Wall_Slide,
 }
 
 Player_Sensor :: struct {
@@ -361,15 +361,6 @@ player_resolve_slopes :: proc() {
 			}
 		}
 	}
-}
-
-player_check_dash :: proc() -> bool {
-	if game.input.is_pressed[.DASH] && game.player_dash_cooldown_timer <= 0 {
-		game.player_dash_active_timer = PLAYER_DASH_DURATION
-		game.player_dash_cooldown_timer = PLAYER_DASH_COOLDOWN
-		return true
-	}
-	return false
 }
 
 player_trigger_impact :: proc(impact_speed: f32, axis: [2]f32) {

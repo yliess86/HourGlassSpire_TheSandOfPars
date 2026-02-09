@@ -3,7 +3,9 @@ package game
 import "core:math"
 
 player_airborne_init :: proc() {
-	player_fsm.handlers[.Airborne] = {update = player_airborne_update}
+	player_fsm.handlers[.Airborne] = {
+		update = player_airborne_update,
+	}
 }
 
 // Airborne — in the air under gravity. Supports coyote jump (stays Airborne) and wall jump (stays Airborne).
@@ -23,31 +25,16 @@ player_airborne_update :: proc(ctx: ^Game_State, dt: f32) -> Maybe(Player_State)
 		ctx.player_coyote_timer = 0
 	}
 
-	if player_check_dash() do return .Dashing
+	if game.input.is_pressed[.DASH] && game.player_dash_cooldown_timer <= 0 do return .Dashing
 	if player_sensor.on_ground do return .Grounded
-
 	if player_sensor.on_back_wall {
-		if ctx.input.is_down[.WALL_RUN] &&
-		   math.abs(ctx.input.axis.x) > 0.5 &&
-		   !ctx.player_wall_run_used &&
-		   ctx.player_wall_run_cooldown_timer <= 0 {
-			ctx.player_wall_run_timer = 0
-			ctx.player_wall_run_dir = ctx.player_dash_dir
-			return .Wall_Run_Horizontal
-		}
-		if ctx.input.is_down[.WALL_RUN] &&
-		   ctx.player_wall_run_cooldown_timer <= 0 &&
-		   !ctx.player_wall_run_used {
-			ctx.player_wall_run_timer = 0
-			return .Wall_Run_Vertical
-		}
+		if ctx.input.is_down[.WALL_RUN] && math.abs(ctx.input.axis.x) > 0.5 && !ctx.player_wall_run_used && ctx.player_wall_run_cooldown_timer <= 0 do return .Wall_Run_Horizontal
+		if ctx.input.is_down[.WALL_RUN] && ctx.player_wall_run_cooldown_timer <= 0 && !ctx.player_wall_run_used do return .Wall_Run_Vertical
 		if ctx.input.is_down[.SLIDE] do return .Wall_Slide
 	}
 
 	if player_sensor.on_side_wall {
-		if math.abs(ctx.player_vel.x) > PLAYER_IMPACT_THRESHOLD {
-			player_trigger_impact(math.abs(ctx.player_vel.x), {1, 0})
-		}
+		if math.abs(ctx.player_vel.x) > PLAYER_IMPACT_THRESHOLD do player_trigger_impact(math.abs(ctx.player_vel.x), {1, 0})
 		if ctx.player_jump_buffer_timer > 0 {
 			if player_sensor.on_side_wall {
 				ctx.player_pos.x -= player_sensor.on_side_wall_dir * EPS
@@ -57,13 +44,7 @@ player_airborne_update :: proc(ctx: ^Game_State, dt: f32) -> Maybe(Player_State)
 			ctx.player_jump_buffer_timer = 0
 			return nil // stay Airborne with wall-jump velocity
 		}
-		if ctx.input.is_down[.WALL_RUN] &&
-		   ctx.player_wall_run_cooldown_timer <= 0 &&
-		   !ctx.player_wall_run_used &&
-		   ctx.player_vel.y > 0 {
-			ctx.player_wall_run_timer = 0
-			return .Wall_Run_Vertical
-		}
+		if ctx.input.is_down[.WALL_RUN] && ctx.player_wall_run_cooldown_timer <= 0 && !ctx.player_wall_run_used && ctx.player_vel.y > 0 do return .Wall_Run_Vertical
 		if ctx.input.is_down[.SLIDE] do return .Wall_Slide
 	}
 
