@@ -143,4 +143,19 @@ game_render_debug :: proc() {
 		"FPS:",
 		fmt.ctprintf("%.0f", 1.0 / game.clock.dt),
 	)
+
+	// Version info — bottom-left
+	version_y := f32(game.win.logical_h) - 2 * DEBUG_TEXT_LINE_H - DEBUG_TEXT_MARGIN_Y
+	debug_value_with_label(
+		DEBUG_TEXT_MARGIN_X,
+		version_y,
+		"Version:",
+		fmt.ctprintf("%s", VERSION_HASH),
+	)
+	debug_text(
+		DEBUG_TEXT_MARGIN_X,
+		version_y + DEBUG_TEXT_LINE_H,
+		fmt.ctprintf("%s - %s - %s", VERSION_NAME, VERSION_DATE, VERSION_TIME),
+		DEBUG_COLOR_STATE_MUTED,
+	)
 }

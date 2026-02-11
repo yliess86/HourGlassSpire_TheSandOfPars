@@ -5,22 +5,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Run
 
 ```sh
-odin run build/            # gen_config + build (-debug) + run
+odin run build/                      # gen_config + build (-debug) + run
 odin run build/ -- run release       # gen_config + build (-o:speed) + run
 odin run build/ -- build             # gen_config + build (-debug) only
 odin run build/ -- build release     # gen_config + build (-o:speed) only
-odin run build/ -- check   # gen_config + type-check only
-odin run build/ -- gen     # regenerate config.odin only
+odin run build/ -- check             # gen_config + type-check only
+odin run build/ -- gen               # regenerate config.odin only
+odin run build/ -- version           # stamp current UTC date/time into game.ini
 odin run build/ -- dist              # build release for current platform
 odin run build/ -- dist windows_x64  # cross-compile for Windows x64
 odin run build/ -- dist macos_arm64  # cross-compile for macOS ARM64
-odin run build/ -- dist linux_x64   # cross-compile for Linux x64
+odin run build/ -- dist linux_x64    # cross-compile for Linux x64
 odin run build/ -- setup             # download SDL3 libs for current platform
 odin run build/ -- clean             # remove bin/, dist/, and libs/
 odin run build/ -- clean bin dist    # remove specific targets (bin, dist, libs)
 ```
 
 No test framework — verify by running the game.
+
+**Before every commit**, run `odin run build/ -- version` to stamp the current UTC date/time into `assets/game.ini` and regenerate `src/game/config.odin`. Stage both files in the commit.
 
 ## Architecture
 
@@ -36,6 +39,7 @@ Odin lang, SDL3 (`vendor:sdl3`). Main package `src/game/`, reusable engine packa
 | `build/main.odin` | Build script entry point: CLI parsing, dev build + run dispatch, `clean` command |
 | `build/sys.odin` | OS helpers: `sys_run`, `sys_make_dir`, `sys_copy`, `sys_download` |
 | `build/config.odin` | Config codegen: parses `assets/game.ini`, generates `src/game/config.odin` |
+| `build/version.odin` | Version stamping: reads `VERSION_NAME` from `game.ini`, stamps UTC date/time + MD5 hash |
 | `build/dist.odin` | Distribution: dist targets, SDL3 download/setup, release build + bundle |
 | `src/engine/config.odin` | INI parser, expression evaluator, config load/reload/get API |
 | `src/game/main.odin` | Entry point (`main` proc): game loop (fixed-timestep update, render, present) |
@@ -176,7 +180,7 @@ All game constants live in `assets/game.ini` — an INI file with sections, expr
 3. Update source files to use the new constant names
 4. `odin run build/ -- check` — verify compilation
 
-INI sections: `[engine]`, `[physics]`, `[camera]` (camera follow parameters prefixed `CAMERA_*`), `[level]` (level colors prefixed `LEVEL_COLOR_*`), `[player]`, `[player_run]`, `[player_jump]`, `[player_dash]`, `[player_wall]`, `[player_slopes]`, `[player_graphics]`, `[player_particles]`, `[player_particle_colors]`, `[input]` (key/gamepad bindings as SDL name strings, prefixed `INPUT_KB_*`/`INPUT_GP_*`), `[debug_colors]`, `[debug]`.
+INI sections: `[game]`, `[version]` (version stamp: `VERSION_NAME`, `VERSION_DATE`, `VERSION_TIME`, `VERSION_HASH`), `[engine]`, `[physics]`, `[camera]` (camera follow parameters prefixed `CAMERA_*`), `[level]` (level colors prefixed `LEVEL_COLOR_*`), `[player]`, `[player_run]`, `[player_jump]`, `[player_dash]`, `[player_wall]`, `[player_slopes]`, `[player_graphics]`, `[player_particles]`, `[player_particle_colors]`, `[input]` (key/gamepad bindings as SDL name strings, prefixed `INPUT_KB_*`/`INPUT_GP_*`), `[debug_colors]`, `[debug]`.
 
 ## Coordinate & Unit Conventions
 
@@ -239,6 +243,8 @@ Cycle with **F3** (`DEBUG` action) through `NONE` → `PLAYER` → `BACKGROUND` 
 | FPS counter | White | Top-left corner, `1.0 / dt` |
 | Sensor readout | White | Top-left column below FPS, all sensor booleans + timers |
 | Camera dead zone | Yellow (transparent) | Screen-space rectangle showing the dead zone boundary (visible in PLAYER + ALL) |
+| Version hash | White label / Muted value | Bottom-left, "Version: {hash}" |
+| Version info | Muted gray | Bottom-left below hash, "{name} - {date} - {time}" |
 
 Constants prefixed `DEBUG_COLOR_*` (colors) and `DEBUG_*` (sizes/scales).
 

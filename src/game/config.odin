@@ -8,6 +8,12 @@ import "core:fmt"
 GAME_TITLE: string
 GAME_SUBTITLE: string
 
+// [version]
+VERSION_NAME: string
+VERSION_DATE: string
+VERSION_TIME: string
+VERSION_HASH: string
+
 // [engine]
 WINDOW_TITLE: string
 WINDOW_SCALE: u8
@@ -160,6 +166,10 @@ DEBUG_VEL_SCALE: f32
 config_apply :: proc() {
 	if val, ok := engine.config_get_string(&game_config, "GAME_TITLE"); ok do GAME_TITLE = val
 	if val, ok := engine.config_get_string(&game_config, "GAME_SUBTITLE"); ok do GAME_SUBTITLE = val
+	if val, ok := engine.config_get_string(&game_config, "VERSION_NAME"); ok do VERSION_NAME = val
+	if val, ok := engine.config_get_string(&game_config, "VERSION_DATE"); ok do VERSION_DATE = val
+	if val, ok := engine.config_get_string(&game_config, "VERSION_TIME"); ok do VERSION_TIME = val
+	if val, ok := engine.config_get_string(&game_config, "VERSION_HASH"); ok do VERSION_HASH = val
 	if val, ok := engine.config_get_string(&game_config, "WINDOW_TITLE"); ok do WINDOW_TITLE = val
 	if val, ok := engine.config_get_u8(&game_config, "WINDOW_SCALE"); ok do WINDOW_SCALE = val
 	if val, ok := engine.config_get_f32(&game_config, "LOGICAL_H"); ok do LOGICAL_H = val

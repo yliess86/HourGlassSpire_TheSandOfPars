@@ -52,7 +52,7 @@ main :: proc() {
 	}
 
 	switch mode {
-	case "run", "build", "check", "gen", "dist":
+	case "run", "build", "check", "gen", "dist", "version":
 	case:
 		fmt.eprintf("Usage: odin run build/ -- [run|build|check|gen|dist|setup|clean]\n")
 		fmt.eprintf("  run [release]    — gen_config + build + run (default: -debug)\n")
@@ -60,6 +60,7 @@ main :: proc() {
 		fmt.eprintf("  check            — gen_config + type-check only\n")
 		fmt.eprintf("  gen              — regenerate config.odin only\n")
 		fmt.eprintf("  dist [target]    — gen_config + release build + bundle\n")
+		fmt.eprintf("  version          — stamp current UTC date/time into game.ini\n")
 		fmt.eprintf("  setup            — download SDL3 libs for current platform\n")
 		fmt.eprintf("  clean [targets]  — remove build artifacts\n")
 		fmt.eprintf("                     targets: bin, dist, libs (default: all)\n")
@@ -74,6 +75,12 @@ main :: proc() {
 
 	if !config_gen() do os.exit(1)
 	if mode == "gen" do return
+
+	if mode == "version" {
+		if !version_stamp() do os.exit(1)
+		if !config_gen() do os.exit(1)
+		return
+	}
 
 	game_bin := fmt.tprintf("bin/%s%s", game_name, EXE_EXT)
 
