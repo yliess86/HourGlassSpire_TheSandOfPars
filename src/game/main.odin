@@ -4,22 +4,6 @@ import engine "../engine"
 import "core:fmt"
 import sdl "vendor:sdl3"
 
-// Resolution & Scaling
-LOGICAL_H :: 480
-WINDOW_SCALE :: 2
-PPM: f32 : 16 // power of 2 — all pixel/PPM values exact in f32
-
-// Engine
-FPS :: 60
-FIXED_STEPS :: 4
-
-// Physics (meters, m/s, m/s²)
-GRAVITY: f32 : 2_000.0 / PPM
-EPS: f32 : 1 / PPM
-
-// Colors
-COLOR_BG: [3]u8 : {20, 20, 30}
-
 // Convenience wrappers for camera coordinate conversion
 world_to_screen :: proc(world_pos, world_size: [2]f32) -> sdl.FRect {
 	return engine.camera_world_to_screen(&game.camera, world_pos, world_size)
@@ -59,7 +43,7 @@ main :: proc() {
 		engine.clock_update(&game.clock)
 		game_update(game.clock.dt)
 		for engine.clock_tick(&game.clock) do game_fixed_update(game.clock.fixed_dt)
-		sdl.SetRenderDrawColor(game.win.renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, 255)
+		sdl.SetRenderDrawColor(game.win.renderer, LEVEL_COLOR_BG.r, LEVEL_COLOR_BG.g, LEVEL_COLOR_BG.b, LEVEL_COLOR_BG.a)
 		sdl.RenderClear(game.win.renderer)
 		game_render()
 		if game.debug != .NONE do game_render_debug()
@@ -69,6 +53,7 @@ main :: proc() {
 }
 
 game_clean :: proc() {
+	engine.config_destroy(&game_config)
 	level_destroy(&game.level)
 	engine.window_clean(&game.win)
 }
@@ -76,12 +61,16 @@ game_clean :: proc() {
 game_init :: proc() {
 	game.running = true
 
-	win, ok := engine.window_init("Hour Glass Spire - the Sands of Pars", LOGICAL_H, WINDOW_SCALE)
+	// Load config first (before window_init so WINDOW_TITLE/LOGICAL_H/WINDOW_SCALE are available)
+	config_load_and_apply()
+
+	win, ok := engine.window_init(fmt.ctprintf("%s", WINDOW_TITLE), i32(LOGICAL_H), i32(WINDOW_SCALE))
 	if !ok {game.running = false; return}
 	game.win = win
 
 	game.input = engine.input_init()
-	game.clock = engine.clock_init(FPS, FIXED_STEPS)
+
+	game.clock = engine.clock_init(u64(FPS), u64(FIXED_STEPS))
 
 	// Load level
 	level, level_ok := level_load("assets/level_01.bmp")
@@ -113,6 +102,7 @@ game_update :: proc(dt: f32) {
 	}
 	engine.input_post_update(&game.input)
 	if game.input.is_pressed[.DEBUG] do game.debug = Debug_State((int(game.debug) + 1) % len(Debug_State))
+	if game.input.is_pressed[.RELOAD] do config_reload_all()
 }
 
 game_fixed_update :: proc(dt: f32) {

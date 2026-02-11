@@ -5,7 +5,6 @@ import "core:fmt"
 import sdl "vendor:sdl3"
 
 TILE_PX :: 8
-TILE_SIZE: f32 : f32(TILE_PX) / PPM // 0.5 meters
 
 Tile_Kind :: enum u8 {
 	Empty,
@@ -34,11 +33,6 @@ PALETTE :: [Tile_Kind][3]u8 {
 	.Slope_Ceil_Right = {128, 0, 0},
 	.Slope_Ceil_Left  = {0, 0, 128},
 }
-
-// Render colors
-COLOR_TILE_SOLID: [3]u8 : {90, 80, 70}
-COLOR_TILE_BACK_WALL: [3]u8 : {45, 40, 35}
-COLOR_TILE_WINDOW: [3]u8 : {35, 30, 28}
 
 Level :: struct {
 	width, height:       int,
@@ -515,19 +509,19 @@ level_render :: proc(level: ^Level) {
 	for y in 0 ..< level.height {
 		for x in 0 ..< level.width {
 			kind := level.tiles[y * level.width + x]
-			color: [3]u8
+			color: [4]u8
 			#partial switch kind {
 			case .Back_Wall:
-				color = COLOR_TILE_BACK_WALL
+				color = LEVEL_COLOR_TILE_BACK_WALL
 			case .Window:
-				color = COLOR_TILE_WINDOW
+				color = LEVEL_COLOR_TILE_WINDOW
 			case:
 				continue
 			}
 			world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
 			world_size := [2]f32{TILE_SIZE, TILE_SIZE}
 			rect := world_to_screen(world_pos, world_size)
-			sdl.SetRenderDrawColor(game.win.renderer, color.r, color.g, color.b, 255)
+			sdl.SetRenderDrawColor(game.win.renderer, color.r, color.g, color.b, color.a)
 			sdl.RenderFillRect(game.win.renderer, &rect)
 		}
 	}
@@ -535,10 +529,10 @@ level_render :: proc(level: ^Level) {
 	// Slope backgrounds (behind the triangles)
 	sdl.SetRenderDrawColor(
 		game.win.renderer,
-		COLOR_TILE_BACK_WALL.r,
-		COLOR_TILE_BACK_WALL.g,
-		COLOR_TILE_BACK_WALL.b,
-		255,
+		LEVEL_COLOR_TILE_BACK_WALL.r,
+		LEVEL_COLOR_TILE_BACK_WALL.g,
+		LEVEL_COLOR_TILE_BACK_WALL.b,
+		LEVEL_COLOR_TILE_BACK_WALL.a,
 	)
 	for s in level.slope_colliders {
 		world_pos := [2]f32{s.base_x, s.base_y}
@@ -557,10 +551,10 @@ level_render :: proc(level: ^Level) {
 			rect := world_to_screen(world_pos, world_size)
 			sdl.SetRenderDrawColor(
 				game.win.renderer,
-				COLOR_TILE_SOLID.r,
-				COLOR_TILE_SOLID.g,
-				COLOR_TILE_SOLID.b,
-				255,
+				LEVEL_COLOR_TILE_SOLID.r,
+				LEVEL_COLOR_TILE_SOLID.g,
+				LEVEL_COLOR_TILE_SOLID.b,
+				LEVEL_COLOR_TILE_SOLID.a,
 			)
 			sdl.RenderFillRect(game.win.renderer, &rect)
 		}
@@ -568,10 +562,10 @@ level_render :: proc(level: ^Level) {
 
 	// Slope triangles (filled)
 	slope_color := sdl.FColor {
-		f32(COLOR_TILE_SOLID.r) / 255,
-		f32(COLOR_TILE_SOLID.g) / 255,
-		f32(COLOR_TILE_SOLID.b) / 255,
-		1,
+		f32(LEVEL_COLOR_TILE_SOLID.r) / 255,
+		f32(LEVEL_COLOR_TILE_SOLID.g) / 255,
+		f32(LEVEL_COLOR_TILE_SOLID.b) / 255,
+		f32(LEVEL_COLOR_TILE_SOLID.a) / 255,
 	}
 	for s in level.slope_colliders {
 		v0, v1, v2: [2]f32

@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```sh
 odin run src/game/        # build + run
 odin check src/game/      # type-check only (no binary)
+odin run tools/gen_config.odin -file  # regenerate src/game/config.odin from assets/game.ini
 ```
 
 No test framework — verify by running the game.
@@ -20,9 +21,12 @@ Odin lang, SDL3 (`vendor:sdl3`). Main package `src/game/`, reusable engine packa
 | File | Purpose |
 |---|---|
 | `PLAYER.md` | Mermaid `stateDiagram-v2` of the player FSM — **keep in sync** when adding/removing states or transitions |
-| `src/game/main.odin` | Constants, `Game_State` struct (contains `player: Player`), game lifecycle (`init`/`clean`), loop, rendering, `world_to_screen`/`world_to_screen_point` convenience wrappers (delegate to `camera_world_to_screen`/`camera_world_to_screen_point`) |
+| `assets/game.ini` | All game constants (engine, physics, level colors, player, debug) — hot-reloadable with F5 |
+| `src/game/config.odin` | **AUTO-GENERATED** from `assets/game.ini` by `tools/gen_config.odin` — variable declarations + `config_apply` proc. Do not edit manually |
+| `tools/gen_config.odin` | Code generator: parses `assets/game.ini` and emits `src/game/config.odin` |
+| `src/engine/config.odin` | INI parser, expression evaluator, config load/reload/get API |
+| `src/game/main.odin` | `Game_State` struct (contains `player: Player`), game lifecycle (`init`/`clean`), loop, rendering, `world_to_screen`/`world_to_screen_point` convenience wrappers (delegate to `camera_world_to_screen`/`camera_world_to_screen_point`) |
 | `src/game/player.odin` | `Player_State` enum, `Player` struct (`Player_Transform`, `Player_Abilities`, `Player_Graphics` sub-structs, `fsm`, `sensor`), `player_init`, `player_fixed_update`, `player_sync_collider`, `player_debug` — all procs take `player: ^Player` |
-| `src/game/player_constants.odin` | `PLAYER_SIZE`, `PLAYER_COLOR` table, all `PLAYER_*` physics/ability/graphics constants |
 | `src/game/player_graphics.odin` | `player_color`, `player_render` (4-layer visual deformation: velocity, look, run bob, impact bounce), `player_trigger_impact` |
 | `src/game/player_sensor.odin` | `Player_Sensor` struct, `player_sensor_update`, `player_sensor_debug` |
 | `src/game/player_physics.odin` | `player_apply_movement`, `player_physics_update` (separated-axis solver), `player_resolve_x`, `player_resolve_y`, `player_resolve_slopes`, `player_physics_debug` (collider + position + velocity) |
@@ -33,7 +37,7 @@ Odin lang, SDL3 (`vendor:sdl3`). Main package `src/game/`, reusable engine packa
 | `src/game/player_fsm_wall_slide.odin` | `player_fsm_wall_slide_init` + `player_fsm_wall_slide_update` |
 | `src/game/player_fsm_wall_run_vertical.odin` | `player_fsm_wall_run_vertical_init` + `player_fsm_wall_run_vertical_enter` + `player_fsm_wall_run_vertical_update` + `player_fsm_wall_run_vertical_exit` |
 | `src/game/player_fsm_wall_run_horizontal.odin` | `player_fsm_wall_run_horizontal_init` + `player_fsm_wall_run_horizontal_enter` + `player_fsm_wall_run_horizontal_update` |
-| `src/game/debug.odin` | `Debug_State` enum, debug drawing helpers (`debug_collider_rect`, `debug_point`, `debug_vector`, `debug_text`, etc.), debug constants |
+| `src/game/debug.odin` | `Debug_State` enum, debug drawing helpers (`debug_collider_rect`, `debug_point`, `debug_vector`, `debug_text`, etc.) |
 | `src/game/level.odin` | `Tile_Kind` enum, `Level` struct, BMP loading (`sdl.LoadBMP`), greedy collider merging, diagonal slope merging, tile rendering, `level_debug` (collider outlines + anchors) |
 | `src/engine/camera.odin` | `Camera` struct (stores `ppm`, `logical_h`), `camera_world_to_screen`/`camera_world_to_screen_point` (world→screen coordinate conversion), follow + clamp within level bounds |
 | `src/engine/window.odin` | SDL3 window/renderer init, VSync, logical presentation (aspect ratio from primary display) |
@@ -133,21 +137,33 @@ Speed modifiers in `grounded_update`: `PLAYER_SLOPE_UPHILL_FACTOR` (0.75×) slow
 
 Dash slope behavior (`player_fsm_dashing_update`): uphill dash decomposes speed along 45° angle (vel.x and vel.y); when the player reaches the slope top (`on_slope` becomes false), positive vel.y is preserved so the player ramps off into the air. Downhill dash lifts off the surface with `vel.y = EPS` and dashes horizontally.
 
-Slopes render as filled triangles via `sdl.RenderGeometry` using `COLOR_TILE_SOLID`, with `COLOR_TILE_BACK_WALL` background rectangles behind them.
+Slopes render as filled triangles via `sdl.RenderGeometry` using `LEVEL_COLOR_TILE_SOLID`, with `LEVEL_COLOR_TILE_BACK_WALL` background rectangles behind them.
 
 ### Camera (`engine/camera.odin`)
 
 2D viewport that follows the player. Camera stores `ppm` and `logical_h` for coordinate conversion. `camera_world_to_screen(cam, world_pos, world_size)` converts a world-space rect to an SDL screen rect (Y-flipped); `camera_world_to_screen_point(cam, world_pos)` converts a world point to screen pixel. Game-level `world_to_screen`/`world_to_screen_point` wrappers pass `&game.camera` for convenience. `camera_follow` snaps to target; `camera_clamp` keeps within level bounds (centers on axis if level is smaller than viewport).
 
+## Configuration (`assets/game.ini`)
+
+All game constants live in `assets/game.ini` — an INI file with sections, expressions (`+`, `-`, `*`, `/`, parentheses, variable references), and `#RRGGBBAA` hex colors. Constants are runtime-loaded (not compile-time), hot-reloadable with **F5** (`RELOAD` action). Type hints via comments: `# :u8` for unsigned byte, otherwise `f32` for numbers, `[4]u8` for colors, `string` for quoted values.
+
+**Workflow for adding/renaming constants:**
+1. Edit `assets/game.ini` — add/rename keys under the appropriate section
+2. Run `odin run tools/gen_config.odin -file` — regenerates `src/game/config.odin`
+3. Update source files to use the new constant names
+4. `odin check src/game/` — verify compilation
+
+INI sections: `[engine]`, `[physics]`, `[level]` (level colors prefixed `LEVEL_COLOR_*`), `[player]`, `[player_run]`, `[player_jump]`, `[player_dash]`, `[player_wall]`, `[player_slopes]`, `[player_graphics]`, `[player_particles]`, `[player_particle_colors]`, `[debug_colors]`, `[debug]`.
+
 ## Coordinate & Unit Conventions
 
-- **All physics in meters.** `PPM: f32 : 16` (pixels per meter, power of 2 for exact f32 math) converts to pixel space.
-- Physics constants are defined in pixel-intuitive values divided by PPM (e.g. `PLAYER_JUMP_FORCE: f32 : 700.0 / PPM`).
+- **All physics in meters.** `PPM = 16` (pixels per meter, power of 2 for exact f32 math) converts to pixel space.
+- Physics constants are defined in pixel-intuitive values divided by PPM in `assets/game.ini` (e.g. `PLAYER_JUMP_FORCE = 700 / PPM`), evaluated at load time.
 - Y-axis points **up** in game logic. Rendering flips via `world_to_screen(world_pos, world_size)` (camera-relative).
-- `TILE_PX :: 8`, `TILE_SIZE: f32 : 0.5` — each BMP pixel = one tile = 0.5m.
-- `LOGICAL_H :: 480`, logical width computed from display aspect ratio at runtime (`window_compute_logical_w`).
-- `WINDOW_SCALE :: 2` — integer multiplier on logical resolution.
-- `FPS :: 60`, `FIXED_STEPS :: 4` — fixed timestep = `1 / (FIXED_STEPS * FPS)`.
+- `TILE_PX :: 8`, `TILE_SIZE = 8 / PPM` (0.5m) — each BMP pixel = one tile = 0.5m.
+- `LOGICAL_H = 480`, logical width computed from display aspect ratio at runtime (`window_compute_logical_w`).
+- `WINDOW_SCALE = 3` — integer multiplier on logical resolution.
+- `FPS = 60`, `FIXED_STEPS = 4` — fixed timestep = `1 / (FIXED_STEPS * FPS)`.
 - `Collider_Rect.pos` = **center**, `size` = full width/height.
 - `player.transform.pos` = player's **bottom-center**; collider pos is offset by `PLAYER_SIZE/2` upward. `player_sync_collider()` keeps collider in sync.
 - Time values (durations, cooldowns) in **seconds** — no PPM conversion.
@@ -204,8 +220,8 @@ Constants prefixed `DEBUG_COLOR_*` (colors) and `DEBUG_*` (sizes/scales).
 
 ## Input Bindings
 
-Actions: `MOVE_UP`, `MOVE_DOWN`, `MOVE_LEFT`, `MOVE_RIGHT`, `JUMP`, `DASH`, `WALL_RUN`, `SLIDE`, `DEBUG`, `QUIT`.
+Actions: `MOVE_UP`, `MOVE_DOWN`, `MOVE_LEFT`, `MOVE_RIGHT`, `JUMP`, `DASH`, `WALL_RUN`, `SLIDE`, `DEBUG`, `RELOAD`, `QUIT`.
 
-Keyboard: WASD move, Space jump, L dash, LShift wall run, LCtrl slide, F3 debug, Esc quit.
+Keyboard: WASD move, Space jump, L dash, LShift wall run, LCtrl slide, F3 debug, F5 reload config, Esc quit.
 Gamepad: left stick / dpad move, South(A) jump, North(Y) dash, RB wall run, LB slide, Back debug, Start quit.
 Input auto-switches between keyboard/gamepad based on last device event. Release events always clear `is_down` regardless of active input type. Axis input is normalized for diagonals. Gamepad axis deadzone: `INPUT_BINDING_GAMEPAD_AXIS_DEADZONE` (0.1).

@@ -3,8 +3,8 @@ package game
 import "core:math"
 import sdl "vendor:sdl3"
 
-player_color :: proc(player: ^Player) -> [3]u8 {
-	return PLAYER_COLOR[player.fsm.current]
+player_color :: proc(player: ^Player) -> [4]u8 {
+	return PLAYER_COLOR
 }
 
 player_render :: proc(player: ^Player) {
@@ -58,7 +58,7 @@ player_render :: proc(player: ^Player) {
 	rect_p := world_to_screen(player_bl, {w_world, h_world})
 
 	color := player_color(player)
-	sdl.SetRenderDrawColor(game.win.renderer, color.r, color.g, color.b, 255)
+	sdl.SetRenderDrawColor(game.win.renderer, color.r, color.g, color.b, color.a)
 	sdl.RenderFillRect(game.win.renderer, &rect_p)
 }
 

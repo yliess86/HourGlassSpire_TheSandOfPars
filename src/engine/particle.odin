@@ -6,7 +6,7 @@ Particle :: struct {
 	lifetime: f32,
 	age:      f32,
 	size:     f32,
-	color:    [3]u8,
+	color:    [4]u8,
 }
 
 PARTICLE_POOL_MAX :: 256

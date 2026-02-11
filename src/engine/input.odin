@@ -19,6 +19,7 @@ Input_Action :: enum u8 {
 	WALL_RUN,
 	SLIDE,
 	DEBUG,
+	RELOAD,
 	QUIT,
 }
 
@@ -41,6 +42,7 @@ INPUT_BINDING_KEYBOARD :: [Input_Action]sdl.Scancode {
 	.WALL_RUN   = .LSHIFT,
 	.SLIDE      = .LCTRL,
 	.DEBUG      = .F3,
+	.RELOAD     = .F5,
 	.QUIT       = .ESCAPE,
 }
 
@@ -54,6 +56,7 @@ INPUT_BINDING_GAMEPAD_BUTTON :: [Input_Action]sdl.GamepadButton {
 	.WALL_RUN   = .RIGHT_SHOULDER,
 	.SLIDE      = .LEFT_SHOULDER,
 	.DEBUG      = .BACK,
+	.RELOAD     = .INVALID,
 	.QUIT       = .START,
 }
 
