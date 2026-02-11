@@ -1,24 +1,24 @@
-package main
+package build
 
-import "core:c/libc"
 import "core:fmt"
 import "core:os"
 import "core:strings"
 
-Entry_Type :: enum {
+Config_Entry_Type :: enum {
 	F32,
 	U8,
 	RGBA,
 	String,
 }
 
-Entry :: struct {
-	key:     string,
-	type:    Entry_Type,
-	section: string,
+Config_Entry :: struct {
+	key:       string,
+	type:      Config_Entry_Type,
+	section:   string,
+	raw_value: string,
 }
 
-gen_config_infer_type :: proc(raw_value: string) -> Entry_Type {
+config_infer_type :: proc(raw_value: string, entries: []Config_Entry) -> Config_Entry_Type {
 	value := strings.trim_space(raw_value)
 	if len(value) > 0 && value[0] == '"' do return .String
 	if len(value) > 0 && value[0] == '#' && len(value) >= 9 do return .RGBA
@@ -35,10 +35,30 @@ gen_config_infer_type :: proc(raw_value: string) -> Entry_Type {
 		if strings.contains(comment, ":u8") do return .U8
 	}
 
+	// Check if any referenced identifier is a string — means this is a string expression
+	expr := value
+	if hash_idx >= 0 do expr = strings.trim_space(value[:hash_idx])
+	pos := 0
+	for pos < len(expr) {
+		c := expr[pos]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' {
+			start := pos
+			for pos < len(expr) && ((expr[pos] >= 'a' && expr[pos] <= 'z') || (expr[pos] >= 'A' && expr[pos] <= 'Z') || expr[pos] == '_' || (expr[pos] >= '0' && expr[pos] <= '9')) do pos += 1
+			name := expr[start:pos]
+			for entry in entries {
+				if entry.key == name && entry.type == .String do return .String
+			}
+		} else {
+			pos += 1
+		}
+	}
+
 	return .F32
 }
 
-gen_config :: proc() -> bool {
+game_name: string
+
+config_gen :: proc() -> bool {
 	data, ok := os.read_entire_file("assets/game.ini")
 	if !ok {
 		fmt.eprintf("Error: could not read assets/game.ini\n")
@@ -46,7 +66,7 @@ gen_config :: proc() -> bool {
 	}
 	defer delete(data)
 
-	entries: [dynamic]Entry
+	entries: [dynamic]Config_Entry
 	defer delete(entries)
 
 	content := string(data)
@@ -70,9 +90,30 @@ gen_config :: proc() -> bool {
 		raw_value := strings.trim_space(trimmed[eq_idx + 1:])
 		if len(key) == 0 || len(raw_value) == 0 do continue
 
-		type := gen_config_infer_type(raw_value)
-		append(&entries, Entry{key = key, type = type, section = current_section})
+		// Pass 1: infer types from literal patterns only (no identifier lookup)
+		type := config_infer_type(raw_value, {})
+		append(
+			&entries,
+			Config_Entry{key = key, type = type, section = current_section, raw_value = raw_value},
+		)
+
+		if key == "GAME_TITLE" && type == .String {
+			title := strings.trim(raw_value, "\"")
+			parts := strings.fields(title)
+			game_name = strings.concatenate(parts)
+			delete(parts)
+		}
 	}
+
+	// Pass 2: re-infer types with full entries for forward string references
+	for &entry in entries {
+		if entry.type == .F32 {
+			new_type := config_infer_type(entry.raw_value, entries[:])
+			if new_type != .F32 do entry.type = new_type
+		}
+	}
+
+	if len(game_name) == 0 do game_name = "game"
 
 	// Generate output
 	b := strings.builder_make()
@@ -164,56 +205,4 @@ gen_config :: proc() -> bool {
 
 	fmt.printf("Generated src/game/config.odin with %d entries\n", len(entries))
 	return true
-}
-
-run_command :: proc(cmd: string) -> i32 {
-	return libc.system(strings.clone_to_cstring(cmd))
-}
-
-when ODIN_OS == .Windows {
-	EXE_EXT :: ".exe"
-} else {
-	EXE_EXT :: ""
-}
-
-GAME_BIN :: "bin/HourGlassSpire" + EXE_EXT
-
-main :: proc() {
-	mode := "run"
-	if len(os.args) > 1 do mode = os.args[1]
-
-	switch mode {
-	case "run", "build", "check", "gen":
-	case:
-		fmt.eprintf("Usage: odin run build.odin -file -- [run|build|check|gen]\n")
-		fmt.eprintf("  run   — gen_config + build + run (default)\n")
-		fmt.eprintf("  build — gen_config + build only\n")
-		fmt.eprintf("  check — gen_config + type-check only\n")
-		fmt.eprintf("  gen   — regenerate config.odin only\n")
-		os.exit(1)
-	}
-
-	if !gen_config() do os.exit(1)
-	if mode == "gen" do return
-
-	os.make_directory("bin")
-	rc: i32
-	switch mode {
-	case "check":
-		rc = run_command("odin check src/game/")
-	case "build", "run":
-		rc = run_command("odin build src/game/ -out:" + GAME_BIN + " -debug")
-	}
-	if rc != 0 {
-		fmt.eprintf("Build failed (exit code %d)\n", rc)
-		os.exit(1)
-	}
-	if mode != "run" do return
-
-	when ODIN_OS == .Windows {
-		rc = run_command(GAME_BIN)
-	} else {
-		rc = run_command("./" + GAME_BIN)
-	}
-	if rc != 0 do os.exit(1)
 }

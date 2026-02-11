@@ -5,10 +5,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Run
 
 ```sh
-odin run build.odin -file            # gen_config + build + run
-odin run build.odin -file -- build   # gen_config + build only
-odin run build.odin -file -- check   # gen_config + type-check only
-odin run build.odin -file -- gen     # regenerate config.odin only
+odin run build/            # gen_config + build (-debug) + run
+odin run build/ -- run release       # gen_config + build (-o:speed) + run
+odin run build/ -- build             # gen_config + build (-debug) only
+odin run build/ -- build release     # gen_config + build (-o:speed) only
+odin run build/ -- check   # gen_config + type-check only
+odin run build/ -- gen     # regenerate config.odin only
+odin run build/ -- dist              # build release for current platform
+odin run build/ -- dist windows_x64  # cross-compile for Windows x64
+odin run build/ -- dist macos_arm64  # cross-compile for macOS ARM64
+odin run build/ -- dist linux_x64   # cross-compile for Linux x64
+odin run build/ -- setup             # download SDL3 libs for current platform
+odin run build/ -- clean             # remove bin/, dist/, and libs/
+odin run build/ -- clean bin dist    # remove specific targets (bin, dist, libs)
 ```
 
 No test framework — verify by running the game.
@@ -23,8 +32,11 @@ Odin lang, SDL3 (`vendor:sdl3`). Main package `src/game/`, reusable engine packa
 |---|---|
 | `PLAYER.md` | Mermaid `stateDiagram-v2` of the player FSM — **keep in sync** when adding/removing states or transitions |
 | `assets/game.ini` | All game constants (engine, physics, level colors, player, debug) — hot-reloadable with F5 |
-| `src/game/config.odin` | **AUTO-GENERATED** from `assets/game.ini` by `build.odin` — variable declarations + `config_apply` proc. Do not edit manually |
-| `build.odin` | Build script (project root): config codegen + odin build/check/run. Replaces `tools/gen_config.odin` |
+| `src/game/config.odin` | **AUTO-GENERATED** from `assets/game.ini` by `build/` — variable declarations + `config_apply` proc. Do not edit manually |
+| `build/main.odin` | Build script entry point: CLI parsing, dev build + run dispatch, `clean` command |
+| `build/sys.odin` | OS helpers: `sys_run`, `sys_make_dir`, `sys_copy`, `sys_download` |
+| `build/config.odin` | Config codegen: parses `assets/game.ini`, generates `src/game/config.odin` |
+| `build/dist.odin` | Distribution: dist targets, SDL3 download/setup, release build + bundle |
 | `src/engine/config.odin` | INI parser, expression evaluator, config load/reload/get API |
 | `src/game/main.odin` | Entry point (`main` proc): game loop (fixed-timestep update, render, present) |
 | `src/game/game.odin` | `Game_State` struct, `game` global, `config_post_apply` (syncs input bindings + camera params on config load/reload), game lifecycle (`game_init`/`game_clean`), `game_update`/`game_fixed_update`/`game_render`/`game_render_debug`, `world_to_screen`/`world_to_screen_point` convenience wrappers |
@@ -160,9 +172,9 @@ All game constants live in `assets/game.ini` — an INI file with sections, expr
 
 **Workflow for adding/renaming constants:**
 1. Edit `assets/game.ini` — add/rename keys under the appropriate section
-2. Run `odin run build.odin -file -- gen` — regenerates `src/game/config.odin`
+2. Run `odin run build/ -- gen` — regenerates `src/game/config.odin`
 3. Update source files to use the new constant names
-4. `odin run build.odin -file -- check` — verify compilation
+4. `odin run build/ -- check` — verify compilation
 
 INI sections: `[engine]`, `[physics]`, `[camera]` (camera follow parameters prefixed `CAMERA_*`), `[level]` (level colors prefixed `LEVEL_COLOR_*`), `[player]`, `[player_run]`, `[player_jump]`, `[player_dash]`, `[player_wall]`, `[player_slopes]`, `[player_graphics]`, `[player_particles]`, `[player_particle_colors]`, `[input]` (key/gamepad bindings as SDL name strings, prefixed `INPUT_KB_*`/`INPUT_GP_*`), `[debug_colors]`, `[debug]`.
 

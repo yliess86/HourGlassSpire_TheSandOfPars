@@ -1,3 +1,5 @@
 .backup
 scripts
 bin/
+dist/
+libs/

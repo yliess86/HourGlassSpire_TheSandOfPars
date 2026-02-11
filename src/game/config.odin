@@ -4,6 +4,10 @@ package game
 import engine "../engine"
 import "core:fmt"
 
+// [game]
+GAME_TITLE: string
+GAME_SUBTITLE: string
+
 // [engine]
 WINDOW_TITLE: string
 WINDOW_SCALE: u8
@@ -153,6 +157,8 @@ DEBUG_TEXT_STATE_GAP: f32
 DEBUG_VEL_SCALE: f32
 
 config_apply :: proc() {
+	if val, ok := engine.config_get_string(&game_config, "GAME_TITLE"); ok do GAME_TITLE = val
+	if val, ok := engine.config_get_string(&game_config, "GAME_SUBTITLE"); ok do GAME_SUBTITLE = val
 	if val, ok := engine.config_get_string(&game_config, "WINDOW_TITLE"); ok do WINDOW_TITLE = val
 	if val, ok := engine.config_get_u8(&game_config, "WINDOW_SCALE"); ok do WINDOW_SCALE = val
 	if val, ok := engine.config_get_f32(&game_config, "LOGICAL_H"); ok do LOGICAL_H = val

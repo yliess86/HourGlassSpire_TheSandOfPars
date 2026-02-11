@@ -188,6 +188,7 @@ Token_Kind :: enum u8 {
 	Number,
 	Ident,
 	Hex_Color,
+	String_Lit,
 	Plus,
 	Minus,
 	Star,
@@ -308,6 +309,19 @@ _next_token :: proc(t: ^Tokenizer) -> (tok: Token, ok: bool) {
 			return Token{kind = .Hex_Color, value = [4]u8{r, g, b, a}}, true
 		}
 		return {}, false
+	}
+
+	if c == '"' {
+		start := t.pos + 1
+		end := start
+		for end < len(t.src) && t.src[end] != '"' do end += 1
+		if end >= len(t.src) do return {}, false
+		tok = Token {
+			kind  = .String_Lit,
+			value = t.src[start:end],
+		}
+		t.pos = end + 1
+		return tok, true
 	}
 
 	if (c >= '0' && c <= '9') || c == '.' {
@@ -459,6 +473,50 @@ _parse_expr :: proc(p: ^Parser) -> f32 {
 }
 
 @(private = "file")
+_eval_string_concat :: proc(expr: string, config: ^Config) -> (val: Config_String, ok: bool) {
+	t := Tokenizer {
+		src = expr,
+		pos = 0,
+	}
+
+	tok, tok_ok := _next_token(&t)
+	if !tok_ok do return {}, false
+
+	b := strings.builder_make()
+	defer strings.builder_destroy(&b)
+	first := true
+
+	for {
+		if !first {
+			if tok.kind == .EOF do break
+			if tok.kind != .Plus do return {}, false
+			tok, tok_ok = _next_token(&t)
+			if !tok_ok do return {}, false
+		}
+		first = false
+
+		#partial switch tok.kind {
+		case .String_Lit:
+			strings.write_string(&b, tok.value.(string))
+		case .Ident:
+			name := tok.value.(string)
+			idx, found := config.lookup[name]
+			if !found do return {}, false
+			str, is_str := config.entries[idx].value.(Config_String)
+			if !is_str do return {}, false
+			strings.write_string(&b, str.value)
+		case:
+			return {}, false
+		}
+
+		tok, tok_ok = _next_token(&t)
+		if !tok_ok do return {}, false
+	}
+
+	return Config_String{value = strings.clone(strings.to_string(b))}, true
+}
+
+@(private = "file")
 _eval_expression :: proc(expr: string, config: ^Config) -> (val: Config_Entry_Value, ok: bool) {
 	trimmed := strings.trim_space(expr)
 
@@ -481,7 +539,10 @@ _eval_expression :: proc(expr: string, config: ^Config) -> (val: Config_Entry_Va
 
 	p := _parser_init(trimmed, config)
 	result := _parse_expr(&p)
-	if !p.ok do return nil, false
-	if p.current.kind != .EOF do return nil, false
-	return Config_Expression{value = result}, true
+	if p.ok && p.current.kind == .EOF do return Config_Expression{value = result}, true
+
+	str_val, str_ok := _eval_string_concat(trimmed, config)
+	if str_ok do return str_val, true
+
+	return nil, false
 }
