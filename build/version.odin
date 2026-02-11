@@ -6,11 +6,11 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 
-version_stamp :: proc() -> bool {
-	data, ok := os.read_entire_file("assets/game.ini")
-	if !ok {
+version_stamp :: proc() -> (compact_name: string, hash_out: string, ok: bool) {
+	data, read_ok := os.read_entire_file("assets/game.ini")
+	if !read_ok {
 		fmt.eprintf("Error: could not read assets/game.ini\n")
-		return false
+		return {}, {}, false
 	}
 	defer delete(data)
 
@@ -77,8 +77,11 @@ version_stamp :: proc() -> bool {
 	write_ok := os.write_entire_file("assets/game.ini", transmute([]u8)output)
 	if !write_ok {
 		fmt.eprintf("Error: could not write assets/game.ini\n")
-		return false
+		return {}, {}, false
 	}
 
-	return true
+	// Compact name: remove spaces (e.g. "Game Jam" → "GameJam")
+	compact_name = strings.concatenate(strings.fields(name))
+	hash_out = strings.clone(hash_str)
+	return compact_name, hash_out, true
 }

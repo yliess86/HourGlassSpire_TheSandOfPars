@@ -74,7 +74,7 @@ dist_setup_sdl :: proc(target_os: string) -> bool {
 				),
 			)
 			sys_copy(
-				"libs\\sdl3_tmp\\SDL3-devel-" + DIST_SDL_VERSION + "-VC\\lib\\x64\\SDL3.dll",
+				"libs\\sdl3_tmp\\SDL3-" + DIST_SDL_VERSION + "\\lib\\x64\\SDL3.dll",
 				"libs\\windows\\SDL3.dll",
 			)
 			sys_run("rmdir /S /Q libs\\sdl3_tmp")
@@ -84,7 +84,7 @@ dist_setup_sdl :: proc(target_os: string) -> bool {
 				return false
 			}
 			sys_copy(
-				"libs/sdl3_tmp/SDL3-devel-" + DIST_SDL_VERSION + "-VC/lib/x64/SDL3.dll",
+				"libs/sdl3_tmp/SDL3-" + DIST_SDL_VERSION + "/lib/x64/SDL3.dll",
 				"libs/windows/SDL3.dll",
 			)
 			sys_run("rm -rf libs/sdl3_tmp")
@@ -121,7 +121,7 @@ dist_setup_sdl :: proc(target_os: string) -> bool {
 }
 
 dist_build :: proc(target: Dist_Target) {
-	tmp_dir := fmt.tprintf("/tmp/%s_dist_%s", game_name, target.name)
+	tmp_dir := fmt.tprintf(".dist_tmp_%s", target.name)
 	tmp_assets := fmt.tprintf("%s/assets", tmp_dir)
 	tmp_bin := fmt.tprintf("%s/%s%s", tmp_dir, game_name, target.exe_ext)
 
@@ -138,9 +138,9 @@ dist_build :: proc(target: Dist_Target) {
 	extra_flags: string
 	switch target.target_os {
 	case "windows":
-		extra_flags = " -subsystem:windows"
+		when ODIN_OS == .Windows do extra_flags = " -subsystem:windows"
 	case "linux":
-		extra_flags = " -extra-linker-flags:\"-Wl,-rpath,'$ORIGIN'\""
+		extra_flags = " -extra-linker-flags:\"-Wl,-rpath,'\\$ORIGIN'\""
 	}
 	build_cmd := fmt.tprintf(
 		"odin build src/game/ -out:%s -target:%s -o:speed%s",

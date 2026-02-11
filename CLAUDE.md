@@ -12,6 +12,7 @@ odin run build/ -- build release     # gen_config + build (-o:speed) only
 odin run build/ -- check             # gen_config + type-check only
 odin run build/ -- gen               # regenerate config.odin only
 odin run build/ -- version           # stamp current UTC date/time into game.ini
+odin run build/ -- release           # stamp version, commit, tag (release-<hash>), and push
 odin run build/ -- dist              # build release for current platform
 odin run build/ -- dist windows_x64  # cross-compile for Windows x64
 odin run build/ -- dist macos_arm64  # cross-compile for macOS ARM64

@@ -1,0 +1,128 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'release-*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: windows_x64
+            os: windows-latest
+          - target: macos_arm64
+            os: macos-latest
+          - target: macos_x64
+            os: macos-latest
+          - target: linux_x64
+            os: ubuntu-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Odin
+        uses: laytan/setup-odin@v2
+        with:
+          release: dev-2026-02
+
+      - name: Setup SDL3 for Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxext-dev libxcursor-dev libxi-dev libxrandr-dev \
+            libxfixes-dev libxss-dev libxtst-dev libxkbcommon-dev \
+            libwayland-dev libdecor-0-dev \
+            libegl-dev libgl-dev libdrm-dev libgbm-dev \
+            libpulse-dev libasound2-dev libpipewire-0.3-dev \
+            libudev-dev libdbus-1-dev
+          curl -L -o SDL3.tar.gz https://github.com/libsdl-org/SDL/releases/download/release-3.4.0/SDL3-3.4.0.tar.gz
+          tar xzf SDL3.tar.gz
+          cd SDL3-3.4.0
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j$(nproc)
+          sudo cmake --install build
+          sudo ldconfig
+          cd ..
+          mkdir -p libs/linux
+          cp /usr/local/lib/libSDL3.so.0 libs/linux/
+
+      - name: Setup SDL3 for macOS
+        if: runner.os == 'macOS'
+        run: |
+          odin run build/ -- setup
+          sudo mkdir -p /usr/local/lib
+          sudo cp libs/macos/libSDL3.dylib /usr/local/lib/
+
+      - name: Build dist
+        run: odin run build/ -- dist ${{ matrix.target }}
+
+      - name: Zip artifact (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd dist/${{ matrix.target }}
+          zip -r ../../HourGlassSpire-${{ github.ref_name }}-${{ matrix.target }}.zip .
+
+      - name: Zip artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/${{ matrix.target }}/* -DestinationPath HourGlassSpire-${{ github.ref_name }}-${{ matrix.target }}.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HourGlassSpire-${{ github.ref_name }}-${{ matrix.target }}
+          path: HourGlassSpire-${{ github.ref_name }}-${{ matrix.target }}.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-creatordate | sed -n '2p')
+          if [ -n "$PREV_TAG" ]; then
+            CHANGELOG=$(git log --pretty="- %s" "$PREV_TAG".."${{ github.ref_name }}")
+            COMPARE_URL="${{ github.server_url }}/${{ github.repository }}/compare/${PREV_TAG}...${{ github.ref_name }}"
+          else
+            CHANGELOG=$(git log --pretty="- %s")
+            COMPARE_URL="${{ github.server_url }}/${{ github.repository }}/commits/${{ github.ref_name }}"
+          fi
+          {
+            echo "body<<CHANGELOG_EOF"
+            echo "## What's Changed"
+            echo ""
+            echo "$CHANGELOG"
+            echo ""
+            echo "**Full Changelog**: $COMPARE_URL"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: ${{ steps.changelog.outputs.body }}
+          files: artifacts/*.zip

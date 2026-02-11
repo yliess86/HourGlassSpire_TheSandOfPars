@@ -52,7 +52,7 @@ main :: proc() {
 	}
 
 	switch mode {
-	case "run", "build", "check", "gen", "dist", "version":
+	case "run", "build", "check", "gen", "dist", "version", "release":
 	case:
 		fmt.eprintf("Usage: odin run build/ -- [run|build|check|gen|dist|setup|clean]\n")
 		fmt.eprintf("  run [release]    — gen_config + build + run (default: -debug)\n")
@@ -61,6 +61,7 @@ main :: proc() {
 		fmt.eprintf("  gen              — regenerate config.odin only\n")
 		fmt.eprintf("  dist [target]    — gen_config + release build + bundle\n")
 		fmt.eprintf("  version          — stamp current UTC date/time into game.ini\n")
+		fmt.eprintf("  release          — stamp version, commit, tag, and push\n")
 		fmt.eprintf("  setup            — download SDL3 libs for current platform\n")
 		fmt.eprintf("  clean [targets]  — remove build artifacts\n")
 		fmt.eprintf("                     targets: bin, dist, libs (default: all)\n")
@@ -73,12 +74,27 @@ main :: proc() {
 		os.exit(1)
 	}
 
+	// Stamp version before config_gen for version/release modes
+	ver_name, ver_hash: string
+	if mode == "version" || mode == "release" {
+		stamp_ok: bool
+		ver_name, ver_hash, stamp_ok = version_stamp()
+		if !stamp_ok do os.exit(1)
+	}
+
 	if !config_gen() do os.exit(1)
 	if mode == "gen" do return
+	if mode == "version" do return
 
-	if mode == "version" {
-		if !version_stamp() do os.exit(1)
-		if !config_gen() do os.exit(1)
+	if mode == "release" {
+		tag := fmt.tprintf("release-%s", ver_hash)
+		msg := fmt.tprintf("%s: %s", ver_name, tag)
+		if !sys_run("git add assets/game.ini src/game/config.odin") do os.exit(1)
+		if !sys_run(fmt.tprintf("git commit -m \"%s\"", msg)) do os.exit(1)
+		if !sys_run(fmt.tprintf("git tag %s", tag)) do os.exit(1)
+		if !sys_run(fmt.tprintf("git push origin HEAD %s", tag)) do os.exit(1)
+
+		fmt.printf("Released %s\n", tag)
 		return
 	}
 
