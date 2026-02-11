@@ -1,8 +1,7 @@
 package game
 
-import "core:fmt"
-import "core:math"
 import engine "../engine"
+import "core:fmt"
 import sdl "vendor:sdl3"
 
 TILE_PX :: 8
@@ -12,13 +11,13 @@ Tile_Kind :: enum u8 {
 	Empty,
 	Solid,
 	Platform,
-	Behind_Wall,
+	Back_Wall,
 	Window,
 	Spawn,
-	Slope_Right,      // floor, rises left→right /
-	Slope_Left,       // floor, rises right→left \
+	Slope_Right, // floor, rises left→right /
+	Slope_Left, // floor, rises right→left \
 	Slope_Ceil_Right, // ceiling, solid top-right \
-	Slope_Ceil_Left,  // ceiling, solid top-left /
+	Slope_Ceil_Left, // ceiling, solid top-left /
 }
 
 // BMP palette: editor color → tile kind
@@ -27,7 +26,7 @@ PALETTE :: [Tile_Kind][3]u8 {
 	.Empty            = {0, 0, 0},
 	.Solid            = {255, 255, 255},
 	.Platform         = {0, 255, 0},
-	.Behind_Wall      = {127, 127, 127},
+	.Back_Wall        = {127, 127, 127},
 	.Window           = {255, 255, 0},
 	.Spawn            = {255, 0, 255},
 	.Slope_Right      = {255, 0, 0},
@@ -37,20 +36,19 @@ PALETTE :: [Tile_Kind][3]u8 {
 }
 
 // Render colors
-COLOR_TILE_SOLID:       [3]u8 : {90, 80, 70}
-COLOR_TILE_BEHIND_WALL: [3]u8 : {45, 40, 35}
-COLOR_TILE_WINDOW:      [3]u8 : {35, 30, 28}
+COLOR_TILE_SOLID: [3]u8 : {90, 80, 70}
+COLOR_TILE_BACK_WALL: [3]u8 : {45, 40, 35}
+COLOR_TILE_WINDOW: [3]u8 : {35, 30, 28}
 
 Level :: struct {
-	width, height:     int,
-	tiles:             []Tile_Kind, // [y * width + x], y=0 = world bottom
-
-	world_w, world_h:  f32, // meters
-	player_spawn:      [2]f32, // bottom-center, meters
-
+	width, height:       int,
+	tiles:               []Tile_Kind, // [y * width + x], y=0 = world bottom
+	world_w, world_h:    f32, // meters
+	player_spawn:        [2]f32, // bottom-center, meters
 	ground_colliders:    [dynamic]engine.Collider_Rect,
+	ceiling_colliders:   [dynamic]engine.Collider_Rect,
+	side_wall_colliders: [dynamic]engine.Collider_Rect,
 	platform_colliders:  [dynamic]engine.Collider_Rect,
-	wall_colliders:      [dynamic]engine.Collider_Rect,
 	back_wall_colliders: [dynamic]engine.Collider_Rect,
 	slope_colliders:     [dynamic]engine.Collider_Slope,
 }
@@ -165,14 +163,25 @@ Merge_Run :: struct {
 
 @(private = "file")
 slope_is_kind :: proc(kind: Tile_Kind) -> bool {
-	return kind == .Slope_Right || kind == .Slope_Left || kind == .Slope_Ceil_Right || kind == .Slope_Ceil_Left
+	return(
+		kind == .Slope_Right ||
+		kind == .Slope_Left ||
+		kind == .Slope_Ceil_Right ||
+		kind == .Slope_Ceil_Left \
+	)
 }
 
 @(private = "file")
 level_merge_colliders :: proc(level: ^Level) {
-	// Reclassify interior slope tiles as .Solid so the row-merge
-	// includes them as ground/wall colliders. Only surface (hypotenuse)
-	// tiles remain as slopes for diagonal merging.
+	// Save original tile kinds before reclassification so the
+	// classification pass can detect slope neighbors that get cleared.
+	n := level.width * level.height
+	original_tiles := make([]Tile_Kind, n)
+	defer delete(original_tiles)
+	copy(original_tiles, level.tiles)
+
+	// Reclassify interior slope tiles to .Empty so only surface
+	// (hypotenuse) tiles remain as slopes for diagonal merging.
 	for y in 0 ..< level.height {
 		for x in 0 ..< level.width {
 			kind := level.tiles[y * level.width + x]
@@ -191,18 +200,95 @@ level_merge_colliders :: proc(level: ^Level) {
 		}
 	}
 
+	// Classify solid tiles by exposed face.
+	// Uses original_tiles for neighbor checks so reclassified slope
+	// tiles (now .Empty) are still recognized as slope geometry.
+	ground_mask := make([]bool, n)
+	defer delete(ground_mask)
+	ceiling_mask := make([]bool, n)
+	defer delete(ceiling_mask)
+	side_wall_mask := make([]bool, n)
+	defer delete(side_wall_mask)
+
+	for y in 0 ..< level.height {
+		for x in 0 ..< level.width {
+			idx := y * level.width + x
+			if level.tiles[idx] != .Solid do continue
+
+			above_solid := y < level.height - 1 && level.tiles[(y + 1) * level.width + x] == .Solid
+			below_solid := y > 0 && level.tiles[(y - 1) * level.width + x] == .Solid
+
+			// Floor slope above → slope handles the surface, no ground needed
+			above_kind :=
+				original_tiles[(y + 1) * level.width + x] if y < level.height - 1 else Tile_Kind.Empty
+			floor_slope_above := above_kind == .Slope_Right || above_kind == .Slope_Left
+
+			// Ceiling slope below → slope handles the surface, no ceiling needed
+			below_kind := original_tiles[(y - 1) * level.width + x] if y > 0 else Tile_Kind.Empty
+			ceil_slope_below := below_kind == .Slope_Ceil_Right || below_kind == .Slope_Ceil_Left
+
+			is_ground := !above_solid && !floor_slope_above
+			is_ceiling := !below_solid && !ceil_slope_below
+
+			if is_ground do ground_mask[idx] = true
+			if is_ceiling do ceiling_mask[idx] = true
+
+			if !is_ground && !is_ceiling {
+				left_solid := x > 0 && level.tiles[y * level.width + (x - 1)] == .Solid
+				right_solid :=
+					x < level.width - 1 && level.tiles[y * level.width + (x + 1)] == .Solid
+
+				exposed_left := !left_solid
+				exposed_right := !right_solid
+
+				// Check original tiles for slope neighbors (reclassified ones are .Empty now)
+				if exposed_left &&
+				   x > 0 &&
+				   slope_is_kind(original_tiles[y * level.width + (x - 1)]) {
+					exposed_left = false
+				}
+				if exposed_right &&
+				   x < level.width - 1 &&
+				   slope_is_kind(original_tiles[y * level.width + (x + 1)]) {
+					exposed_right = false
+				}
+
+				if exposed_left || exposed_right {
+					side_wall_mask[idx] = true
+				}
+			}
+		}
+	}
+
+	level_merge_mask(level.width, level.height, ground_mask, &level.ground_colliders)
+	level_merge_mask(level.width, level.height, ceiling_mask, &level.ceiling_colliders)
+	level_merge_mask(level.width, level.height, side_wall_mask, &level.side_wall_colliders)
+
+	// Inverted back wall mask: everything is back wall except Window tiles
+	back_wall_mask := make([]bool, n)
+	defer delete(back_wall_mask)
+	for i in 0 ..< n {back_wall_mask[i] = true}
+	for y in 0 ..< level.height {
+		for x in 0 ..< level.width {
+			if level.tiles[y * level.width + x] == .Window {
+				back_wall_mask[y * level.width + x] = false
+			}
+		}
+	}
+	level_merge_mask(level.width, level.height, back_wall_mask, &level.back_wall_colliders)
+
+	// Greedy row-merge for Platform tiles
 	active: [dynamic]Merge_Run
 	defer delete(active)
 
 	for y in 0 ..< level.height {
-		// Find horizontal runs in this row
 		row_runs: [dynamic]Merge_Run
 		defer delete(row_runs)
 
 		x := 0
 		for x < level.width {
 			kind := level.tiles[y * level.width + x]
-			if kind != .Solid && kind != .Platform && kind != .Behind_Wall && kind != .Window {
+			if kind != .Platform {
 				x += 1
 				continue
 			}
@@ -213,13 +299,16 @@ level_merge_colliders :: proc(level: ^Level) {
 			append(&row_runs, Merge_Run{kind = kind, x0 = x0, x1 = x, y0 = y, y1 = y + 1})
 		}
 
-		// Try to extend active rects
 		matched := make([]bool, len(row_runs))
 		defer delete(matched)
 
 		for &ar in active {
 			for &rr, ri in row_runs {
-				if !matched[ri] && rr.kind == ar.kind && rr.x0 == ar.x0 && rr.x1 == ar.x1 && ar.y1 == y {
+				if !matched[ri] &&
+				   rr.kind == ar.kind &&
+				   rr.x0 == ar.x0 &&
+				   rr.x1 == ar.x1 &&
+				   ar.y1 == y {
 					ar.y1 = y + 1
 					matched[ri] = true
 					break
@@ -227,7 +316,6 @@ level_merge_colliders :: proc(level: ^Level) {
 			}
 		}
 
-		// Emit active rects that couldn't extend
 		i := 0
 		for i < len(active) {
 			if active[i].y1 <= y {
@@ -238,7 +326,6 @@ level_merge_colliders :: proc(level: ^Level) {
 			}
 		}
 
-		// Add new unmatched row runs
 		for rr, ri in row_runs {
 			if !matched[ri] {
 				append(&active, rr)
@@ -246,7 +333,6 @@ level_merge_colliders :: proc(level: ^Level) {
 		}
 	}
 
-	// Emit remaining
 	for ar in active {
 		emit_run(level, ar)
 	}
@@ -262,30 +348,95 @@ emit_run :: proc(level: ^Level, run: Merge_Run) {
 	cx := f32(run.x0) * TILE_SIZE + w / 2
 	cy := f32(run.y0) * TILE_SIZE + h / 2
 
-	rect := engine.Collider_Rect{
+	rect := engine.Collider_Rect {
 		pos  = {cx, cy},
 		size = {w, h},
 	}
 
-	#partial switch run.kind {
-	case .Solid:
-		append(&level.ground_colliders, rect)
-		append(&level.wall_colliders, rect)
-	case .Platform:
-		append(&level.platform_colliders, rect)
-	case .Behind_Wall:
-		append(&level.back_wall_colliders, rect)
-	// Window tiles are purely visual — no colliders
+	append(&level.platform_colliders, rect)
+}
+
+@(private = "file")
+level_merge_mask :: proc(
+	width, height: int,
+	mask: []bool,
+	target: ^[dynamic]engine.Collider_Rect,
+) {
+	active: [dynamic]Merge_Run
+	defer delete(active)
+
+	for y in 0 ..< height {
+		row_runs: [dynamic]Merge_Run
+		defer delete(row_runs)
+
+		x := 0
+		for x < width {
+			if !mask[y * width + x] {
+				x += 1
+				continue
+			}
+			x0 := x
+			for x < width && mask[y * width + x] {
+				x += 1
+			}
+			append(&row_runs, Merge_Run{kind = .Solid, x0 = x0, x1 = x, y0 = y, y1 = y + 1})
+		}
+
+		matched := make([]bool, len(row_runs))
+		defer delete(matched)
+
+		for &ar in active {
+			for &rr, ri in row_runs {
+				if !matched[ri] && rr.x0 == ar.x0 && rr.x1 == ar.x1 && ar.y1 == y {
+					ar.y1 = y + 1
+					matched[ri] = true
+					break
+				}
+			}
+		}
+
+		i := 0
+		for i < len(active) {
+			if active[i].y1 <= y {
+				emit_rect(target, active[i])
+				ordered_remove(&active, i)
+			} else {
+				i += 1
+			}
+		}
+
+		for rr, ri in row_runs {
+			if !matched[ri] {
+				append(&active, rr)
+			}
+		}
 	}
+
+	for ar in active {
+		emit_rect(target, ar)
+	}
+}
+
+@(private = "file")
+emit_rect :: proc(target: ^[dynamic]engine.Collider_Rect, run: Merge_Run) {
+	w := f32(run.x1 - run.x0) * TILE_SIZE
+	h := f32(run.y1 - run.y0) * TILE_SIZE
+	cx := f32(run.x0) * TILE_SIZE + w / 2
+	cy := f32(run.y0) * TILE_SIZE + h / 2
+	append(target, engine.Collider_Rect{pos = {cx, cy}, size = {w, h}})
 }
 
 @(private = "file")
 tile_to_slope_kind :: proc(kind: Tile_Kind) -> engine.Collider_Slope_Kind {
 	#partial switch kind {
-	case .Slope_Right:      return .Right
-	case .Slope_Left:       return .Left
-	case .Slope_Ceil_Left:  return .Ceil_Left
-	case .Slope_Ceil_Right: return .Ceil_Right
+	case .Slope_Right:
+		return .Right
+	case .Slope_Left:
+		return .Left
+	case .Slope_Ceil_Left:
+		return .Ceil_Left
+	case .Slope_Ceil_Right:
+		return .Ceil_Right
 	}
 	return .Right
 }
@@ -346,12 +497,15 @@ level_merge_slopes :: proc(level: ^Level) {
 				base_y = f32(y - run + 1) * TILE_SIZE
 			}
 
-			append(&level.slope_colliders, engine.Collider_Slope{
-				kind   = tile_to_slope_kind(kind),
-				base_x = base_x,
-				base_y = base_y,
-				span   = span,
-			})
+			append(
+				&level.slope_colliders,
+				engine.Collider_Slope {
+					kind = tile_to_slope_kind(kind),
+					base_x = base_x,
+					base_y = base_y,
+					span = span,
+				},
+			)
 		}
 	}
 }
@@ -363,8 +517,8 @@ level_render :: proc(level: ^Level) {
 			kind := level.tiles[y * level.width + x]
 			color: [3]u8
 			#partial switch kind {
-			case .Behind_Wall:
-				color = COLOR_TILE_BEHIND_WALL
+			case .Back_Wall:
+				color = COLOR_TILE_BACK_WALL
 			case .Window:
 				color = COLOR_TILE_WINDOW
 			case:
@@ -379,7 +533,13 @@ level_render :: proc(level: ^Level) {
 	}
 
 	// Slope backgrounds (behind the triangles)
-	sdl.SetRenderDrawColor(game.win.renderer, COLOR_TILE_BEHIND_WALL.r, COLOR_TILE_BEHIND_WALL.g, COLOR_TILE_BEHIND_WALL.b, 255)
+	sdl.SetRenderDrawColor(
+		game.win.renderer,
+		COLOR_TILE_BACK_WALL.r,
+		COLOR_TILE_BACK_WALL.g,
+		COLOR_TILE_BACK_WALL.b,
+		255,
+	)
 	for s in level.slope_colliders {
 		world_pos := [2]f32{s.base_x, s.base_y}
 		world_size := [2]f32{s.span, s.span}
@@ -395,13 +555,24 @@ level_render :: proc(level: ^Level) {
 			world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
 			world_size := [2]f32{TILE_SIZE, TILE_SIZE}
 			rect := world_to_screen(world_pos, world_size)
-			sdl.SetRenderDrawColor(game.win.renderer, COLOR_TILE_SOLID.r, COLOR_TILE_SOLID.g, COLOR_TILE_SOLID.b, 255)
+			sdl.SetRenderDrawColor(
+				game.win.renderer,
+				COLOR_TILE_SOLID.r,
+				COLOR_TILE_SOLID.g,
+				COLOR_TILE_SOLID.b,
+				255,
+			)
 			sdl.RenderFillRect(game.win.renderer, &rect)
 		}
 	}
 
 	// Slope triangles (filled)
-	slope_color := sdl.FColor{f32(COLOR_TILE_SOLID.r) / 255, f32(COLOR_TILE_SOLID.g) / 255, f32(COLOR_TILE_SOLID.b) / 255, 1}
+	slope_color := sdl.FColor {
+		f32(COLOR_TILE_SOLID.r) / 255,
+		f32(COLOR_TILE_SOLID.g) / 255,
+		f32(COLOR_TILE_SOLID.b) / 255,
+		1,
+	}
 	for s in level.slope_colliders {
 		v0, v1, v2: [2]f32
 		switch s.kind {
@@ -425,7 +596,7 @@ level_render :: proc(level: ^Level) {
 		sp0 := world_to_screen_point(v0)
 		sp1 := world_to_screen_point(v1)
 		sp2 := world_to_screen_point(v2)
-		verts := [3]sdl.Vertex{
+		verts := [3]sdl.Vertex {
 			{position = sdl.FPoint(sp0), color = slope_color, tex_coord = {0, 0}},
 			{position = sdl.FPoint(sp1), color = slope_color, tex_coord = {0, 0}},
 			{position = sdl.FPoint(sp2), color = slope_color, tex_coord = {0, 0}},
@@ -437,8 +608,24 @@ level_render :: proc(level: ^Level) {
 level_destroy :: proc(level: ^Level) {
 	delete(level.tiles)
 	delete(level.ground_colliders)
+	delete(level.ceiling_colliders)
+	delete(level.side_wall_colliders)
 	delete(level.platform_colliders)
-	delete(level.wall_colliders)
 	delete(level.back_wall_colliders)
 	delete(level.slope_colliders)
+}
+
+level_debug :: proc(level: ^Level) {
+	if game.debug == .BACKGROUND || game.debug == .ALL {
+		for c in level.ground_colliders do debug_collider_rect(c)
+		for c in level.ceiling_colliders do debug_collider_rect(c, DEBUG_COLOR_COLLIDER_CEILING)
+		for c in level.side_wall_colliders do debug_collider_rect(c, DEBUG_COLOR_COLLIDER_SIDE_WALL)
+		for c in level.platform_colliders do debug_collider_plateform(c)
+		for c in level.back_wall_colliders do debug_collider_back_wall(c)
+		for s in level.slope_colliders do debug_collider_slope(s)
+		for c in level.ground_colliders do debug_point(c.pos)
+		for c in level.ceiling_colliders do debug_point(c.pos)
+		for c in level.side_wall_colliders do debug_point(c.pos)
+		for c in level.platform_colliders do debug_point(c.pos)
+	}
 }

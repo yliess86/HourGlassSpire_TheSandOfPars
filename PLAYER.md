@@ -35,10 +35,12 @@ stateDiagram-v2
     Wall_Run_Horizontal --> Airborne : jump buffered
     Wall_Run_Horizontal --> Airborne : !on_back_wall / falling fast / hit side wall
     Wall_Run_Horizontal --> Dashing : DASH && cooldown ready
-    Wall_Run_Horizontal --> Grounded : on_ground
+    Wall_Run_Horizontal --> Grounded : on_ground && vel.y <= 0
+    Wall_Run_Horizontal --> Wall_Slide : WALL_RUN released && SLIDE held
+    Wall_Run_Horizontal --> Airborne : WALL_RUN released
 
     Dashing --> Grounded : timer expired && on_ground
-    Dashing --> Wall_Run_Vertical : timer expired && on_side_wall && WALL_RUN && !wall_run_used && vel.y > 0
+    Dashing --> Wall_Run_Vertical : timer expired && on_side_wall && WALL_RUN && cooldown ready && !wall_run_used && vel.y > 0
     Dashing --> Wall_Slide : timer expired && on_side_wall && SLIDE held
     Dashing --> Airborne : timer expired (default)
 

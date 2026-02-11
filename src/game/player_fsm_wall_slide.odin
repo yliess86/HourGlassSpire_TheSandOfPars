@@ -2,9 +2,9 @@ package game
 
 import "core:math"
 
-player_wall_slide_init :: proc() {
+player_fsm_wall_slide_init :: proc() {
 	player_fsm.handlers[.Wall_Slide] = {
-		update = player_wall_slide_update,
+		update = player_fsm_wall_slide_update,
 	}
 }
 
@@ -16,7 +16,7 @@ player_wall_slide_init :: proc() {
 // - Grounded: on_ground (landed)
 // - Airborne: !on_side_wall && !on_back_wall (detached)
 // - Airborne: on_back_wall && !on_side_wall && SLIDE released
-player_wall_slide_update :: proc(ctx: ^Game_State, dt: f32) -> Maybe(Player_State) {
+player_fsm_wall_slide_update :: proc(ctx: ^Game_State, dt: f32) -> Maybe(Player_State) {
 	player_apply_movement(dt)
 
 	if ctx.player_vel.y < 0 do ctx.player_vel.y = math.max(ctx.player_vel.y, -PLAYER_WALL_SLIDE_SPEED)

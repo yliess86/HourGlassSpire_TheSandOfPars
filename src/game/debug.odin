@@ -3,17 +3,27 @@ package game
 import engine "../engine"
 import sdl "vendor:sdl3"
 
+Debug_State :: enum u8 {
+	NONE,
+	PLAYER,
+	BACKGROUND,
+	ALL,
+}
+
 DEBUG_COLOR_COLLIDER: [3]u8 : {0, 255, 0}
 DEBUG_COLOR_COLLIDER_BACK_WALL: [3]u8 : {0, 100, 100} // dark cyan — back wall colliders
+DEBUG_COLOR_COLLIDER_CEILING: [3]u8 : {200, 50, 50} // dark red — ceiling colliders
+DEBUG_COLOR_COLLIDER_SIDE_WALL: [3]u8 : {255, 180, 0} // orange — side wall colliders
 DEBUG_COLOR_COLLIDER_PLATFORM: [3]u8 : {0, 100, 255}
-DEBUG_COLOR_COLLIDER_SENSOR: [3]u8 : {255, 255, 0}
 DEBUG_COLOR_FACING_DIR: [3]u8 : {0, 255, 255} // cyan — facing direction
 DEBUG_COLOR_PLAYER: [3]u8 : {255, 0, 255} // magenta — player position
 DEBUG_COLOR_STATE: [3]u8 : {255, 255, 255} // white — state text
 DEBUG_COLOR_STATE_MUTED: [3]u8 : {130, 130, 130} // muted gray — previous state text
+DEBUG_COLOR_RAY_HIT: [3]u8 : {255, 255, 0} // bright yellow — ray hit
+DEBUG_COLOR_RAY_MISS: [3]u8 : {80, 80, 80} // dim gray — ray miss
 DEBUG_COLOR_VELOCITY: [3]u8 : {180, 255, 0} // yellow-green — velocity vector
 DEBUG_CROSS_HALF: f32 : 2 // pixels, half-size of anchor crosses
-DEBUG_FACING_LENGTH: f32 : 2 // pixels, length of facing direction line
+DEBUG_FACING_LENGTH: f32 : 0.5 // pixels, length of facing direction line
 DEBUG_TEXT_CHAR_W: f32 : 8 // SDL debug font character width
 DEBUG_TEXT_LINE_H: f32 : 12 // pixels, line height for debug text rows
 DEBUG_TEXT_MARGIN_X: f32 : 16 // pixels, horizontal margin from screen edges for debug text
@@ -80,8 +90,11 @@ debug_collider_rect :: proc(
 	sdl.RenderRect(game.win.renderer, &rect)
 }
 
-debug_collider_sensor :: proc(collider_rect: engine.Collider_Rect) {
-	debug_collider_rect(collider_rect, DEBUG_COLOR_COLLIDER_SENSOR)
+debug_ray :: proc(origin, endpoint: [2]f32, hit: bool) {
+	sp := world_to_screen_point(origin)
+	ep := world_to_screen_point(endpoint)
+	debug_set_color(DEBUG_COLOR_RAY_HIT if hit else DEBUG_COLOR_RAY_MISS)
+	sdl.RenderLine(game.win.renderer, sp.x, sp.y, ep.x, ep.y)
 }
 
 debug_collider_plateform :: proc(collider_rect: engine.Collider_Rect) {

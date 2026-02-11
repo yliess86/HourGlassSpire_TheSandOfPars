@@ -22,6 +22,12 @@ Collider_Slope :: struct {
 	span:   f32, // side length (N * tile_size)
 }
 
+Collider_Raycast_Hit :: struct {
+	hit:      bool,
+	distance: f32, // along ray direction
+	point:    [2]f32, // world-space hit position
+}
+
 
 collider_check_rect_vs_rect :: proc(a, b: Collider_Rect) -> bool {
 	abs_diff := linalg.abs(a.pos - b.pos)
@@ -44,17 +50,13 @@ collider_resolve_dynamic_rect :: proc(
 	diff := dynamic_rect.pos - static_rect.pos
 	abs_diff: [2]f32 = {math.abs(diff.x), math.abs(diff.y)}
 	half_sum := 0.5 * (dynamic_rect.size + static_rect.size)
-	if abs_diff.x >= half_sum.x || abs_diff.y >= half_sum.y {
-		return false, 0
-	}
+	if abs_diff.x >= half_sum.x || abs_diff.y >= half_sum.y do return false, 0
 
 	overlap := half_sum[axis] - abs_diff[axis]
 	if overlap <= 0 do return false, 0
 
 	direction := diff[axis]
-	if vel_on_axis != 0 && math.sign(vel_on_axis) == math.sign(direction) {
-		return false, 0
-	}
+	if vel_on_axis != 0 && math.sign(vel_on_axis) == math.sign(direction) do return false, 0
 
 	push_dir: f32 = math.sign(direction)
 	if push_dir == 0 {
@@ -78,6 +80,18 @@ collider_slope_surface_y :: proc(s: Collider_Slope, world_x: f32) -> f32 {
 	return s.base_y
 }
 
+// Surface X at a given world Y (Inverse of surface_y)
+collider_slope_surface_x :: proc(s: Collider_Slope, world_y: f32) -> f32 {
+	local_y := math.clamp(world_y - s.base_y, 0, s.span)
+	switch s.kind {
+	case .Right, .Ceil_Left:
+		return s.base_x + local_y // /
+	case .Left, .Ceil_Right:
+		return s.base_x + s.span - local_y // \
+	}
+	return s.base_x
+}
+
 // Whether X falls within [base_x, base_x + span]
 collider_slope_contains_x :: proc(s: Collider_Slope, x: f32) -> bool {
 	return x >= s.base_x && x <= s.base_x + s.span
@@ -88,59 +102,53 @@ collider_slope_is_floor :: proc(s: Collider_Slope) -> bool {
 	return s.kind == .Right || s.kind == .Left
 }
 
-// Broad-phase: does rect overlap the slope's bounding square?
-collider_check_rect_vs_slope :: proc(r: Collider_Rect, s: Collider_Slope) -> bool {
-	slope_rect := Collider_Rect {
-		pos  = {s.base_x + s.span / 2, s.base_y + s.span / 2},
-		size = {s.span, s.span},
-	}
-	return collider_check_rect_vs_rect(r, slope_rect)
+// Axis-aligned ray vs AABB.
+// cross_half_size widens the cross-axis check (0 = point ray, >0 = thick ray).
+collider_raycast_rect :: proc(
+	origin: [2]f32,
+	axis: int,
+	sign: f32,
+	max_dist: f32,
+	rect: Collider_Rect,
+	cross_half_size: f32 = 0,
+) -> Collider_Raycast_Hit {
+	cross := 1 - axis
+	if math.abs(origin[cross] - rect.pos[cross]) > rect.size[cross] / 2 + cross_half_size do return {}
+
+	face := rect.pos[axis] - sign * rect.size[axis] / 2
+	dist := sign * (face - origin[axis])
+	if dist < 0 || dist > max_dist do return {}
+
+	point: [2]f32
+	point[axis] = origin[axis] + sign * dist
+	point[cross] = origin[cross]
+	return {hit = true, distance = dist, point = point}
 }
 
-// Resolve rect against slope surface. Pushes rect out of slope.
-// For floor: pushes up if rect bottom < surface. For ceiling: pushes down if rect top > surface.
-// Returns (resolved, slope_dir): slope_dir is +1 (Right), -1 (Left), 0 (ceiling/no hit).
-collider_resolve_rect_vs_slope :: proc(
-	rect: ^Collider_Rect,
+// Axis-aligned raycast against a slope's surface.
+// axis: 1 = Vertical (Y-axis ray), 0 = Horizontal (X-axis ray)
+// sign: +1 = Positive dir (Up/Right), -1 = Negative dir (Down/Left)
+// cross_half_size: Widens the check on the CROSS axis (thick ray width)
+collider_raycast_slope :: proc(
+	origin: [2]f32,
+	axis: int,
+	sign: f32,
+	max_dist: f32,
 	slope: Collider_Slope,
-) -> (
-	resolved: bool,
-	slope_dir: f32,
-) {
-	// Sample at uphill edge for floor slopes to prevent corner clipping
-	sample_x := rect.pos.x
-	switch slope.kind {
-	case .Right:
-		sample_x = rect.pos.x + rect.size.x / 2 // uphill edge
-	case .Left:
-		sample_x = rect.pos.x - rect.size.x / 2 // uphill edge
-	case .Ceil_Left, .Ceil_Right: // center is fine for ceilings
-	}
+	cross_half_size: f32 = 0,
+) -> Collider_Raycast_Hit {
+	cross := 1 - axis
+	slope_base_cross := slope.base_x if axis == 1 else slope.base_y
+	if origin[cross] + cross_half_size < slope_base_cross || origin[cross] - cross_half_size > slope_base_cross + slope.span do return {}
 
-	// Range check: floor slopes use rect-overlap so the slope activates when the
-	// uphill edge first touches the boundary (where surface_y == base_y, matching
-	// flat ground). Ceiling slopes keep center-based check.
-	if collider_slope_is_floor(slope) {
-		rect_left := rect.pos.x - rect.size.x / 2
-		rect_right := rect.pos.x + rect.size.x / 2
-		if rect_right < slope.base_x || rect_left > slope.base_x + slope.span do return false, 0
-	} else {
-		if rect.pos.x < slope.base_x || rect.pos.x > slope.base_x + slope.span do return false, 0
-	}
-	surface_y := collider_slope_surface_y(slope, sample_x)
-	switch slope.kind {
-	case .Right, .Left:
-		rect_bottom := rect.pos.y - rect.size.y / 2
-		if rect_bottom <= surface_y {
-			rect.pos.y = surface_y + rect.size.y / 2
-			return true, 1 if slope.kind == .Right else -1
-		}
-	case .Ceil_Left, .Ceil_Right:
-		rect_top := rect.pos.y + rect.size.y / 2
-		if rect_top > surface_y {
-			rect.pos.y = surface_y - rect.size.y / 2
-			return true, 0
-		}
-	}
-	return false, 0
+	surface_val :=
+		collider_slope_surface_y(slope, origin.x) if axis == 1 else collider_slope_surface_x(slope, origin.y)
+
+	dist := sign * (surface_val - origin[axis])
+	if dist < 0 || dist > max_dist do return {}
+
+	point: [2]f32
+	point[axis] = surface_val
+	point[cross] = origin[cross]
+	return {hit = true, distance = dist, point = point}
 }

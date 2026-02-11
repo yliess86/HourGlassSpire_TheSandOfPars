@@ -2,20 +2,20 @@ package game
 
 import "core:math"
 
-player_wall_run_vertical_init :: proc() {
+player_fsm_wall_run_vertical_init :: proc() {
 	player_fsm.handlers[.Wall_Run_Vertical] = {
-		enter  = player_wall_run_vertical_enter,
-		update = player_wall_run_vertical_update,
-		exit   = player_wall_run_vertical_exit,
+		enter  = player_fsm_wall_run_vertical_enter,
+		update = player_fsm_wall_run_vertical_update,
+		exit   = player_fsm_wall_run_vertical_exit,
 	}
 }
 
-player_wall_run_vertical_enter :: proc(ctx: ^Game_State) {
+player_fsm_wall_run_vertical_enter :: proc(ctx: ^Game_State) {
 	ctx.player_wall_run_used = true
 	ctx.player_wall_run_timer = 0
 }
 
-player_wall_run_vertical_exit :: proc(ctx: ^Game_State) {
+player_fsm_wall_run_vertical_exit :: proc(ctx: ^Game_State) {
 	ctx.player_wall_run_cooldown_timer = PLAYER_WALL_RUN_COOLDOWN
 }
 
@@ -26,13 +26,13 @@ player_wall_run_vertical_exit :: proc(ctx: ^Game_State) {
 // - Dashing: DASH pressed && cooldown ready
 // - Wall_Slide: speed decayed or released && SLIDE held
 // - Airborne: speed decayed or released or detached
-// - Grounded: on_ground (landed)
-player_wall_run_vertical_update :: proc(ctx: ^Game_State, dt: f32) -> Maybe(Player_State) {
+// - Grounded: on_ground (landed) AND falling
+player_fsm_wall_run_vertical_update :: proc(ctx: ^Game_State, dt: f32) -> Maybe(Player_State) {
 	ctx.player_wall_run_timer += dt
 
-	base_speed :=
-		PLAYER_WALL_RUN_VERTICAL_SPEED if player_sensor.on_side_wall else PLAYER_WALL_RUN_HORIZONTAL_SPEED
-	ctx.player_vel.y = base_speed * math.exp(-PLAYER_WALL_RUN_DECAY * ctx.player_wall_run_timer)
+	speed := PLAYER_WALL_RUN_VERTICAL_SPEED
+	decay := PLAYER_WALL_RUN_VERTICAL_DECAY
+	ctx.player_vel.y = speed * math.exp(-decay * ctx.player_wall_run_timer)
 	ctx.player_vel.x = 0
 
 	if player_sensor.on_side_wall {
@@ -49,9 +49,7 @@ player_wall_run_vertical_update :: proc(ctx: ^Game_State, dt: f32) -> Maybe(Play
 			ctx.player_pos.x -= player_sensor.on_side_wall_dir * EPS
 			ctx.player_vel.y = 0.75 * PLAYER_JUMP_FORCE
 			ctx.player_vel.x = -player_sensor.on_side_wall_dir * PLAYER_WALL_JUMP_FORCE
-		} else {
-			ctx.player_vel.y = PLAYER_JUMP_FORCE
-		}
+		} else do ctx.player_vel.y = PLAYER_JUMP_FORCE
 		ctx.player_jump_buffer_timer = 0
 		return .Airborne
 	}
@@ -71,7 +69,7 @@ player_wall_run_vertical_update :: proc(ctx: ^Game_State, dt: f32) -> Maybe(Play
 	}
 
 	if !player_sensor.on_side_wall && !player_sensor.on_back_wall do return .Airborne
-	if player_sensor.on_ground do return .Grounded
+	if player_sensor.on_ground && ctx.player_vel.y <= 0 do return .Grounded
 
 	return nil
 }

@@ -75,9 +75,7 @@ input_pre_update :: proc(input: ^Input) {
 }
 
 input_post_update :: proc(input: ^Input) {
-	for action in Input_Action {
-		input.is_pressed[action] = input.is_down[action] && !input.was_down[action]
-	}
+	for action in Input_Action do input.is_pressed[action] = input.is_down[action] && !input.was_down[action]
 }
 
 input_update :: proc(input: ^Input, event: ^sdl.Event) {
@@ -99,17 +97,10 @@ input_update_keyboard :: proc(input: ^Input, event: ^sdl.Event) {
 	}
 
 	if input.type == .KEYBOARD {
-		input.axis.x = 0
-		input.axis.y = 0
-
-		if input.is_down[.MOVE_LEFT] do input.axis.x -= 1.0
-		if input.is_down[.MOVE_RIGHT] do input.axis.x += 1.0
-		if input.is_down[.MOVE_UP] do input.axis.y += 1.0
-		if input.is_down[.MOVE_DOWN] do input.axis.y -= 1.0
-
-		if input.axis.x != 0 && input.axis.y != 0 {
-			input.axis = linalg.normalize(input.axis)
-		}
+		x := int(input.is_down[.MOVE_RIGHT]) - int(input.is_down[.MOVE_LEFT])
+		y := int(input.is_down[.MOVE_UP]) - int(input.is_down[.MOVE_DOWN])
+		input.axis = {f32(x), f32(y)}
+		input.axis = linalg.normalize0(input.axis)
 	}
 }
 
@@ -156,17 +147,10 @@ input_update_gamepad :: proc(input: ^Input, event: ^sdl.Event) {
 	}
 
 	if input.type == .GAMEPAD {
-		dpad: [2]f32 = {0, 0}
-		if input.is_down[.MOVE_LEFT] do dpad.x -= 1.0
-		if input.is_down[.MOVE_RIGHT] do dpad.x += 1.0
-		if input.is_down[.MOVE_UP] do dpad.y += 1.0
-		if input.is_down[.MOVE_DOWN] do dpad.y -= 1.0
-
-		if dpad.x != 0 do input.axis.x = dpad.x
-		if dpad.y != 0 do input.axis.y = dpad.y
-
-		if input.axis.x != 0 && input.axis.y != 0 {
-			input.axis = linalg.normalize(input.axis)
-		}
+		dpad_x := f32(int(input.is_down[.MOVE_RIGHT]) - int(input.is_down[.MOVE_LEFT]))
+		dpad_y := f32(int(input.is_down[.MOVE_UP]) - int(input.is_down[.MOVE_DOWN]))
+		input.axis.x = input.axis.x * (1.0 - math.abs(dpad_x)) + dpad_x
+		input.axis.y = input.axis.y * (1.0 - math.abs(dpad_y)) + dpad_y
+		input.axis = linalg.normalize0(input.axis) if dpad_x != 0 || dpad_y != 0 else input.axis
 	}
 }

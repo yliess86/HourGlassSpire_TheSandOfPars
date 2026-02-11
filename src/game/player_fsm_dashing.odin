@@ -2,14 +2,14 @@ package game
 
 import "core:math"
 
-player_dashing_init :: proc() {
+player_fsm_dashing_init :: proc() {
 	player_fsm.handlers[.Dashing] = {
-		enter  = player_dashing_enter,
-		update = player_dashing_update,
+		enter  = player_fsm_dashing_enter,
+		update = player_fsm_dashing_update,
 	}
 }
 
-player_dashing_enter :: proc(ctx: ^Game_State) {
+player_fsm_dashing_enter :: proc(ctx: ^Game_State) {
 	ctx.player_dash_active_timer = PLAYER_DASH_DURATION
 	ctx.player_dash_cooldown_timer = PLAYER_DASH_COOLDOWN
 }
@@ -19,7 +19,7 @@ player_dashing_enter :: proc(ctx: ^Game_State) {
 // - Wall_Run_Vertical: timer expired && on_side_wall && WALL_RUN held && cooldown ready && !wall_run_used && vel.y > 0
 // - Wall_Slide: timer expired && on_side_wall && SLIDE held
 // - Airborne: timer expired (default)
-player_dashing_update :: proc(ctx: ^Game_State, dt: f32) -> Maybe(Player_State) {
+player_fsm_dashing_update :: proc(ctx: ^Game_State, dt: f32) -> Maybe(Player_State) {
 	// Timer expired — apply normal movement on expiry frame, then transition
 	if ctx.player_dash_active_timer <= 0 {
 		player_apply_movement(dt)
