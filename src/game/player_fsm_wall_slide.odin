@@ -2,8 +2,8 @@ package game
 
 import "core:math"
 
-player_fsm_wall_slide_init :: proc() {
-	player_fsm.handlers[.Wall_Slide] = {
+player_fsm_wall_slide_init :: proc(player: ^Player) {
+	player.fsm.handlers[.Wall_Slide] = {
 		update = player_fsm_wall_slide_update,
 	}
 }
@@ -16,29 +16,29 @@ player_fsm_wall_slide_init :: proc() {
 // - Grounded: on_ground (landed)
 // - Airborne: !on_side_wall && !on_back_wall (detached)
 // - Airborne: on_back_wall && !on_side_wall && SLIDE released
-player_fsm_wall_slide_update :: proc(ctx: ^Game_State, dt: f32) -> Maybe(Player_State) {
-	player_apply_movement(dt)
+player_fsm_wall_slide_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) {
+	player_apply_movement(ctx, dt)
 
-	if ctx.player_vel.y < 0 do ctx.player_vel.y = math.max(ctx.player_vel.y, -PLAYER_WALL_SLIDE_SPEED)
-	ctx.player_vel.x = math.lerp(ctx.player_vel.x, 0, 15.0 * dt)
+	if ctx.transform.vel.y < 0 do ctx.transform.vel.y = math.max(ctx.transform.vel.y, -PLAYER_WALL_SLIDE_SPEED)
+	ctx.transform.vel.x = math.lerp(ctx.transform.vel.x, 0, PLAYER_MOVE_LERP_SPEED * dt)
 
-	if player_sensor.on_side_wall {
-		ctx.player_pos.x = player_sensor.on_side_wall_snap_x
-		ctx.player_vel.x = 0
+	if ctx.sensor.on_side_wall {
+		ctx.transform.pos.x = ctx.sensor.on_side_wall_snap_x
+		ctx.transform.vel.x = 0
 	}
 
-	if ctx.player_jump_buffer_timer > 0 && player_sensor.on_side_wall {
-		ctx.player_pos.x -= player_sensor.on_side_wall_dir * EPS
-		ctx.player_vel.y = 0.75 * PLAYER_JUMP_FORCE
-		ctx.player_vel.x = -player_sensor.on_side_wall_dir * PLAYER_WALL_JUMP_FORCE
-		ctx.player_jump_buffer_timer = 0
+	if ctx.abilities.jump_buffer_timer > 0 && ctx.sensor.on_side_wall {
+		ctx.transform.pos.x -= ctx.sensor.on_side_wall_dir * EPS
+		ctx.transform.vel.y = PLAYER_WALL_JUMP_VERTICAL_MULT * PLAYER_JUMP_FORCE
+		ctx.transform.vel.x = -ctx.sensor.on_side_wall_dir * PLAYER_WALL_JUMP_FORCE
+		ctx.abilities.jump_buffer_timer = 0
 		return .Airborne
 	}
 
-	if game.input.is_pressed[.DASH] && game.player_dash_cooldown_timer <= 0 do return .Dashing
-	if player_sensor.on_ground do return .Grounded
-	if !player_sensor.on_side_wall && !player_sensor.on_back_wall do return .Airborne
-	if player_sensor.on_back_wall && !player_sensor.on_side_wall && !ctx.input.is_down[.SLIDE] do return .Airborne
+	if game.input.is_pressed[.DASH] && ctx.abilities.dash_cooldown_timer <= 0 do return .Dashing
+	if ctx.sensor.on_ground do return .Grounded
+	if !ctx.sensor.on_side_wall && !ctx.sensor.on_back_wall do return .Airborne
+	if ctx.sensor.on_back_wall && !ctx.sensor.on_side_wall && !game.input.is_down[.SLIDE] do return .Airborne
 
 	return nil
 }

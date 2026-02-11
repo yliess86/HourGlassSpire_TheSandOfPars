@@ -6,7 +6,7 @@ import sdl "vendor:sdl3"
 
 // Resolution & Scaling
 LOGICAL_H :: 480
-WINDOW_SCALE :: 2
+WINDOW_SCALE :: 1
 PPM: f32 : 16 // power of 2 — all pixel/PPM values exact in f32
 
 // Engine
@@ -20,58 +20,31 @@ EPS: f32 : 1 / PPM
 // Colors
 COLOR_BG: [3]u8 : {20, 20, 30}
 
-// World-to-screen conversion (camera-based)
-// world_pos = bottom-left corner in world meters, world_size = dimensions in meters
+// Convenience wrappers for camera coordinate conversion
 world_to_screen :: proc(world_pos, world_size: [2]f32) -> sdl.FRect {
-	cam_bl := game.camera.pos - game.camera.size / 2
-	rel := (world_pos - cam_bl) * PPM
-	sz := world_size * PPM
-	return {rel.x, f32(LOGICAL_H) - rel.y - sz.y, sz.x, sz.y}
+	return engine.camera_world_to_screen(&game.camera, world_pos, world_size)
 }
 
-// World position → screen pixel (Y-flipped)
 world_to_screen_point :: proc(world_pos: [2]f32) -> [2]f32 {
-	cam_bl := game.camera.pos - game.camera.size / 2
-	rel := (world_pos - cam_bl) * PPM
-	return {rel.x, f32(LOGICAL_H) - rel.y}
+	return engine.camera_world_to_screen_point(&game.camera, world_pos)
 }
 
 Game_State :: struct {
-	win:                            engine.Window,
-	running:                        bool,
-	debug:                          Debug_State,
-	world_w:                        f32,
+	win:     engine.Window,
+	running: bool,
+	debug:   Debug_State,
+	world_w: f32,
 
 	// Engine
-	input:                          engine.Input,
-	clock:                          engine.Clock,
+	input:   engine.Input,
+	clock:   engine.Clock,
 
 	// Camera & Level
-	camera:                         engine.Camera,
-	level:                          Level,
+	camera:  engine.Camera,
+	level:   Level,
 
 	// Player
-	player_vel:                     [2]f32,
-	player_pos:                     [2]f32,
-	player_collider:                engine.Collider_Rect,
-	// Player Abilities
-	player_dash_dir:                f32,
-	player_dash_active_timer:       f32,
-	player_dash_cooldown_timer:     f32,
-	player_coyote_timer:            f32,
-	player_jump_buffer_timer:       f32,
-	player_wall_run_timer:          f32,
-	player_wall_run_cooldown_timer: f32,
-	player_wall_run_used:           bool,
-	player_wall_run_dir:            f32,
-	player_ground_sticky_timer:     f32,
-
-	// Player Visual
-	player_visual_look:             [2]f32,
-	player_run_anim_timer:          f32,
-	player_impact_timer:            f32,
-	player_impact_strength:         f32,
-	player_impact_axis:             [2]f32,
+	player:  Player,
 }
 
 game: Game_State
@@ -92,8 +65,6 @@ main :: proc() {
 		free_all(context.temp_allocator)
 	}
 }
-
-// Game life cycle procs
 
 game_clean :: proc() {
 	level_destroy(&game.level)
@@ -117,12 +88,12 @@ game_init :: proc() {
 	game.world_w = game.level.world_w
 
 	// Camera
-	game.camera = engine.camera_init(f32(game.win.logical_w) / PPM, f32(LOGICAL_H) / PPM)
+	game.camera = engine.camera_init(f32(game.win.logical_w) / PPM, f32(LOGICAL_H) / PPM, PPM, f32(LOGICAL_H))
 
 	// Player
-	game.player_pos = game.level.player_spawn
-	game.player_dash_dir = 1
-	player_init()
+	game.player.transform.pos = game.level.player_spawn
+	game.player.abilities.dash_dir = 1
+	player_init(&game.player)
 }
 
 game_update :: proc(dt: f32) {
@@ -138,14 +109,14 @@ game_update :: proc(dt: f32) {
 }
 
 game_fixed_update :: proc(dt: f32) {
-	player_fixed_update(dt)
-	engine.camera_follow(&game.camera, {game.player_pos.x, game.player_pos.y + PLAYER_SIZE / 2})
+	player_fixed_update(&game.player, dt)
+	engine.camera_follow(&game.camera, game.player.collider.pos)
 	engine.camera_clamp(&game.camera, {0, 0}, {game.level.world_w, game.level.world_h})
 }
 
 game_render :: proc() {
 	level_render(&game.level)
-	player_render()
+	player_render(&game.player)
 }
 
 game_render_debug :: proc() {
@@ -153,9 +124,10 @@ game_render_debug :: proc() {
 
 	level_debug(&game.level)
 
-	player_sensor_debug({DEBUG_TEXT_MARGIN_X, DEBUG_TEXT_MARGIN_Y + 2 * DEBUG_TEXT_LINE_H})
-	player_physics_debug()
-	player_debug()
+	sensor_pos: [2]f32 = {DEBUG_TEXT_MARGIN_X, DEBUG_TEXT_MARGIN_Y + 2 * DEBUG_TEXT_LINE_H}
+	player_sensor_debug(&game.player, sensor_pos)
+	player_physics_debug(&game.player)
+	player_debug(&game.player)
 
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,

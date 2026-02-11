@@ -1,14 +1,35 @@
 package engine
 
+import sdl "vendor:sdl3"
+
 Camera :: struct {
-	pos:  [2]f32, // center of viewport (world units / meters)
-	size: [2]f32, // viewport dimensions (world units / meters)
+	pos:       [2]f32, // center of viewport (world units / meters)
+	size:      [2]f32, // viewport dimensions (world units / meters)
+	ppm:       f32, // pixels per meter
+	logical_h: f32, // logical screen height in pixels
 }
 
-camera_init :: proc(viewport_w, viewport_h: f32) -> Camera {
+camera_init :: proc(viewport_w, viewport_h, ppm, logical_h: f32) -> Camera {
 	return Camera{
-		size = {viewport_w, viewport_h},
+		size      = {viewport_w, viewport_h},
+		ppm       = ppm,
+		logical_h = logical_h,
 	}
+}
+
+// World-space rect (bottom-left + size in meters) → screen-space SDL rect (Y-flipped)
+camera_world_to_screen :: proc(cam: ^Camera, world_pos, world_size: [2]f32) -> sdl.FRect {
+	cam_bl := cam.pos - cam.size / 2
+	rel := (world_pos - cam_bl) * cam.ppm
+	sz := world_size * cam.ppm
+	return {rel.x, cam.logical_h - rel.y - sz.y, sz.x, sz.y}
+}
+
+// World position → screen pixel (Y-flipped)
+camera_world_to_screen_point :: proc(cam: ^Camera, world_pos: [2]f32) -> [2]f32 {
+	cam_bl := cam.pos - cam.size / 2
+	rel := (world_pos - cam_bl) * cam.ppm
+	return {rel.x, cam.logical_h - rel.y}
 }
 
 camera_follow :: proc(cam: ^Camera, target: [2]f32) {

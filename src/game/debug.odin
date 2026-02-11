@@ -19,9 +19,15 @@ DEBUG_COLOR_FACING_DIR: [3]u8 : {0, 255, 255} // cyan — facing direction
 DEBUG_COLOR_PLAYER: [3]u8 : {255, 0, 255} // magenta — player position
 DEBUG_COLOR_STATE: [3]u8 : {255, 255, 255} // white — state text
 DEBUG_COLOR_STATE_MUTED: [3]u8 : {130, 130, 130} // muted gray — previous state text
-DEBUG_COLOR_RAY_HIT: [3]u8 : {255, 255, 0} // bright yellow — ray hit
+DEBUG_COLOR_RAY_GROUND: [3]u8 : {0, 255, 0} // green — ground ray (matches ground collider)
+DEBUG_COLOR_RAY_SLOPE: [3]u8 : {100, 255, 100} // light green — slope ray
+DEBUG_COLOR_RAY_PLATFORM: [3]u8 : {0, 100, 255} // blue — platform ray (matches platform collider)
+DEBUG_COLOR_RAY_WALL: [3]u8 : {255, 180, 0} // orange — wall ray (matches side wall collider)
+DEBUG_COLOR_RAY_HIT_POINT: [3]u8 : {255, 50, 50} // bright red — hit point marker
 DEBUG_COLOR_RAY_MISS: [3]u8 : {80, 80, 80} // dim gray — ray miss
 DEBUG_COLOR_VELOCITY: [3]u8 : {180, 255, 0} // yellow-green — velocity vector
+DEBUG_COLOR_GRID: [3]u8 : {255, 255, 255} // white — tile grid (drawn with low alpha)
+DEBUG_GRID_ALPHA: u8 : 20 // faint so it doesn't obscure other overlays
 DEBUG_CROSS_HALF: f32 : 2 // pixels, half-size of anchor crosses
 DEBUG_FACING_LENGTH: f32 : 0.5 // pixels, length of facing direction line
 DEBUG_TEXT_CHAR_W: f32 : 8 // SDL debug font character width
@@ -90,14 +96,27 @@ debug_collider_rect :: proc(
 	sdl.RenderRect(game.win.renderer, &rect)
 }
 
-debug_ray :: proc(origin, endpoint: [2]f32, hit: bool) {
+debug_ray :: proc(
+	origin, endpoint: [2]f32,
+	hit: engine.Collider_Raycast_Hit,
+	hit_color: [3]u8 = DEBUG_COLOR_RAY_GROUND,
+) {
 	sp := world_to_screen_point(origin)
 	ep := world_to_screen_point(endpoint)
-	debug_set_color(DEBUG_COLOR_RAY_HIT if hit else DEBUG_COLOR_RAY_MISS)
-	sdl.RenderLine(game.win.renderer, sp.x, sp.y, ep.x, ep.y)
+	if hit.hit {
+		hp := world_to_screen_point(hit.point)
+		debug_set_color(hit_color)
+		sdl.RenderLine(game.win.renderer, sp.x, sp.y, hp.x, hp.y)
+		debug_set_color(DEBUG_COLOR_RAY_MISS)
+		sdl.RenderLine(game.win.renderer, hp.x, hp.y, ep.x, ep.y)
+		debug_point(hit.point, DEBUG_COLOR_RAY_HIT_POINT)
+	} else {
+		debug_set_color(DEBUG_COLOR_RAY_MISS)
+		sdl.RenderLine(game.win.renderer, sp.x, sp.y, ep.x, ep.y)
+	}
 }
 
-debug_collider_plateform :: proc(collider_rect: engine.Collider_Rect) {
+debug_collider_platform :: proc(collider_rect: engine.Collider_Rect) {
 	debug_collider_rect(collider_rect, DEBUG_COLOR_COLLIDER_PLATFORM)
 }
 

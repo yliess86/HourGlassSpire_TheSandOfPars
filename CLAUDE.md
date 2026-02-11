@@ -20,9 +20,10 @@ Odin lang, SDL3 (`vendor:sdl3`). Main package `src/game/`, reusable engine packa
 | File | Purpose |
 |---|---|
 | `PLAYER.md` | Mermaid `stateDiagram-v2` of the player FSM — **keep in sync** when adding/removing states or transitions |
-| `src/game/main.odin` | Constants, `Game_State` struct, game lifecycle (`init`/`clean`), loop, rendering, `world_to_screen`/`world_to_screen_point` camera helpers |
-| `src/game/player.odin` | `Player_State` enum, player constants, `PLAYER_COLOR` table, `player_init`, `player_fixed_update`, `player_sync_collider`, `player_trigger_impact`, `player_debug` (facing dir + FSM state text) |
-| `src/game/player_graphics.odin` | `player_color`, `player_render` (4-layer visual deformation: velocity, look, run bob, impact bounce) |
+| `src/game/main.odin` | Constants, `Game_State` struct (contains `player: Player`), game lifecycle (`init`/`clean`), loop, rendering, `world_to_screen`/`world_to_screen_point` convenience wrappers (delegate to `camera_world_to_screen`/`camera_world_to_screen_point`) |
+| `src/game/player.odin` | `Player_State` enum, `Player` struct (`Player_Transform`, `Player_Abilities`, `Player_Graphics` sub-structs, `fsm`, `sensor`), `player_init`, `player_fixed_update`, `player_sync_collider`, `player_debug` — all procs take `player: ^Player` |
+| `src/game/player_constants.odin` | `PLAYER_SIZE`, `PLAYER_COLOR` table, all `PLAYER_*` physics/ability/graphics constants |
+| `src/game/player_graphics.odin` | `player_color`, `player_render` (4-layer visual deformation: velocity, look, run bob, impact bounce), `player_trigger_impact` |
 | `src/game/player_sensor.odin` | `Player_Sensor` struct, `player_sensor_update`, `player_sensor_debug` |
 | `src/game/player_physics.odin` | `player_apply_movement`, `player_physics_update` (separated-axis solver), `player_resolve_x`, `player_resolve_y`, `player_resolve_slopes`, `player_physics_debug` (collider + position + velocity) |
 | `src/game/player_fsm_grounded.odin` | `player_fsm_grounded_init` + `player_fsm_grounded_enter` + `player_fsm_grounded_update` |
@@ -34,7 +35,7 @@ Odin lang, SDL3 (`vendor:sdl3`). Main package `src/game/`, reusable engine packa
 | `src/game/player_fsm_wall_run_horizontal.odin` | `player_fsm_wall_run_horizontal_init` + `player_fsm_wall_run_horizontal_enter` + `player_fsm_wall_run_horizontal_update` |
 | `src/game/debug.odin` | `Debug_State` enum, debug drawing helpers (`debug_collider_rect`, `debug_point`, `debug_vector`, `debug_text`, etc.), debug constants |
 | `src/game/level.odin` | `Tile_Kind` enum, `Level` struct, BMP loading (`sdl.LoadBMP`), greedy collider merging, diagonal slope merging, tile rendering, `level_debug` (collider outlines + anchors) |
-| `src/engine/camera.odin` | `Camera` struct, follow + clamp within level bounds |
+| `src/engine/camera.odin` | `Camera` struct (stores `ppm`, `logical_h`), `camera_world_to_screen`/`camera_world_to_screen_point` (world→screen coordinate conversion), follow + clamp within level bounds |
 | `src/engine/window.odin` | SDL3 window/renderer init, VSync, logical presentation (aspect ratio from primary display) |
 | `src/engine/clock.odin` | Frame timing, fixed timestep accumulator, frame-rate cap via `sdl.Delay`, dt capped at 0.1s |
 | `src/engine/input.odin` | Keyboard + gamepad input with action bindings, `is_down`/`is_pressed`/`axis` |
@@ -48,14 +49,14 @@ Fixed-timestep loop: `game_update(dt)` → N × `game_fixed_update(fixed_dt)` �
 - `game_fixed_update` — delegates to `player_fixed_update`, then camera follow + clamp
 - `game_render` — SDL rect drawing with 4-layer visual deformation (velocity, look, run bob, impact bounce)
 
-Global `game: Game_State` struct holds all state. No ECS.
+Global `game: Game_State` struct holds all state. Player state is nested under `game.player: Player` with sub-structs: `transform` (pos, vel), `collider`, `abilities` (timers, dash, wall run), `graphics` (visual look, impact bounce), `fsm` (FSM instance), `sensor` (per-frame collision queries). All player procs take `player: ^Player`; call sites pass `&game.player`. No ECS.
 
 ### Player FSM (`player.odin`)
 
 Player states: `Grounded`, `Airborne`, `Dashing`, `Dropping`, `Wall_Run_Horizontal`, `Wall_Slide`, `Wall_Run_Vertical`.
-Uses generic `engine.FSM(Game_State, Player_State)` via `player_fsm` — each state has an `update` handler returning `Maybe(Player_State)` to signal transitions (nil = stay). `fsm_transition` prevents self-transitions (same-state returns are no-ops). Enter/exit handlers are wired for states that need setup/teardown: `Grounded` (enter: reset wall run cooldown/used, snap to ground), `Dashing` (enter: set dash timers), `Wall_Run_Vertical` (enter: set wall_run_used/timer; exit: set wall run cooldown), `Wall_Run_Horizontal` (enter: set wall_run_used/timer/dir).
+Uses generic `engine.FSM(Player, Player_State)` via `player.fsm` — each state has an `update` handler returning `Maybe(Player_State)` to signal transitions (nil = stay). `fsm_transition` prevents self-transitions (same-state returns are no-ops). FSM handlers receive `ctx: ^Player` (the player pointer). Enter/exit handlers are wired for states that need setup/teardown: `Grounded` (enter: reset wall run cooldown/used, snap to ground), `Dashing` (enter: set dash timers), `Wall_Run_Vertical` (enter: set wall_run_used/timer; exit: set wall run cooldown), `Wall_Run_Horizontal` (enter: set wall_run_used/timer/dir).
 
-Each state lives in its own file (`player_fsm_<state>.odin`) with a `player_fsm_<state>_init` proc (registers handlers on `player_fsm`) and a `player_fsm_<state>_update` proc, plus optional `player_fsm_<state>_enter` / `player_fsm_<state>_exit` procs. `player_init` calls all init procs then `fsm_init`.
+Each state lives in its own file (`player_fsm_<state>.odin`) with a `player_fsm_<state>_init(player: ^Player)` proc (registers handlers on `player.fsm`) and a `player_fsm_<state>_update(ctx: ^Player, dt: f32)` proc, plus optional `_enter(ctx: ^Player)` / `_exit(ctx: ^Player)` procs. `player_init` calls all init procs then `fsm_init`. Inside FSM handlers, player state is accessed via `ctx.transform`, `ctx.abilities`, `ctx.sensor`, etc.; input is accessed via global `game.input`.
 
 Each FSM state handler has a doc comment block immediately above it describing the state's behavior and listing all exit transitions with their conditions. When modifying a state handler, always keep its doc comment in sync with the implementation. Also update the Mermaid diagram in `PLAYER.md` whenever states or transitions change.
 
@@ -107,14 +108,14 @@ Physics uses a **separated-axis solver** (`player_physics_update` in `player_phy
 
 | Resolve step | Colliders | Notes |
 |---|---|---|
-| Slope resolve (post-X) | `level.slope_colliders` | Snaps to surface if `vel.y <= 0` and within snap distance |
+| Slope resolve (post-X) | `level.slope_colliders` | Floor slopes: snaps feet up if `vel.y <= 0` and within snap distance. Ceiling slopes: pushes player down if head penetrates surface |
 | X walls | `level.side_wall_colliders` | Step-height tolerance: skip if player bottom >= wall top - `PLAYER_STEP_HEIGHT` |
 | Y ceiling | `level.ceiling_colliders` | Always resolved |
 | Y ground | `level.ground_colliders` | Only when `vel.y <= 0` |
-| Y platforms | `level.platform_colliders` | One-way: skipped during `Dropping`, requires `player_pos.y >= platform_top - EPS` |
-| Slope resolve (post-Y) | `level.slope_colliders` | Final snap; grounded uses `2 * PLAYER_STEP_HEIGHT` snap distance, others use `PLAYER_SLOPE_SNAP` |
+| Y platforms | `level.platform_colliders` | One-way: skipped during `Dropping`, requires `player.transform.pos.y >= platform_top - EPS` |
+| Slope resolve (post-Y) | `level.slope_colliders` | Floor: final snap; grounded uses `2 * PLAYER_STEP_HEIGHT` snap distance, others use `PLAYER_SLOPE_SNAP`. Ceiling: pushes down on head penetration |
 
-`Player_Sensor` struct (`player_sensor`, in `player_sensor.odin`) caches per-frame environment queries (on_ground, on_ground_snap_y, on_platform, in_platform, on_slope, on_slope_dir, on_side_wall, on_side_wall_dir, on_side_wall_snap_x, on_back_wall) — queried **after** collision resolution so sensors reflect the resolved position. Ground detection uses a downward raycast from feet against `ground_colliders`; slope ground detection raycasts from `PLAYER_STEP_HEIGHT` above feet; wall detection uses horizontal raycasts from player upper-center against `side_wall_colliders` (separate loops). `on_ground` includes slopes and platforms. Used by all state handlers on the next frame.
+`Player_Sensor` struct (`player.sensor`, in `player_sensor.odin`) caches per-frame environment queries (on_ground, on_ground_snap_y, on_platform, in_platform, on_slope, on_slope_dir, on_side_wall, on_side_wall_dir, on_side_wall_snap_x, on_back_wall) — queried **after** collision resolution so sensors reflect the resolved position. Ground detection uses a downward raycast from feet against `ground_colliders`; slope ground detection raycasts from `PLAYER_STEP_HEIGHT` above feet; wall detection uses horizontal raycasts from player upper-center against `side_wall_colliders` (separate loops). `on_ground` includes slopes and platforms. Used by all state handlers on the next frame.
 
 ### Level (`level.odin`)
 
@@ -124,7 +125,7 @@ Levels loaded from BMP files (1 pixel = 1 tile, `TILE_PX :: 8` pixels = `TILE_SI
 
 45° slope tiles in 4 variants: `Slope_Right` (floor /), `Slope_Left` (floor \), `Slope_Ceil_Left` (ceiling /), `Slope_Ceil_Right` (ceiling \). BMP palette: red `{255,0,0}`, blue `{0,0,255}`, dark red `{128,0,0}`, dark blue `{0,0,128}`.
 
-`collider_slope_surface_y(slope, world_x)` computes the surface height at any X within the tile. Floor slopes push the player up; ceiling slopes push down. Collision runs in `player_resolve_slopes` (`player_physics.odin`) — called twice per frame: once after X move (lateral slope interactions) and once after Y move (final surface snap). Only active when `vel.y <= 0`. Grounded state uses a larger snap distance (`2 * PLAYER_STEP_HEIGHT`) than airborne (`PLAYER_SLOPE_SNAP`) for smoother traversal.
+`collider_slope_surface_y(slope, world_x)` computes the surface height at any X within the tile. `player_resolve_slopes` (`player_physics.odin`) handles floor and ceiling slopes separately, called twice per frame: once after X move (lateral slope interactions) and once after Y move (final surface snap). Floor slopes (only when `vel.y <= 0`): snap player feet up to surface; grounded uses `2 * PLAYER_STEP_HEIGHT` snap distance, airborne uses `PLAYER_SLOPE_SNAP`. Ceiling slopes: push player down when head (`pos.y + PLAYER_SIZE`) penetrates the ceiling surface, zeroing upward velocity.
 
 Downhill following: snap-based — slope resolve snaps the player to the surface if slightly above (gap < snap distance), handling both downhill traversal and flat-to-slope transitions.
 
@@ -134,7 +135,7 @@ Slopes render as filled triangles via `sdl.RenderGeometry` using `COLOR_TILE_SOL
 
 ### Camera (`engine/camera.odin`)
 
-2D viewport that follows the player. `camera_follow` snaps to target; `camera_clamp` keeps within level bounds (centers on axis if level is smaller than viewport). All rendering uses `world_to_screen` / `world_to_screen_point` which subtract the camera bottom-left and flip Y.
+2D viewport that follows the player. Camera stores `ppm` and `logical_h` for coordinate conversion. `camera_world_to_screen(cam, world_pos, world_size)` converts a world-space rect to an SDL screen rect (Y-flipped); `camera_world_to_screen_point(cam, world_pos)` converts a world point to screen pixel. Game-level `world_to_screen`/`world_to_screen_point` wrappers pass `&game.camera` for convenience. `camera_follow` snaps to target; `camera_clamp` keeps within level bounds (centers on axis if level is smaller than viewport).
 
 ## Coordinate & Unit Conventions
 
@@ -146,7 +147,7 @@ Slopes render as filled triangles via `sdl.RenderGeometry` using `COLOR_TILE_SOL
 - `WINDOW_SCALE :: 2` — integer multiplier on logical resolution.
 - `FPS :: 60`, `FIXED_STEPS :: 4` — fixed timestep = `1 / (FIXED_STEPS * FPS)`.
 - `Collider_Rect.pos` = **center**, `size` = full width/height.
-- `player_pos` = player's **bottom-center**; collider pos is offset by `PLAYER_SIZE/2` upward. `player_sync_collider()` keeps collider in sync.
+- `player.transform.pos` = player's **bottom-center**; collider pos is offset by `PLAYER_SIZE/2` upward. `player_sync_collider()` keeps collider in sync.
 - Time values (durations, cooldowns) in **seconds** — no PPM conversion.
 
 ## Player Abilities
@@ -183,10 +184,14 @@ Cycle with **F3** (`DEBUG` action) through `NONE` → `PLAYER` → `BACKGROUND` 
 | Platform outlines | Blue | Platform collider wireframes |
 | Back wall outlines | Dark cyan | Back wall collider wireframes |
 | Slope outlines | Green | Triangle wireframes for slope colliders |
-| Sensor rays | Yellow (hit) / Gray (miss) | Ground ray (downward) + wall rays (left/right) with hit marker |
+| Ground sensor ray | Green (hit) / Gray (miss) | Downward raycast from feet against ground colliders; red hit point marker |
+| Slope sensor ray | Light green (hit) / Gray (miss) | Downward raycast from `PLAYER_STEP_HEIGHT` above feet (longer range); red hit point marker |
+| Platform sensor ray | Blue (hit) / Gray (miss) | Downward raycast from feet against platform colliders; red hit point marker |
+| Wall sensor rays | Orange (hit) / Gray (miss) | Horizontal raycasts left/right from upper-center; red hit point markers |
+| Back wall indicator | Dark cyan | Player collider outline when overlapping a back wall collider |
 | Element anchors | White | Cross at `.pos` center of ground, ceiling, side wall, and platform colliders |
-| Player position | Magenta | Cross at `player_pos` (bottom-center) |
-| Facing direction | Cyan | Vector from player center in `player_dash_dir` |
+| Player position | Magenta | Cross at `player.transform.pos` (bottom-center) |
+| Facing direction | Cyan | Vector from player center in `player.abilities.dash_dir` |
 | Velocity vector | Yellow-green | Vector from player center, scaled by `DEBUG_VEL_SCALE` |
 | FSM current state | White | Text centered above player via `sdl.RenderDebugText` |
 | FSM previous state | Muted gray | Text centered below current state label |

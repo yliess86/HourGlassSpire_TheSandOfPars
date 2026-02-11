@@ -617,15 +617,52 @@ level_destroy :: proc(level: ^Level) {
 
 level_debug :: proc(level: ^Level) {
 	if game.debug == .BACKGROUND || game.debug == .ALL {
+		level_debug_grid(level)
 		for c in level.ground_colliders do debug_collider_rect(c)
 		for c in level.ceiling_colliders do debug_collider_rect(c, DEBUG_COLOR_COLLIDER_CEILING)
 		for c in level.side_wall_colliders do debug_collider_rect(c, DEBUG_COLOR_COLLIDER_SIDE_WALL)
-		for c in level.platform_colliders do debug_collider_plateform(c)
+		for c in level.platform_colliders do debug_collider_platform(c)
 		for c in level.back_wall_colliders do debug_collider_back_wall(c)
 		for s in level.slope_colliders do debug_collider_slope(s)
 		for c in level.ground_colliders do debug_point(c.pos)
 		for c in level.ceiling_colliders do debug_point(c.pos)
 		for c in level.side_wall_colliders do debug_point(c.pos)
 		for c in level.platform_colliders do debug_point(c.pos)
+	}
+}
+
+// Draw tile grid lines across the visible camera area
+level_debug_grid :: proc(level: ^Level) {
+	cam_bl := game.camera.pos - game.camera.size / 2
+	cam_tr := game.camera.pos + game.camera.size / 2
+
+	// Tile range visible on screen (clamped to level bounds)
+	x0 := max(int(cam_bl.x / TILE_SIZE), 0)
+	y0 := max(int(cam_bl.y / TILE_SIZE), 0)
+	x1 := min(int(cam_tr.x / TILE_SIZE) + 1, level.width)
+	y1 := min(int(cam_tr.y / TILE_SIZE) + 1, level.height)
+
+	sdl.SetRenderDrawColor(
+		game.win.renderer,
+		DEBUG_COLOR_GRID.r,
+		DEBUG_COLOR_GRID.g,
+		DEBUG_COLOR_GRID.b,
+		DEBUG_GRID_ALPHA,
+	)
+
+	// Vertical lines
+	for x in x0 ..= x1 {
+		wx := f32(x) * TILE_SIZE
+		sp0 := world_to_screen_point({wx, f32(y0) * TILE_SIZE})
+		sp1 := world_to_screen_point({wx, f32(y1) * TILE_SIZE})
+		sdl.RenderLine(game.win.renderer, sp0.x, sp0.y, sp1.x, sp1.y)
+	}
+
+	// Horizontal lines
+	for y in y0 ..= y1 {
+		wy := f32(y) * TILE_SIZE
+		sp0 := world_to_screen_point({f32(x0) * TILE_SIZE, wy})
+		sp1 := world_to_screen_point({f32(x1) * TILE_SIZE, wy})
+		sdl.RenderLine(game.win.renderer, sp0.x, sp0.y, sp1.x, sp1.y)
 	}
 }
