@@ -68,7 +68,7 @@ game_init :: proc() {
 	game.clock = engine.clock_init(u64(FPS), u64(FIXED_STEPS))
 
 	// Load level
-	level, level_ok := level_load("assets/level_01.bmp")
+	level, level_ok := level_load(fmt.ctprintf("assets/%s.bmp", LEVEL_NAME))
 	if !level_ok {game.running = false; return}
 	game.level = level
 	game.world_w = game.level.world_w

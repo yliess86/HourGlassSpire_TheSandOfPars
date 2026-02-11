@@ -28,6 +28,7 @@ CAMERA_DEAD_ZONE: f32
 CAMERA_BOUNDARY_ZONE: f32
 
 // [level]
+LEVEL_NAME: string
 LEVEL_COLOR_BG: [4]u8
 LEVEL_COLOR_TILE_SOLID: [4]u8
 LEVEL_COLOR_TILE_BACK_WALL: [4]u8
@@ -172,6 +173,7 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&game_config, "CAMERA_FOLLOW_SPEED_MAX"); ok do CAMERA_FOLLOW_SPEED_MAX = val
 	if val, ok := engine.config_get_f32(&game_config, "CAMERA_DEAD_ZONE"); ok do CAMERA_DEAD_ZONE = val
 	if val, ok := engine.config_get_f32(&game_config, "CAMERA_BOUNDARY_ZONE"); ok do CAMERA_BOUNDARY_ZONE = val
+	if val, ok := engine.config_get_string(&game_config, "LEVEL_NAME"); ok do LEVEL_NAME = val
 	if val, ok := engine.config_get_rgba(&game_config, "LEVEL_COLOR_BG"); ok do LEVEL_COLOR_BG = val
 	if val, ok := engine.config_get_rgba(&game_config, "LEVEL_COLOR_TILE_SOLID"); ok do LEVEL_COLOR_TILE_SOLID = val
 	if val, ok := engine.config_get_rgba(&game_config, "LEVEL_COLOR_TILE_BACK_WALL"); ok do LEVEL_COLOR_TILE_BACK_WALL = val
