@@ -82,34 +82,32 @@ player_resolve_y :: proc(player: ^Player) {
 }
 
 player_resolve_slopes :: proc(player: ^Player) {
-	if player.transform.vel.y <= 0 {
-		found_floor := false
-		best_floor_y := f32(-1e18)
-		for c in game.level.slope_colliders {
-			if !engine.collider_slope_is_floor(c) do continue
-			if player.transform.pos.x >= c.base_x && player.transform.pos.x <= c.base_x + c.span {
-				sy := engine.collider_slope_surface_y(c, player.transform.pos.x)
-				if sy > best_floor_y {
-					best_floor_y = sy
-					found_floor = true
-				}
+	found_floor := false
+	best_floor_y := f32(-1e18)
+	for c in game.level.slope_colliders {
+		if !engine.collider_slope_is_floor(c) do continue
+		if player.transform.pos.x >= c.base_x && player.transform.pos.x <= c.base_x + c.span {
+			sy := engine.collider_slope_surface_y(c, player.transform.pos.x)
+			if sy > best_floor_y {
+				best_floor_y = sy
+				found_floor = true
 			}
 		}
+	}
 
-		if found_floor {
-			dist := player.transform.pos.y - best_floor_y
-			if dist < 0 {
+	if found_floor {
+		dist := player.transform.pos.y - best_floor_y
+		if dist < 0 {
+			player.transform.pos.y = best_floor_y
+			player.transform.vel.y = math.max(player.transform.vel.y, 0)
+			player_sync_collider(player)
+		} else if player.transform.vel.y <= 0 {
+			is_grounded := player.fsm.current == .Grounded
+			snap_dist := 2 * PLAYER_STEP_HEIGHT if is_grounded else PLAYER_SLOPE_SNAP
+			if dist <= snap_dist {
 				player.transform.pos.y = best_floor_y
 				player.transform.vel.y = 0
 				player_sync_collider(player)
-			} else {
-				is_grounded := player.fsm.current == .Grounded
-				snap_dist := 2 * PLAYER_STEP_HEIGHT if is_grounded else PLAYER_SLOPE_SNAP
-				if dist <= snap_dist {
-					player.transform.pos.y = best_floor_y
-					player.transform.vel.y = 0
-					player_sync_collider(player)
-				}
 			}
 		}
 	}

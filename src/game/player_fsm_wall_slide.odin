@@ -33,8 +33,16 @@ player_fsm_wall_slide_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_Stat
 		ctx.transform.vel.y = PLAYER_WALL_JUMP_VERTICAL_MULT * PLAYER_JUMP_FORCE
 		ctx.transform.vel.x = -ctx.sensor.on_side_wall_dir * PLAYER_WALL_JUMP_FORCE
 		ctx.abilities.jump_buffer_timer = 0
-		wall_pos := [2]f32{ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2, ctx.transform.pos.y + PLAYER_SIZE / 2}
-		player_dust_emit(&game.dust, wall_pos, {-ctx.sensor.on_side_wall_dir * PLAYER_PARTICLE_DUST_SPEED_MAX, 0}, 4)
+		wall_pos := [2]f32 {
+			ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2,
+			ctx.transform.pos.y + PLAYER_SIZE / 2,
+		}
+		player_dust_emit(
+			&game.dust,
+			wall_pos,
+			{-ctx.sensor.on_side_wall_dir * PLAYER_PARTICLE_DUST_SPEED_MAX, 0},
+			4,
+		)
 		player_step_emit(&game.steps, wall_pos)
 		return .Airborne
 	}
@@ -47,10 +55,16 @@ player_fsm_wall_slide_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_Stat
 	// Sparse dust from hand position while sliding
 	if rand.float32() < 0.25 {
 		if ctx.sensor.on_side_wall {
-			hand_pos := [2]f32{ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2, ctx.transform.pos.y + PLAYER_SIZE}
+			hand_pos := [2]f32 {
+				ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2,
+				ctx.transform.pos.y + PLAYER_SIZE,
+			}
 			player_dust_emit(&game.dust, hand_pos, {0, PLAYER_PARTICLE_DUST_SPEED_MIN}, 1)
 		} else if ctx.sensor.on_back_wall {
-			hand_pos := [2]f32{ctx.transform.pos.x - PLAYER_SIZE / 2, ctx.transform.pos.y + PLAYER_SIZE}
+			hand_pos := [2]f32 {
+				ctx.transform.pos.x - PLAYER_SIZE / 2,
+				ctx.transform.pos.y + PLAYER_SIZE,
+			}
 			player_dust_emit(&game.dust, hand_pos, {0, PLAYER_PARTICLE_DUST_SPEED_MIN}, 1)
 		}
 	}

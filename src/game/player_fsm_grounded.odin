@@ -28,16 +28,13 @@ player_fsm_grounded_enter :: proc(ctx: ^Player) {
 // - Wall_Run_Vertical: on_back_wall && WALL_RUN (default)
 // - Airborne: !on_ground (fell off edge)
 player_fsm_grounded_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) {
-	// Drive run bob timer and emit footstep dust on zero-crossings of sin(timer)
 	prev := ctx.graphics.run_anim_timer
 	if math.abs(game.input.axis.x) > PLAYER_INPUT_AXIS_THRESHOLD {
 		ctx.graphics.run_anim_timer += PLAYER_RUN_BOB_SPEED * dt
 		if math.floor(prev / math.PI) != math.floor(ctx.graphics.run_anim_timer / math.PI) {
 			player_dust_emit(&game.dust, ctx.transform.pos, {0, 0}, 2)
 		}
-	} else {
-		ctx.graphics.run_anim_timer = 0
-	}
+	} else do ctx.graphics.run_anim_timer = 0
 
 	speed_factor: f32 = 1.0
 	if ctx.sensor.on_slope {
@@ -52,7 +49,9 @@ player_fsm_grounded_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 	ctx.transform.vel.y = 0
 	ctx.abilities.coyote_timer = PLAYER_COYOTE_TIME_DURATION
 
-	if ctx.sensor.on_platform && game.input.axis.y < -PLAYER_INPUT_AXIS_THRESHOLD && ctx.abilities.jump_buffer_timer > 0 {
+	if ctx.sensor.on_platform &&
+	   game.input.axis.y < -PLAYER_INPUT_AXIS_THRESHOLD &&
+	   ctx.abilities.jump_buffer_timer > 0 {
 		ctx.transform.pos.y -= PLAYER_DROP_NUDGE
 		ctx.abilities.jump_buffer_timer = 0
 		ctx.abilities.coyote_timer = 0

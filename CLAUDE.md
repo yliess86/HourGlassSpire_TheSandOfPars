@@ -131,6 +131,8 @@ Downhill following: snap-based — slope resolve snaps the player to the surface
 
 Speed modifiers in `grounded_update`: `PLAYER_SLOPE_UPHILL_FACTOR` (0.75×) slows uphill, `PLAYER_SLOPE_DOWNHILL_FACTOR` (1.25×) speeds downhill.
 
+Dash slope behavior (`player_fsm_dashing_update`): uphill dash decomposes speed along 45° angle (vel.x and vel.y); when the player reaches the slope top (`on_slope` becomes false), positive vel.y is preserved so the player ramps off into the air. Downhill dash lifts off the surface with `vel.y = EPS` and dashes horizontally.
+
 Slopes render as filled triangles via `sdl.RenderGeometry` using `COLOR_TILE_SOLID`, with `COLOR_TILE_BACK_WALL` background rectangles behind them.
 
 ### Camera (`engine/camera.odin`)
@@ -161,7 +163,7 @@ Slopes render as filled triangles via `sdl.RenderGeometry` using `COLOR_TILE_SOL
 | Wall run vertical | `PLAYER_WALL_RUN_VERTICAL_SPEED`, `PLAYER_WALL_RUN_VERTICAL_DECAY` (exponential), `PLAYER_WALL_RUN_COOLDOWN`. Side wall requires `vel.y > 0` (upward momentum) to enter from airborne |
 | Wall run horizontal | `PLAYER_WALL_RUN_HORIZONTAL_SPEED`, `PLAYER_WALL_RUN_HORIZONTAL_LIFT`, `PLAYER_WALL_RUN_HORIZONTAL_GRAV_MULT` (parabolic arc along back wall) |
 | Wall jump | `PLAYER_WALL_JUMP_FORCE` (1.5× jump), 0.75× vertical component |
-| Dash | `PLAYER_DASH_SPEED` (4× run), `PLAYER_DASH_DURATION`, `PLAYER_DASH_COOLDOWN`, direction-locked |
+| Dash | `PLAYER_DASH_SPEED` (4× run), `PLAYER_DASH_DURATION`, `PLAYER_DASH_COOLDOWN`, direction-locked. Slope-aware: uphill follows 45° angle and ramps off slope top (preserves upward momentum), downhill lifts off surface |
 | Drop through | Down + jump on platform → nudge down and enter `Dropping` state |
 | Gravity | `GRAVITY` with 3× multiplier when ascending with jump released (variable jump height / short hop). Grounded state zeroes Y velocity each frame to stay flush; slope snap keeps player on surface going downhill |
 | Step height | `PLAYER_STEP_HEIGHT` — tolerance to step over small obstacles and slope tops; also used for wall collision filtering and slope snap distance when grounded |

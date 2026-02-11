@@ -49,12 +49,25 @@ player_fsm_wall_run_vertical_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Play
 			ctx.transform.pos.x -= ctx.sensor.on_side_wall_dir * EPS
 			ctx.transform.vel.y = PLAYER_WALL_JUMP_VERTICAL_MULT * PLAYER_JUMP_FORCE
 			ctx.transform.vel.x = -ctx.sensor.on_side_wall_dir * PLAYER_WALL_JUMP_FORCE
-			wall_pos := [2]f32{ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2, ctx.transform.pos.y + PLAYER_SIZE / 2}
-			player_dust_emit(&game.dust, wall_pos, {-ctx.sensor.on_side_wall_dir * PLAYER_PARTICLE_DUST_SPEED_MAX, 0}, 4)
+			wall_pos := [2]f32 {
+				ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2,
+				ctx.transform.pos.y + PLAYER_SIZE / 2,
+			}
+			player_dust_emit(
+				&game.dust,
+				wall_pos,
+				{-ctx.sensor.on_side_wall_dir * PLAYER_PARTICLE_DUST_SPEED_MAX, 0},
+				4,
+			)
 			player_step_emit(&game.steps, wall_pos)
 		} else {
 			ctx.transform.vel.y = PLAYER_JUMP_FORCE
-			player_dust_emit(&game.dust, ctx.transform.pos, {0, -PLAYER_PARTICLE_DUST_SPEED_MAX}, 4)
+			player_dust_emit(
+				&game.dust,
+				ctx.transform.pos,
+				{0, -PLAYER_PARTICLE_DUST_SPEED_MAX},
+				4,
+			)
 			player_step_emit(&game.steps, ctx.transform.pos)
 		}
 		ctx.abilities.jump_buffer_timer = 0
@@ -83,11 +96,19 @@ player_fsm_wall_run_vertical_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Play
 	ctx.graphics.run_anim_timer += PLAYER_RUN_BOB_SPEED * dt
 	if math.floor(prev / math.PI) != math.floor(ctx.graphics.run_anim_timer / math.PI) {
 		if ctx.sensor.on_side_wall {
-			wall_pos := [2]f32{ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2, ctx.transform.pos.y}
+			wall_pos := [2]f32 {
+				ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2,
+				ctx.transform.pos.y,
+			}
 			player_dust_emit(&game.dust, wall_pos, {0, -PLAYER_PARTICLE_DUST_SPEED_MIN}, 2)
 			player_step_emit(&game.steps, wall_pos)
 		} else {
-			player_dust_emit(&game.dust, ctx.transform.pos, {0, -PLAYER_PARTICLE_DUST_SPEED_MIN}, 2)
+			player_dust_emit(
+				&game.dust,
+				ctx.transform.pos,
+				{0, -PLAYER_PARTICLE_DUST_SPEED_MIN},
+				2,
+			)
 			player_step_emit(&game.steps, ctx.transform.pos)
 		}
 	}
