@@ -90,6 +90,30 @@ PLAYER_PARTICLE_STEP_LIFETIME: f32
 PLAYER_PARTICLE_DUST_COLOR: [4]u8
 PLAYER_PARTICLE_STEP_COLOR: [4]u8
 
+// [input]
+INPUT_AXIS_DEADZONE: f32
+INPUT_KB_MOVE_UP: string
+INPUT_KB_MOVE_DOWN: string
+INPUT_KB_MOVE_LEFT: string
+INPUT_KB_MOVE_RIGHT: string
+INPUT_KB_JUMP: string
+INPUT_KB_DASH: string
+INPUT_KB_WALL_RUN: string
+INPUT_KB_SLIDE: string
+INPUT_KB_DEBUG: string
+INPUT_KB_RELOAD: string
+INPUT_KB_QUIT: string
+INPUT_GP_MOVE_UP: string
+INPUT_GP_MOVE_DOWN: string
+INPUT_GP_MOVE_LEFT: string
+INPUT_GP_MOVE_RIGHT: string
+INPUT_GP_JUMP: string
+INPUT_GP_DASH: string
+INPUT_GP_WALL_RUN: string
+INPUT_GP_SLIDE: string
+INPUT_GP_DEBUG: string
+INPUT_GP_QUIT: string
+
 // [debug_colors]
 DEBUG_COLOR_COLLIDER: [4]u8
 DEBUG_COLOR_COLLIDER_BACK_WALL: [4]u8
@@ -183,6 +207,28 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&game_config, "PLAYER_PARTICLE_STEP_LIFETIME"); ok do PLAYER_PARTICLE_STEP_LIFETIME = val
 	if val, ok := engine.config_get_rgba(&game_config, "PLAYER_PARTICLE_DUST_COLOR"); ok do PLAYER_PARTICLE_DUST_COLOR = val
 	if val, ok := engine.config_get_rgba(&game_config, "PLAYER_PARTICLE_STEP_COLOR"); ok do PLAYER_PARTICLE_STEP_COLOR = val
+	if val, ok := engine.config_get_f32(&game_config, "INPUT_AXIS_DEADZONE"); ok do INPUT_AXIS_DEADZONE = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_KB_MOVE_UP"); ok do INPUT_KB_MOVE_UP = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_KB_MOVE_DOWN"); ok do INPUT_KB_MOVE_DOWN = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_KB_MOVE_LEFT"); ok do INPUT_KB_MOVE_LEFT = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_KB_MOVE_RIGHT"); ok do INPUT_KB_MOVE_RIGHT = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_KB_JUMP"); ok do INPUT_KB_JUMP = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_KB_DASH"); ok do INPUT_KB_DASH = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_KB_WALL_RUN"); ok do INPUT_KB_WALL_RUN = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_KB_SLIDE"); ok do INPUT_KB_SLIDE = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_KB_DEBUG"); ok do INPUT_KB_DEBUG = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_KB_RELOAD"); ok do INPUT_KB_RELOAD = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_KB_QUIT"); ok do INPUT_KB_QUIT = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_GP_MOVE_UP"); ok do INPUT_GP_MOVE_UP = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_GP_MOVE_DOWN"); ok do INPUT_GP_MOVE_DOWN = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_GP_MOVE_LEFT"); ok do INPUT_GP_MOVE_LEFT = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_GP_MOVE_RIGHT"); ok do INPUT_GP_MOVE_RIGHT = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_GP_JUMP"); ok do INPUT_GP_JUMP = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_GP_DASH"); ok do INPUT_GP_DASH = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_GP_WALL_RUN"); ok do INPUT_GP_WALL_RUN = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_GP_SLIDE"); ok do INPUT_GP_SLIDE = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_GP_DEBUG"); ok do INPUT_GP_DEBUG = val
+	if val, ok := engine.config_get_string(&game_config, "INPUT_GP_QUIT"); ok do INPUT_GP_QUIT = val
 	if val, ok := engine.config_get_rgba(&game_config, "DEBUG_COLOR_COLLIDER"); ok do DEBUG_COLOR_COLLIDER = val
 	if val, ok := engine.config_get_rgba(&game_config, "DEBUG_COLOR_COLLIDER_BACK_WALL"); ok do DEBUG_COLOR_COLLIDER_BACK_WALL = val
 	if val, ok := engine.config_get_rgba(&game_config, "DEBUG_COLOR_COLLIDER_CEILING"); ok do DEBUG_COLOR_COLLIDER_CEILING = val
@@ -226,10 +272,12 @@ config_load_and_apply :: proc() {
 config_reload_all :: proc() {
 	if len(game_config.path) == 0 {
 		config_load_and_apply()
+		input_binding_apply(&game.input)
 		return
 	}
 	if engine.config_reload(&game_config) {
 		config_apply()
+		input_binding_apply(&game.input)
 		fmt.eprintf("[config] Reloaded\n")
 	}
 }

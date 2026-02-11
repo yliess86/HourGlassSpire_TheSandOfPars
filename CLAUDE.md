@@ -43,7 +43,8 @@ Odin lang, SDL3 (`vendor:sdl3`). Main package `src/game/`, reusable engine packa
 | `src/engine/camera.odin` | `Camera` struct (stores `ppm`, `logical_h`), `camera_world_to_screen`/`camera_world_to_screen_point` (world→screen coordinate conversion), follow + clamp within level bounds |
 | `src/engine/window.odin` | SDL3 window/renderer init, VSync, logical presentation (aspect ratio from primary display) |
 | `src/engine/clock.odin` | Frame timing, fixed timestep accumulator, frame-rate cap via `sdl.Delay`, dt capped at 0.1s |
-| `src/engine/input.odin` | Keyboard + gamepad input with action bindings, `is_down`/`is_pressed`/`axis` |
+| `src/game/input.odin` | `Input_Action` enum, `INPUT_DEFAULT_BINDINGS` constant, `input_binding_apply` (reads `[input]` config strings via `sdl.GetScancodeFromName`/`sdl.GetGamepadButtonFromString`) |
+| `src/engine/input.odin` | Generic parametric `Input($Action)` with `Input_Binding`, `Input_Axis_Map($Action)`, runtime bindings + deadzone; `is_down`/`is_pressed`/`axis` |
 | `src/engine/collider.odin` | AABB overlap check (`collider_check_rect_vs_rect`), single-axis dynamic resolve (`collider_resolve_dynamic_rect`), axis-aligned raycasts (`collider_raycast_rect`, `collider_raycast_slope`), slope helpers (`collider_slope_surface_y`, `collider_slope_surface_x`, `collider_slope_contains_x`, `collider_slope_is_floor`) |
 | `src/engine/fsm.odin` | Generic parametric FSM with enter/update/exit handlers, tracks `previous` state |
 
@@ -154,7 +155,7 @@ All game constants live in `assets/game.ini` — an INI file with sections, expr
 3. Update source files to use the new constant names
 4. `odin check src/game/` — verify compilation
 
-INI sections: `[engine]`, `[physics]`, `[level]` (level colors prefixed `LEVEL_COLOR_*`), `[player]`, `[player_run]`, `[player_jump]`, `[player_dash]`, `[player_wall]`, `[player_slopes]`, `[player_graphics]`, `[player_particles]`, `[player_particle_colors]`, `[debug_colors]`, `[debug]`.
+INI sections: `[engine]`, `[physics]`, `[level]` (level colors prefixed `LEVEL_COLOR_*`), `[player]`, `[player_run]`, `[player_jump]`, `[player_dash]`, `[player_wall]`, `[player_slopes]`, `[player_graphics]`, `[player_particles]`, `[player_particle_colors]`, `[input]` (key/gamepad bindings as SDL name strings, prefixed `INPUT_KB_*`/`INPUT_GP_*`), `[debug_colors]`, `[debug]`.
 
 ## Coordinate & Unit Conventions
 
@@ -221,8 +222,10 @@ Constants prefixed `DEBUG_COLOR_*` (colors) and `DEBUG_*` (sizes/scales).
 
 ## Input Bindings
 
-Actions: `MOVE_UP`, `MOVE_DOWN`, `MOVE_LEFT`, `MOVE_RIGHT`, `JUMP`, `DASH`, `WALL_RUN`, `SLIDE`, `DEBUG`, `RELOAD`, `QUIT`.
+`Input_Action` enum defined in `src/game/input.odin`: `MOVE_UP`, `MOVE_DOWN`, `MOVE_LEFT`, `MOVE_RIGHT`, `JUMP`, `DASH`, `WALL_RUN`, `SLIDE`, `DEBUG`, `RELOAD`, `QUIT`.
 
-Keyboard: WASD move, Space jump, L dash, LShift wall run, LCtrl slide, F3 debug, F5 reload config, Esc quit.
-Gamepad: left stick / dpad move, South(A) jump, North(Y) dash, RB wall run, LB slide, Back debug, Start quit.
-Input auto-switches between keyboard/gamepad based on last device event. Release events always clear `is_down` regardless of active input type. Axis input is normalized for diagonals. Gamepad axis deadzone: `INPUT_BINDING_GAMEPAD_AXIS_DEADZONE` (0.1).
+Engine `Input($Action)` is generic (parametric on action enum, like the FSM pattern). `Game_State.input` is `engine.Input(Input_Action)`. Bindings are data-driven via `[input]` section in `assets/game.ini` — keyboard keys as SDL scancode names (`INPUT_KB_*`), gamepad buttons as SDL button names (`INPUT_GP_*`). `input_binding_apply` reads config strings, converts via `sdl.GetScancodeFromName`/`sdl.GetGamepadButtonFromString`, falls back to `INPUT_DEFAULT_BINDINGS` on invalid names. Bindings hot-reload with F5 (`config_reload_all` calls `input_binding_apply`).
+
+Default keyboard: WASD move, Space jump, L dash, LShift wall run, LCtrl slide, F3 debug, F5 reload config, Esc quit.
+Default gamepad: left stick / dpad move, South(A) jump, North(Y) dash, RB wall run, LB slide, Back debug, Start quit.
+Input auto-switches between keyboard/gamepad based on last device event. Release events always clear `is_down` regardless of active input type. Axis input is normalized for diagonals. Gamepad axis deadzone: `INPUT_AXIS_DEADZONE` (0.1, config-loaded).

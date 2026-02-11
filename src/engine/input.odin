@@ -9,105 +9,70 @@ Input_Type :: enum u8 {
 	GAMEPAD,
 }
 
-Input_Action :: enum u8 {
-	MOVE_UP,
-	MOVE_DOWN,
-	MOVE_LEFT,
-	MOVE_RIGHT,
-	JUMP,
-	DASH,
-	WALL_RUN,
-	SLIDE,
-	DEBUG,
-	RELOAD,
-	QUIT,
+Input_Binding :: struct {
+	keyboard:       sdl.Scancode,
+	gamepad_button: sdl.GamepadButton,
 }
 
-Input :: struct {
+Input_Axis_Map :: struct($Action: typeid) {
+	pos_x, neg_x: Action,
+	pos_y, neg_y: Action,
+	gamepad_x:    sdl.GamepadAxis,
+	gamepad_y:    sdl.GamepadAxis,
+}
+
+Input :: struct($Action: typeid) {
 	type:       Input_Type,
 	gamepad:    ^sdl.Gamepad,
-	was_down:   [Input_Action]bool,
-	is_down:    [Input_Action]bool,
-	is_pressed: [Input_Action]bool,
+	was_down:   [Action]bool,
+	is_down:    [Action]bool,
+	is_pressed: [Action]bool,
 	axis:       [2]f32,
+	bindings:   [Action]Input_Binding,
+	axis_map:   Input_Axis_Map(Action),
+	deadzone:   f32,
 }
 
-INPUT_BINDING_KEYBOARD :: [Input_Action]sdl.Scancode {
-	.MOVE_UP    = .W,
-	.MOVE_DOWN  = .S,
-	.MOVE_LEFT  = .A,
-	.MOVE_RIGHT = .D,
-	.JUMP       = .SPACE,
-	.DASH       = .L,
-	.WALL_RUN   = .LSHIFT,
-	.SLIDE      = .LCTRL,
-	.DEBUG      = .F3,
-	.RELOAD     = .F5,
-	.QUIT       = .ESCAPE,
+input_init :: proc(input: ^Input($Action), deadzone: f32 = 0.1) {
+	input^ = {}
+	input.deadzone = deadzone
 }
 
-INPUT_BINDING_GAMEPAD_BUTTON :: [Input_Action]sdl.GamepadButton {
-	.MOVE_UP    = .DPAD_UP,
-	.MOVE_DOWN  = .DPAD_DOWN,
-	.MOVE_LEFT  = .DPAD_LEFT,
-	.MOVE_RIGHT = .DPAD_RIGHT,
-	.JUMP       = .SOUTH,
-	.DASH       = .NORTH,
-	.WALL_RUN   = .RIGHT_SHOULDER,
-	.SLIDE      = .LEFT_SHOULDER,
-	.DEBUG      = .BACK,
-	.RELOAD     = .INVALID,
-	.QUIT       = .START,
-}
-
-INPUT_BINDING_GAMEPAD_AXIS :: #partial [Input_Action]sdl.GamepadAxis {
-	.MOVE_UP    = .LEFTY,
-	.MOVE_DOWN  = .LEFTY,
-	.MOVE_LEFT  = .LEFTX,
-	.MOVE_RIGHT = .LEFTX,
-}
-
-INPUT_BINDING_GAMEPAD_AXIS_DEADZONE: f32 : 0.1
-
-input_init :: proc(type: Input_Type = .KEYBOARD) -> (input: Input) {
-	return Input{type = type}
-}
-
-input_pre_update :: proc(input: ^Input) {
+input_pre_update :: proc(input: ^Input($Action)) {
 	input.was_down = input.is_down
 }
 
-input_post_update :: proc(input: ^Input) {
-	for action in Input_Action do input.is_pressed[action] = input.is_down[action] && !input.was_down[action]
+input_post_update :: proc(input: ^Input($Action)) {
+	for action in Action do input.is_pressed[action] = input.is_down[action] && !input.was_down[action]
 }
 
-input_update :: proc(input: ^Input, event: ^sdl.Event) {
+input_update :: proc(input: ^Input($Action), event: ^sdl.Event) {
 	input_update_keyboard(input, event)
 	input_update_gamepad(input, event)
 }
 
-input_update_keyboard :: proc(input: ^Input, event: ^sdl.Event) {
+input_update_keyboard :: proc(input: ^Input($Action), event: ^sdl.Event) {
 	#partial switch event.type {
 	case .KEY_DOWN:
 		input.type = .KEYBOARD
-		for scancode, action in INPUT_BINDING_KEYBOARD {
-			if event.key.scancode == scancode do input.is_down[action] = true
+		for binding, action in input.bindings {
+			if event.key.scancode == binding.keyboard do input.is_down[action] = true
 		}
 	case .KEY_UP:
-		for scancode, action in INPUT_BINDING_KEYBOARD {
-			if event.key.scancode == scancode do input.is_down[action] = false
+		for binding, action in input.bindings {
+			if event.key.scancode == binding.keyboard do input.is_down[action] = false
 		}
 	}
 
 	if input.type == .KEYBOARD {
-		x := int(input.is_down[.MOVE_RIGHT]) - int(input.is_down[.MOVE_LEFT])
-		y := int(input.is_down[.MOVE_UP]) - int(input.is_down[.MOVE_DOWN])
+		x := int(input.is_down[input.axis_map.pos_x]) - int(input.is_down[input.axis_map.neg_x])
+		y := int(input.is_down[input.axis_map.pos_y]) - int(input.is_down[input.axis_map.neg_y])
 		input.axis = {f32(x), f32(y)}
 		input.axis = linalg.normalize0(input.axis)
 	}
 }
 
-input_update_gamepad :: proc(input: ^Input, event: ^sdl.Event) {
+input_update_gamepad :: proc(input: ^Input($Action), event: ^sdl.Event) {
 	#partial switch event.type {
 	case .GAMEPAD_ADDED:
 		if input.gamepad == nil {
@@ -120,17 +85,17 @@ input_update_gamepad :: proc(input: ^Input, event: ^sdl.Event) {
 		}
 	case .GAMEPAD_BUTTON_DOWN:
 		input.type = .GAMEPAD
-		for button, action in INPUT_BINDING_GAMEPAD_BUTTON {
-			if event.gbutton.button == u8(button) do input.is_down[action] = true
+		for binding, action in input.bindings {
+			if event.gbutton.button == u8(binding.gamepad_button) do input.is_down[action] = true
 		}
 	case .GAMEPAD_BUTTON_UP:
-		for button, action in INPUT_BINDING_GAMEPAD_BUTTON {
-			if event.gbutton.button == u8(button) {
+		for binding, action in input.bindings {
+			if event.gbutton.button == u8(binding.gamepad_button) {
 				input.is_down[action] = false
-				if action == .MOVE_LEFT do input.axis.x = 0
-				if action == .MOVE_RIGHT do input.axis.x = 0
-				if action == .MOVE_UP do input.axis.y = 0
-				if action == .MOVE_DOWN do input.axis.y = 0
+				if action == input.axis_map.neg_x do input.axis.x = 0
+				if action == input.axis_map.pos_x do input.axis.x = 0
+				if action == input.axis_map.pos_y do input.axis.y = 0
+				if action == input.axis_map.neg_y do input.axis.y = 0
 			}
 		}
 	case .GAMEPAD_AXIS_MOTION:
@@ -138,20 +103,20 @@ input_update_gamepad :: proc(input: ^Input, event: ^sdl.Event) {
 
 		value := f32(event.gaxis.value) / 3_2767
 		value_abs := math.abs(value)
-		axis: f32 = value if value_abs > INPUT_BINDING_GAMEPAD_AXIS_DEADZONE else 0
-		axis = axis if value_abs < 1 - INPUT_BINDING_GAMEPAD_AXIS_DEADZONE else math.sign(value)
+		axis: f32 = value if value_abs > input.deadzone else 0
+		axis = axis if value_abs < 1 - input.deadzone else math.sign(value)
 
-		#partial switch sdl.GamepadAxis(event.gaxis.axis) {
-		case .LEFTX:
+		gaxis := sdl.GamepadAxis(event.gaxis.axis)
+		if gaxis == input.axis_map.gamepad_x {
 			input.axis.x = axis
-		case .LEFTY:
+		} else if gaxis == input.axis_map.gamepad_y {
 			input.axis.y = -axis
 		}
 	}
 
 	if input.type == .GAMEPAD {
-		dpad_x := f32(int(input.is_down[.MOVE_RIGHT]) - int(input.is_down[.MOVE_LEFT]))
-		dpad_y := f32(int(input.is_down[.MOVE_UP]) - int(input.is_down[.MOVE_DOWN]))
+		dpad_x := f32(int(input.is_down[input.axis_map.pos_x]) - int(input.is_down[input.axis_map.neg_x]))
+		dpad_y := f32(int(input.is_down[input.axis_map.pos_y]) - int(input.is_down[input.axis_map.neg_y]))
 		input.axis.x = input.axis.x * (1.0 - math.abs(dpad_x)) + dpad_x
 		input.axis.y = input.axis.y * (1.0 - math.abs(dpad_y)) + dpad_y
 		input.axis = linalg.normalize0(input.axis) if dpad_x != 0 || dpad_y != 0 else input.axis

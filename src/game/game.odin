@@ -20,7 +20,7 @@ Game_State :: struct {
 	world_w: f32,
 
 	// Engine
-	input:   engine.Input,
+	input:   engine.Input(Input_Action),
 	clock:   engine.Clock,
 
 	// Camera & Level
@@ -51,7 +51,8 @@ game_init :: proc() {
 	if !ok {game.running = false; return}
 	game.win = win
 
-	game.input = engine.input_init()
+	engine.input_init(&game.input)
+	input_binding_apply(&game.input)
 
 	game.clock = engine.clock_init(u64(FPS), u64(FIXED_STEPS))
 
