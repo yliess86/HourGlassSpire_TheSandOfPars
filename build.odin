@@ -1,5 +1,6 @@
 package main
 
+import "core:c/libc"
 import "core:fmt"
 import "core:os"
 import "core:strings"
@@ -17,11 +18,31 @@ Entry :: struct {
 	section: string,
 }
 
-main :: proc() {
+gen_config_infer_type :: proc(raw_value: string) -> Entry_Type {
+	value := strings.trim_space(raw_value)
+	if len(value) > 0 && value[0] == '"' do return .String
+	if len(value) > 0 && value[0] == '#' && len(value) >= 9 do return .RGBA
+
+	hash_idx := -1
+	for i in 0 ..< len(value) {
+		if value[i] == '#' {
+			hash_idx = i
+			break
+		}
+	}
+	if hash_idx >= 0 {
+		comment := value[hash_idx:]
+		if strings.contains(comment, ":u8") do return .U8
+	}
+
+	return .F32
+}
+
+gen_config :: proc() -> bool {
 	data, ok := os.read_entire_file("assets/game.ini")
 	if !ok {
 		fmt.eprintf("Error: could not read assets/game.ini\n")
-		os.exit(1)
+		return false
 	}
 	defer delete(data)
 
@@ -36,25 +57,20 @@ main :: proc() {
 		if len(trimmed) == 0 do continue
 		if trimmed[0] == '#' do continue
 
-		// Section header
 		if trimmed[0] == '[' {
 			end := strings.index_byte(trimmed, ']')
 			if end > 0 do current_section = trimmed[1:end]
 			continue
 		}
 
-		// Key = Value line
 		eq_idx := strings.index_byte(trimmed, '=')
 		if eq_idx < 0 do continue
 
 		key := strings.trim_space(trimmed[:eq_idx])
 		raw_value := strings.trim_space(trimmed[eq_idx + 1:])
-
 		if len(key) == 0 || len(raw_value) == 0 do continue
 
-		// Infer type
-		type := infer_type(raw_value)
-
+		type := gen_config_infer_type(raw_value)
 		append(&entries, Entry{key = key, type = type, section = current_section})
 	}
 
@@ -143,38 +159,61 @@ main :: proc() {
 	write_ok := os.write_entire_file("src/game/config.odin", transmute([]u8)output)
 	if !write_ok {
 		fmt.eprintf("Error: could not write src/game/config.odin\n")
-		os.exit(1)
+		return false
 	}
 
 	fmt.printf("Generated src/game/config.odin with %d entries\n", len(entries))
+	return true
 }
 
-infer_type :: proc(raw_value: string) -> Entry_Type {
-	// Strip expression part, look at first token
-	value := strings.trim_space(raw_value)
+run_command :: proc(cmd: string) -> i32 {
+	return libc.system(strings.clone_to_cstring(cmd))
+}
 
-	// Check if value starts with " (quoted string)
-	if len(value) > 0 && value[0] == '"' do return .String
+when ODIN_OS == .Windows {
+	EXE_EXT :: ".exe"
+} else {
+	EXE_EXT :: ""
+}
 
-	// Check if value starts with # (hex color)
-	if len(value) > 0 && value[0] == '#' {
-		// Verify it's a hex color (8 hex digits after #)
-		if len(value) >= 9 do return .RGBA
+GAME_BIN :: "bin/HourGlassSpire" + EXE_EXT
+
+main :: proc() {
+	mode := "run"
+	if len(os.args) > 1 do mode = os.args[1]
+
+	switch mode {
+	case "run", "build", "check", "gen":
+	case:
+		fmt.eprintf("Usage: odin run build.odin -file -- [run|build|check|gen]\n")
+		fmt.eprintf("  run   — gen_config + build + run (default)\n")
+		fmt.eprintf("  build — gen_config + build only\n")
+		fmt.eprintf("  check — gen_config + type-check only\n")
+		fmt.eprintf("  gen   — regenerate config.odin only\n")
+		os.exit(1)
 	}
 
-	// Check for inline comment containing :u8
-	hash_idx := -1
-	// For non-color values, find inline comment
-	for i in 0 ..< len(value) {
-		if value[i] == '#' {
-			hash_idx = i
-			break
-		}
-	}
-	if hash_idx >= 0 {
-		comment := value[hash_idx:]
-		if strings.contains(comment, ":u8") do return .U8
-	}
+	if !gen_config() do os.exit(1)
+	if mode == "gen" do return
 
-	return .F32
+	os.make_directory("bin")
+	rc: i32
+	switch mode {
+	case "check":
+		rc = run_command("odin check src/game/")
+	case "build", "run":
+		rc = run_command("odin build src/game/ -out:" + GAME_BIN + " -debug")
+	}
+	if rc != 0 {
+		fmt.eprintf("Build failed (exit code %d)\n", rc)
+		os.exit(1)
+	}
+	if mode != "run" do return
+
+	when ODIN_OS == .Windows {
+		rc = run_command(GAME_BIN)
+	} else {
+		rc = run_command("./" + GAME_BIN)
+	}
+	if rc != 0 do os.exit(1)
 }
