@@ -14,13 +14,86 @@ player_apply_movement :: proc(player: ^Player, dt: f32) {
 	player.transform.vel.y -= gravity_mult * GRAVITY * dt
 }
 
+player_physics_sweep_x :: proc(player: ^Player, dt: f32) -> f32 {
+	delta_x := player.transform.vel.x * dt
+	if delta_x == 0 do return 0
+
+	dir_x: f32 = math.sign(delta_x)
+	pc := player.collider
+	origin: [2]f32 = {pc.pos.x + dir_x * pc.size.x / 2, pc.pos.y}
+	travel := math.abs(delta_x)
+	nearest: f32 = travel
+
+	for c in game.level.side_wall_colliders {
+		wall_top := c.pos.y + c.size.y / 2
+		player_bottom := pc.pos.y - pc.size.y / 2
+		if player_bottom >= wall_top - PLAYER_STEP_HEIGHT + EPS do continue
+
+		hit := engine.collider_raycast_rect(origin, 0, dir_x, travel, c, pc.size.y / 2)
+		if hit.hit && hit.distance < nearest {
+			nearest = hit.distance
+		}
+	}
+
+	safe := nearest - PLAYER_SWEEP_SKIN if nearest < travel else travel
+	return dir_x * math.max(safe, 0)
+}
+
+player_physics_sweep_y :: proc(player: ^Player, dt: f32) -> f32 {
+	delta_y := player.transform.vel.y * dt
+	if delta_y == 0 do return 0
+
+	dir_y: f32 = math.sign(delta_y)
+	pc := player.collider
+	origin: [2]f32 = {pc.pos.x, pc.pos.y + dir_y * pc.size.y / 2}
+	travel := math.abs(delta_y)
+	nearest: f32 = travel
+
+	// Ceiling (moving up)
+	if delta_y > 0 {
+		for c in game.level.ceiling_colliders {
+			hit := engine.collider_raycast_rect(origin, 1, dir_y, travel, c, pc.size.x / 2)
+			if hit.hit && hit.distance < nearest {
+				nearest = hit.distance
+			}
+		}
+	}
+
+	// Ground (moving down)
+	if delta_y < 0 {
+		for c in game.level.ground_colliders {
+			hit := engine.collider_raycast_rect(origin, 1, dir_y, travel, c, pc.size.x / 2)
+			if hit.hit && hit.distance < nearest {
+				nearest = hit.distance
+			}
+		}
+	}
+
+	// Platforms (moving down, not Dropping, player above platform)
+	if delta_y < 0 && player.fsm.current != .Dropping {
+		for c in game.level.platform_colliders {
+			if player.transform.pos.y >= c.pos.y + c.size.y / 2 - EPS {
+				hit := engine.collider_raycast_rect(origin, 1, dir_y, travel, c, pc.size.x / 2)
+				if hit.hit && hit.distance < nearest {
+					nearest = hit.distance
+				}
+			}
+		}
+	}
+
+	safe := nearest - PLAYER_SWEEP_SKIN if nearest < travel else travel
+	return dir_y * math.max(safe, 0)
+}
+
 player_physics_update :: proc(player: ^Player, dt: f32) {
-	player.transform.pos.x += player.transform.vel.x * dt
+	player_sync_collider(player)
+
+	player.transform.pos.x += player_physics_sweep_x(player, dt)
 	player_sync_collider(player)
 	player_resolve_slopes(player)
 	player_resolve_x(player)
 
-	player.transform.pos.y += player.transform.vel.y * dt
+	player.transform.pos.y += player_physics_sweep_y(player, dt)
 	player_sync_collider(player)
 	player_resolve_y(player)
 	player_resolve_slopes(player)

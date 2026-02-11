@@ -30,7 +30,7 @@ Odin lang, SDL3 (`vendor:sdl3`). Main package `src/game/`, reusable engine packa
 | `src/game/player.odin` | `Player_State` enum, `Player` struct (`Player_Transform`, `Player_Abilities`, `Player_Graphics` sub-structs, `fsm`, `sensor`), `player_init`, `player_fixed_update`, `player_sync_collider`, `player_debug` — all procs take `player: ^Player` |
 | `src/game/player_graphics.odin` | `player_color`, `player_render` (4-layer visual deformation: velocity, look, run bob, impact bounce), `player_trigger_impact` |
 | `src/game/player_sensor.odin` | `Player_Sensor` struct, `player_sensor_update`, `player_sensor_debug` |
-| `src/game/player_physics.odin` | `player_apply_movement`, `player_physics_update` (separated-axis solver), `player_resolve_x`, `player_resolve_y`, `player_resolve_slopes`, `player_physics_debug` (collider + position + velocity) |
+| `src/game/player_physics.odin` | `player_apply_movement`, `player_physics_update` (separated-axis solver), `player_physics_sweep_x` (swept AABB for X axis), `player_physics_sweep_y` (swept AABB for Y axis), `player_resolve_x`, `player_resolve_y`, `player_resolve_slopes`, `player_physics_debug` (collider + position + velocity) |
 | `src/game/player_fsm_grounded.odin` | `player_fsm_grounded_init` + `player_fsm_grounded_enter` + `player_fsm_grounded_update` |
 | `src/game/player_fsm_airborne.odin` | `player_fsm_airborne_init` + `player_fsm_airborne_update` |
 | `src/game/player_fsm_dashing.odin` | `player_fsm_dashing_init` + `player_fsm_dashing_enter` + `player_fsm_dashing_update` |

@@ -72,6 +72,7 @@ PLAYER_SLOPE_SNAP: f32
 PLAYER_SLOPE_UPHILL_FACTOR: f32
 PLAYER_SLOPE_DOWNHILL_FACTOR: f32
 PLAYER_STEP_HEIGHT: f32
+PLAYER_SWEEP_SKIN: f32
 
 // [player_graphics]
 PLAYER_LOOK_DEFORM: f32
@@ -201,6 +202,7 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&game_config, "PLAYER_SLOPE_UPHILL_FACTOR"); ok do PLAYER_SLOPE_UPHILL_FACTOR = val
 	if val, ok := engine.config_get_f32(&game_config, "PLAYER_SLOPE_DOWNHILL_FACTOR"); ok do PLAYER_SLOPE_DOWNHILL_FACTOR = val
 	if val, ok := engine.config_get_f32(&game_config, "PLAYER_STEP_HEIGHT"); ok do PLAYER_STEP_HEIGHT = val
+	if val, ok := engine.config_get_f32(&game_config, "PLAYER_SWEEP_SKIN"); ok do PLAYER_SWEEP_SKIN = val
 	if val, ok := engine.config_get_f32(&game_config, "PLAYER_LOOK_DEFORM"); ok do PLAYER_LOOK_DEFORM = val
 	if val, ok := engine.config_get_f32(&game_config, "PLAYER_LOOK_SMOOTH"); ok do PLAYER_LOOK_SMOOTH = val
 	if val, ok := engine.config_get_f32(&game_config, "PLAYER_IMPACT_DECAY"); ok do PLAYER_IMPACT_DECAY = val
