@@ -3,10 +3,6 @@ package game
 import "core:math"
 import sdl "vendor:sdl3"
 
-player_color :: proc(player: ^Player) -> [4]u8 {
-	return PLAYER_COLOR
-}
-
 player_render :: proc(player: ^Player) {
 	vel_px := player.transform.vel * PPM
 	size_px: f32 = PLAYER_SIZE * PPM
@@ -57,8 +53,13 @@ player_render :: proc(player: ^Player) {
 	player_bl := [2]f32{player.transform.pos.x - w_world / 2, player.transform.pos.y}
 	rect_p := world_to_screen(player_bl, {w_world, h_world})
 
-	color := player_color(player)
-	sdl.SetRenderDrawColor(game.win.renderer, color.r, color.g, color.b, color.a)
+	sdl.SetRenderDrawColor(
+		game.win.renderer,
+		PLAYER_COLOR.r,
+		PLAYER_COLOR.g,
+		PLAYER_COLOR.b,
+		PLAYER_COLOR.a,
+	)
 	sdl.RenderFillRect(game.win.renderer, &rect_p)
 }
 
