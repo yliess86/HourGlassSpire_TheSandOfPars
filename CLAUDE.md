@@ -26,7 +26,7 @@ Odin lang, SDL3 (`vendor:sdl3`). Main package `src/game/`, reusable engine packa
 | `tools/gen_config.odin` | Code generator: parses `assets/game.ini` and emits `src/game/config.odin` |
 | `src/engine/config.odin` | INI parser, expression evaluator, config load/reload/get API |
 | `src/game/main.odin` | Entry point (`main` proc): game loop (fixed-timestep update, render, present) |
-| `src/game/game.odin` | `Game_State` struct, `game` global, game lifecycle (`game_init`/`game_clean`), `game_update`/`game_fixed_update`/`game_render`/`game_render_debug`, `world_to_screen`/`world_to_screen_point` convenience wrappers |
+| `src/game/game.odin` | `Game_State` struct, `game` global, `config_post_apply` (syncs input bindings + camera params on config load/reload), game lifecycle (`game_init`/`game_clean`), `game_update`/`game_fixed_update`/`game_render`/`game_render_debug`, `world_to_screen`/`world_to_screen_point` convenience wrappers |
 | `src/game/player.odin` | `Player_State` enum, `Player` struct (`Player_Transform`, `Player_Abilities`, `Player_Graphics` sub-structs, `fsm`, `sensor`), `player_init`, `player_fixed_update`, `player_sync_collider`, `player_debug` — all procs take `player: ^Player` |
 | `src/game/player_graphics.odin` | `player_color`, `player_render` (4-layer visual deformation: velocity, look, run bob, impact bounce), `player_trigger_impact` |
 | `src/game/player_sensor.odin` | `Player_Sensor` struct, `player_sensor_update`, `player_sensor_debug` |
@@ -38,9 +38,9 @@ Odin lang, SDL3 (`vendor:sdl3`). Main package `src/game/`, reusable engine packa
 | `src/game/player_fsm_wall_slide.odin` | `player_fsm_wall_slide_init` + `player_fsm_wall_slide_update` |
 | `src/game/player_fsm_wall_run_vertical.odin` | `player_fsm_wall_run_vertical_init` + `player_fsm_wall_run_vertical_enter` + `player_fsm_wall_run_vertical_update` + `player_fsm_wall_run_vertical_exit` |
 | `src/game/player_fsm_wall_run_horizontal.odin` | `player_fsm_wall_run_horizontal_init` + `player_fsm_wall_run_horizontal_enter` + `player_fsm_wall_run_horizontal_update` |
-| `src/game/debug.odin` | `Debug_State` enum, debug drawing helpers (`debug_collider_rect`, `debug_point`, `debug_vector`, `debug_text`, etc.) |
+| `src/game/debug.odin` | `Debug_State` enum, debug drawing helpers (`debug_collider_rect`, `debug_point`, `debug_vector`, `debug_text`, etc.), `camera_debug` (dead zone rectangle overlay) |
 | `src/game/level.odin` | `Tile_Kind` enum, `Level` struct, BMP loading (`sdl.LoadBMP`), greedy collider merging, diagonal slope merging, tile rendering, `level_debug` (collider outlines + anchors) |
-| `src/engine/camera.odin` | `Camera` struct (stores `ppm`, `logical_h`), `camera_world_to_screen`/`camera_world_to_screen_point` (world→screen coordinate conversion), follow + clamp within level bounds |
+| `src/engine/camera.odin` | `Camera` struct (stores `ppm`, `logical_h`, follow parameters), `camera_world_to_screen`/`camera_world_to_screen_point` (world→screen coordinate conversion), dead-zone follow + boundary deceleration + clamp within level bounds |
 | `src/engine/window.odin` | SDL3 window/renderer init, VSync, logical presentation (aspect ratio from primary display) |
 | `src/engine/clock.odin` | Frame timing, fixed timestep accumulator, frame-rate cap via `sdl.Delay`, dt capped at 0.1s |
 | `src/game/input.odin` | `Input_Action` enum, `INPUT_DEFAULT_BINDINGS` constant, `input_binding_apply` (reads `[input]` config strings via `sdl.GetScancodeFromName`/`sdl.GetGamepadButtonFromString`) |
@@ -143,7 +143,15 @@ Slopes render as filled triangles via `sdl.RenderGeometry` using `LEVEL_COLOR_TI
 
 ### Camera (`engine/camera.odin`)
 
-2D viewport that follows the player. Camera stores `ppm` and `logical_h` for coordinate conversion. `camera_world_to_screen(cam, world_pos, world_size)` converts a world-space rect to an SDL screen rect (Y-flipped); `camera_world_to_screen_point(cam, world_pos)` converts a world point to screen pixel. Game-level `world_to_screen`/`world_to_screen_point` wrappers pass `&game.camera` for convenience. `camera_follow` snaps to target; `camera_clamp` keeps within level bounds (centers on axis if level is smaller than viewport).
+2D viewport that follows the player with a dead-zone system. Camera stores `ppm`, `logical_h`, and four follow parameters (`follow_speed_min`, `follow_speed_max`, `dead_zone`, `boundary_zone`). `camera_world_to_screen(cam, world_pos, world_size)` converts a world-space rect to an SDL screen rect (Y-flipped); `camera_world_to_screen_point(cam, world_pos)` converts a world point to screen pixel. Game-level `world_to_screen`/`world_to_screen_point` wrappers pass `&game.camera` for convenience.
+
+`camera_follow(cam, target, bounds_min, bounds_max, dt)` uses per-axis zone-based follow:
+1. **Dead zone**: player offset from camera center is normalized to half-viewport; a smoothstep ramp from `dead_zone` to `1.0` yields `t = 0` inside the dead zone and `t = 1` at viewport edge
+2. **Speed interpolation**: `lerp(follow_speed_min, follow_speed_max, t)` — slow in center, fast at edge
+3. **Boundary deceleration**: when the camera viewport edge is within `boundary_zone` of a level bound, speed is reduced toward `follow_speed_min` via another smoothstep
+4. **Exponential smoothing**: `offset * (1 - exp(-speed * dt))` for frame-rate independent follow
+
+`camera_clamp` remains as a hard safety clamp after the smooth follow (centers on axis if level is smaller than viewport). Camera params are synced from config via `config_post_apply` and hot-reload with F5. Camera snaps to player spawn on init (no smooth-in from origin).
 
 ## Configuration (`assets/game.ini`)
 
@@ -155,7 +163,7 @@ All game constants live in `assets/game.ini` — an INI file with sections, expr
 3. Update source files to use the new constant names
 4. `odin check src/game/` — verify compilation
 
-INI sections: `[engine]`, `[physics]`, `[level]` (level colors prefixed `LEVEL_COLOR_*`), `[player]`, `[player_run]`, `[player_jump]`, `[player_dash]`, `[player_wall]`, `[player_slopes]`, `[player_graphics]`, `[player_particles]`, `[player_particle_colors]`, `[input]` (key/gamepad bindings as SDL name strings, prefixed `INPUT_KB_*`/`INPUT_GP_*`), `[debug_colors]`, `[debug]`.
+INI sections: `[engine]`, `[physics]`, `[camera]` (camera follow parameters prefixed `CAMERA_*`), `[level]` (level colors prefixed `LEVEL_COLOR_*`), `[player]`, `[player_run]`, `[player_jump]`, `[player_dash]`, `[player_wall]`, `[player_slopes]`, `[player_graphics]`, `[player_particles]`, `[player_particle_colors]`, `[input]` (key/gamepad bindings as SDL name strings, prefixed `INPUT_KB_*`/`INPUT_GP_*`), `[debug_colors]`, `[debug]`.
 
 ## Coordinate & Unit Conventions
 
@@ -191,7 +199,7 @@ INI sections: `[engine]`, `[physics]`, `[level]` (level colors prefixed `LEVEL_C
 
 Cycle with **F3** (`DEBUG` action) through `NONE` → `PLAYER` → `BACKGROUND` → `ALL`. Rendered in `game_render_debug()`. Drawing helpers in `src/game/debug.odin`.
 
-- `PLAYER` — player collider, position, facing direction, velocity vector, FSM state text, sensor rays
+- `PLAYER` — player collider, position, facing direction, velocity vector, FSM state text, sensor rays, camera dead zone rectangle
 - `BACKGROUND` — level collider outlines (ground, ceiling, side wall, platform, back wall, slope) + element anchors
 - `ALL` — all of the above
 - FPS counter and sensor readout appear in all non-NONE debug modes
@@ -217,6 +225,7 @@ Cycle with **F3** (`DEBUG` action) through `NONE` → `PLAYER` → `BACKGROUND` 
 | FSM previous state | Muted gray | Text centered below current state label |
 | FPS counter | White | Top-left corner, `1.0 / dt` |
 | Sensor readout | White | Top-left column below FPS, all sensor booleans + timers |
+| Camera dead zone | Yellow (transparent) | Screen-space rectangle showing the dead zone boundary (visible in PLAYER + ALL) |
 
 Constants prefixed `DEBUG_COLOR_*` (colors) and `DEBUG_*` (sizes/scales).
 
@@ -224,7 +233,7 @@ Constants prefixed `DEBUG_COLOR_*` (colors) and `DEBUG_*` (sizes/scales).
 
 `Input_Action` enum defined in `src/game/input.odin`: `MOVE_UP`, `MOVE_DOWN`, `MOVE_LEFT`, `MOVE_RIGHT`, `JUMP`, `DASH`, `WALL_RUN`, `SLIDE`, `DEBUG`, `RELOAD`, `QUIT`.
 
-Engine `Input($Action)` is generic (parametric on action enum, like the FSM pattern). `Game_State.input` is `engine.Input(Input_Action)`. Bindings are data-driven via `[input]` section in `assets/game.ini` — keyboard keys as SDL scancode names (`INPUT_KB_*`), gamepad buttons as SDL button names (`INPUT_GP_*`). `input_binding_apply` reads config strings, converts via `sdl.GetScancodeFromName`/`sdl.GetGamepadButtonFromString`, falls back to `INPUT_DEFAULT_BINDINGS` on invalid names. Bindings hot-reload with F5 (`config_reload_all` calls `input_binding_apply`).
+Engine `Input($Action)` is generic (parametric on action enum, like the FSM pattern). `Game_State.input` is `engine.Input(Input_Action)`. Bindings are data-driven via `[input]` section in `assets/game.ini` — keyboard keys as SDL scancode names (`INPUT_KB_*`), gamepad buttons as SDL button names (`INPUT_GP_*`). `input_binding_apply` reads config strings, converts via `sdl.GetScancodeFromName`/`sdl.GetGamepadButtonFromString`, falls back to `INPUT_DEFAULT_BINDINGS` on invalid names. Bindings hot-reload with F5 (`config_reload_all` calls `config_post_apply`, which calls `input_binding_apply` and syncs camera params).
 
 Default keyboard: WASD move, Space jump, L dash, LShift wall run, LCtrl slide, F3 debug, F5 reload config, Esc quit.
 Default gamepad: left stick / dpad move, South(A) jump, North(Y) dash, RB wall run, LB slide, Back debug, Start quit.

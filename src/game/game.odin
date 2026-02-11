@@ -35,6 +35,14 @@ Game_State :: struct {
 
 game: Game_State
 
+config_post_apply :: proc() {
+	input_binding_apply(&game.input)
+	game.camera.follow_speed_min = CAMERA_FOLLOW_SPEED_MIN
+	game.camera.follow_speed_max = CAMERA_FOLLOW_SPEED_MAX
+	game.camera.dead_zone = CAMERA_DEAD_ZONE
+	game.camera.boundary_zone = CAMERA_BOUNDARY_ZONE
+}
+
 game_clean :: proc() {
 	engine.config_destroy(&game_config)
 	level_destroy(&game.level)
@@ -47,12 +55,15 @@ game_init :: proc() {
 	// Load config first (before window_init so WINDOW_TITLE/LOGICAL_H/WINDOW_SCALE are available)
 	config_load_and_apply()
 
-	win, ok := engine.window_init(fmt.ctprintf("%s", WINDOW_TITLE), i32(LOGICAL_H), i32(WINDOW_SCALE))
+	win, ok := engine.window_init(
+		fmt.ctprintf("%s", WINDOW_TITLE),
+		i32(LOGICAL_H),
+		i32(WINDOW_SCALE),
+	)
 	if !ok {game.running = false; return}
 	game.win = win
 
 	engine.input_init(&game.input)
-	input_binding_apply(&game.input)
 
 	game.clock = engine.clock_init(u64(FPS), u64(FIXED_STEPS))
 
@@ -74,6 +85,10 @@ game_init :: proc() {
 	game.player.transform.pos = game.level.player_spawn
 	game.player.abilities.dash_dir = 1
 	player_init(&game.player)
+
+	// Apply post-config (input bindings + camera params) and snap camera to player spawn
+	config_post_apply()
+	game.camera.pos = game.player.collider.pos
 }
 
 game_update :: proc(dt: f32) {
@@ -93,7 +108,13 @@ game_fixed_update :: proc(dt: f32) {
 	player_fixed_update(&game.player, dt)
 	player_dust_update(&game.dust, dt)
 	player_step_update(&game.steps, dt)
-	engine.camera_follow(&game.camera, game.player.collider.pos)
+	engine.camera_follow(
+		&game.camera,
+		game.player.collider.pos,
+		{0, 0},
+		{game.level.world_w, game.level.world_h},
+		dt,
+	)
 	engine.camera_clamp(&game.camera, {0, 0}, {game.level.world_w, game.level.world_h})
 }
 
@@ -114,6 +135,7 @@ game_render_debug :: proc() {
 	player_sensor_debug(&game.player, sensor_pos)
 	player_physics_debug(&game.player)
 	player_debug(&game.player)
+	camera_debug()
 
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,

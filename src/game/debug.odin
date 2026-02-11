@@ -126,3 +126,21 @@ debug_collider_slope :: proc(collider_slope: engine.Collider_Slope) {
 	sdl.RenderLine(game.win.renderer, sp1.x, sp1.y, sp2.x, sp2.y)
 	sdl.RenderLine(game.win.renderer, sp2.x, sp2.y, sp0.x, sp0.y)
 }
+
+camera_debug :: proc() {
+	dz := game.camera.dead_zone
+	lw := f32(game.win.logical_w)
+	lh := f32(game.win.logical_h)
+
+	left := lw * (1 - dz) / 2
+	right := lw * (1 + dz) / 2
+	top := lh * (1 - dz) / 2
+	bottom := lh * (1 + dz) / 2
+
+	debug_set_color(DEBUG_COLOR_CAMERA_ZONE)
+	r := game.win.renderer
+	sdl.RenderLine(r, left, top, right, top) // top
+	sdl.RenderLine(r, left, bottom, right, bottom) // bottom
+	sdl.RenderLine(r, left, top, left, bottom) // left
+	sdl.RenderLine(r, right, top, right, bottom) // right
+}

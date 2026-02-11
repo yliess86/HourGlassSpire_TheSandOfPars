@@ -17,6 +17,12 @@ GRAVITY: f32
 EPS: f32
 TILE_SIZE: f32
 
+// [camera]
+CAMERA_FOLLOW_SPEED_MIN: f32
+CAMERA_FOLLOW_SPEED_MAX: f32
+CAMERA_DEAD_ZONE: f32
+CAMERA_BOUNDARY_ZONE: f32
+
 // [level]
 LEVEL_COLOR_BG: [4]u8
 LEVEL_COLOR_TILE_SOLID: [4]u8
@@ -132,6 +138,7 @@ DEBUG_COLOR_RAY_HIT_POINT: [4]u8
 DEBUG_COLOR_RAY_MISS: [4]u8
 DEBUG_COLOR_VELOCITY: [4]u8
 DEBUG_COLOR_GRID: [4]u8
+DEBUG_COLOR_CAMERA_ZONE: [4]u8
 
 // [debug]
 DEBUG_GRID_ALPHA: u8
@@ -154,6 +161,10 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&game_config, "GRAVITY"); ok do GRAVITY = val
 	if val, ok := engine.config_get_f32(&game_config, "EPS"); ok do EPS = val
 	if val, ok := engine.config_get_f32(&game_config, "TILE_SIZE"); ok do TILE_SIZE = val
+	if val, ok := engine.config_get_f32(&game_config, "CAMERA_FOLLOW_SPEED_MIN"); ok do CAMERA_FOLLOW_SPEED_MIN = val
+	if val, ok := engine.config_get_f32(&game_config, "CAMERA_FOLLOW_SPEED_MAX"); ok do CAMERA_FOLLOW_SPEED_MAX = val
+	if val, ok := engine.config_get_f32(&game_config, "CAMERA_DEAD_ZONE"); ok do CAMERA_DEAD_ZONE = val
+	if val, ok := engine.config_get_f32(&game_config, "CAMERA_BOUNDARY_ZONE"); ok do CAMERA_BOUNDARY_ZONE = val
 	if val, ok := engine.config_get_rgba(&game_config, "LEVEL_COLOR_BG"); ok do LEVEL_COLOR_BG = val
 	if val, ok := engine.config_get_rgba(&game_config, "LEVEL_COLOR_TILE_SOLID"); ok do LEVEL_COLOR_TILE_SOLID = val
 	if val, ok := engine.config_get_rgba(&game_config, "LEVEL_COLOR_TILE_BACK_WALL"); ok do LEVEL_COLOR_TILE_BACK_WALL = val
@@ -246,6 +257,7 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_rgba(&game_config, "DEBUG_COLOR_RAY_MISS"); ok do DEBUG_COLOR_RAY_MISS = val
 	if val, ok := engine.config_get_rgba(&game_config, "DEBUG_COLOR_VELOCITY"); ok do DEBUG_COLOR_VELOCITY = val
 	if val, ok := engine.config_get_rgba(&game_config, "DEBUG_COLOR_GRID"); ok do DEBUG_COLOR_GRID = val
+	if val, ok := engine.config_get_rgba(&game_config, "DEBUG_COLOR_CAMERA_ZONE"); ok do DEBUG_COLOR_CAMERA_ZONE = val
 	if val, ok := engine.config_get_u8(&game_config, "DEBUG_GRID_ALPHA"); ok do DEBUG_GRID_ALPHA = val
 	if val, ok := engine.config_get_f32(&game_config, "DEBUG_CROSS_HALF"); ok do DEBUG_CROSS_HALF = val
 	if val, ok := engine.config_get_f32(&game_config, "DEBUG_FACING_LENGTH"); ok do DEBUG_FACING_LENGTH = val
@@ -272,12 +284,12 @@ config_load_and_apply :: proc() {
 config_reload_all :: proc() {
 	if len(game_config.path) == 0 {
 		config_load_and_apply()
-		input_binding_apply(&game.input)
+		config_post_apply()
 		return
 	}
 	if engine.config_reload(&game_config) {
 		config_apply()
-		input_binding_apply(&game.input)
+		config_post_apply()
 		fmt.eprintf("[config] Reloaded\n")
 	}
 }
