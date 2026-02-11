@@ -6,7 +6,7 @@ import sdl "vendor:sdl3"
 
 // Resolution & Scaling
 LOGICAL_H :: 480
-WINDOW_SCALE :: 1
+WINDOW_SCALE :: 2
 PPM: f32 : 16 // power of 2 — all pixel/PPM values exact in f32
 
 // Engine
@@ -45,6 +45,8 @@ Game_State :: struct {
 
 	// Player
 	player:  Player,
+	dust:    engine.Particle_Pool,
+	steps:   engine.Particle_Pool,
 }
 
 game: Game_State
@@ -88,7 +90,12 @@ game_init :: proc() {
 	game.world_w = game.level.world_w
 
 	// Camera
-	game.camera = engine.camera_init(f32(game.win.logical_w) / PPM, f32(LOGICAL_H) / PPM, PPM, f32(LOGICAL_H))
+	game.camera = engine.camera_init(
+		f32(game.win.logical_w) / PPM,
+		f32(LOGICAL_H) / PPM,
+		PPM,
+		f32(LOGICAL_H),
+	)
 
 	// Player
 	game.player.transform.pos = game.level.player_spawn
@@ -110,12 +117,17 @@ game_update :: proc(dt: f32) {
 
 game_fixed_update :: proc(dt: f32) {
 	player_fixed_update(&game.player, dt)
+	player_dust_update(&game.dust, dt)
+	player_step_update(&game.steps, dt)
 	engine.camera_follow(&game.camera, game.player.collider.pos)
 	engine.camera_clamp(&game.camera, {0, 0}, {game.level.world_w, game.level.world_h})
 }
 
 game_render :: proc() {
 	level_render(&game.level)
+	sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
+	player_step_render(&game.steps)
+	player_dust_render(&game.dust)
 	player_render(&game.player)
 }
 

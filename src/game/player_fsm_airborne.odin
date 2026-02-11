@@ -45,6 +45,8 @@ player_fsm_airborne_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 				ctx.transform.pos.x = ctx.sensor.on_side_wall_snap_x + offset_x
 				ctx.transform.vel.y = PLAYER_WALL_JUMP_VERTICAL_MULT * PLAYER_JUMP_FORCE
 				ctx.transform.vel.x = -ctx.sensor.on_side_wall_dir * PLAYER_WALL_JUMP_FORCE
+				wall_pos := [2]f32{ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2, ctx.transform.pos.y + PLAYER_SIZE / 2}
+				player_dust_emit(&game.dust, wall_pos, {-ctx.sensor.on_side_wall_dir * PLAYER_PARTICLE_DUST_SPEED_MAX, 0}, 4)
 			}
 			ctx.abilities.jump_buffer_timer = 0
 			return nil // stay Airborne with wall-jump velocity

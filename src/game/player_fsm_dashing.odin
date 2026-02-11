@@ -12,6 +12,7 @@ player_fsm_dashing_init :: proc(player: ^Player) {
 player_fsm_dashing_enter :: proc(ctx: ^Player) {
 	ctx.abilities.dash_active_timer = PLAYER_DASH_DURATION
 	ctx.abilities.dash_cooldown_timer = PLAYER_DASH_COOLDOWN
+	player_dust_emit(&game.dust, ctx.transform.pos + {0, PLAYER_SIZE / 2}, {-ctx.abilities.dash_dir * PLAYER_PARTICLE_DUST_SPEED_MAX, 0}, 5)
 }
 
 // Dashing — direction-locked horizontal burst. Zero gravity. Transitions on timer expiry.

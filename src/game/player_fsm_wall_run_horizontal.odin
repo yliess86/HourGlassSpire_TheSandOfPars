@@ -1,5 +1,7 @@
 package game
 
+import "core:math"
+
 player_fsm_wall_run_horizontal_init :: proc(player: ^Player) {
 	player.fsm.handlers[.Wall_Run_Horizontal] = {
 		enter  = player_fsm_wall_run_horizontal_enter,
@@ -30,6 +32,7 @@ player_fsm_wall_run_horizontal_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Pl
 	if ctx.abilities.jump_buffer_timer > 0 {
 		ctx.transform.vel.y = PLAYER_JUMP_FORCE
 		ctx.abilities.jump_buffer_timer = 0
+		player_step_emit(&game.steps, ctx.transform.pos)
 		return .Airborne
 	}
 
@@ -43,6 +46,16 @@ player_fsm_wall_run_horizontal_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Pl
 		if game.input.is_down[.SLIDE] do return .Wall_Slide
 		if ctx.sensor.on_side_wall do ctx.abilities.coyote_timer = PLAYER_COYOTE_TIME_DURATION
 		return .Airborne
+	}
+
+	// Footstep-synced dust trailing behind run direction
+	prev := ctx.graphics.run_anim_timer
+	fall_speed := max(f32(0), -ctx.transform.vel.y)
+	bob_mult := 1.0 + fall_speed / PLAYER_WALL_RUN_HORIZONTAL_LIFT
+	ctx.graphics.run_anim_timer += PLAYER_RUN_BOB_SPEED * bob_mult * dt
+	if math.floor(prev / math.PI) != math.floor(ctx.graphics.run_anim_timer / math.PI) {
+		player_dust_emit(&game.dust, ctx.transform.pos, {-ctx.abilities.wall_run_dir * PLAYER_PARTICLE_DUST_SPEED_MIN, 0}, 2)
+		player_step_emit(&game.steps, ctx.transform.pos)
 	}
 
 	return nil
