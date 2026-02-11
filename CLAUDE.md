@@ -25,7 +25,8 @@ Odin lang, SDL3 (`vendor:sdl3`). Main package `src/game/`, reusable engine packa
 | `src/game/config.odin` | **AUTO-GENERATED** from `assets/game.ini` by `tools/gen_config.odin` — variable declarations + `config_apply` proc. Do not edit manually |
 | `tools/gen_config.odin` | Code generator: parses `assets/game.ini` and emits `src/game/config.odin` |
 | `src/engine/config.odin` | INI parser, expression evaluator, config load/reload/get API |
-| `src/game/main.odin` | `Game_State` struct (contains `player: Player`), game lifecycle (`init`/`clean`), loop, rendering, `world_to_screen`/`world_to_screen_point` convenience wrappers (delegate to `camera_world_to_screen`/`camera_world_to_screen_point`) |
+| `src/game/main.odin` | Entry point (`main` proc): game loop (fixed-timestep update, render, present) |
+| `src/game/game.odin` | `Game_State` struct, `game` global, game lifecycle (`game_init`/`game_clean`), `game_update`/`game_fixed_update`/`game_render`/`game_render_debug`, `world_to_screen`/`world_to_screen_point` convenience wrappers |
 | `src/game/player.odin` | `Player_State` enum, `Player` struct (`Player_Transform`, `Player_Abilities`, `Player_Graphics` sub-structs, `fsm`, `sensor`), `player_init`, `player_fixed_update`, `player_sync_collider`, `player_debug` — all procs take `player: ^Player` |
 | `src/game/player_graphics.odin` | `player_color`, `player_render` (4-layer visual deformation: velocity, look, run bob, impact bounce), `player_trigger_impact` |
 | `src/game/player_sensor.odin` | `Player_Sensor` struct, `player_sensor_update`, `player_sensor_debug` |
