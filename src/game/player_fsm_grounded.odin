@@ -42,13 +42,17 @@ player_fsm_grounded_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 		speed_factor = PLAYER_SLOPE_UPHILL_FACTOR if uphill else PLAYER_SLOPE_DOWNHILL_FACTOR
 	}
 	sand_move_factor: f32 = 1.0 - ctx.sensor.sand_immersion * SAND_MOVE_PENALTY
+	water_move_factor: f32 = 1.0 - ctx.sensor.water_immersion * WATER_MOVE_PENALTY
+	combined_move := max(sand_move_factor * water_move_factor, 0)
 	ctx.transform.vel.x = math.lerp(
 		ctx.transform.vel.x,
-		game.input.axis.x * PLAYER_RUN_SPEED * speed_factor * max(sand_move_factor, 0),
+		game.input.axis.x * PLAYER_RUN_SPEED * speed_factor * combined_move,
 		PLAYER_MOVE_LERP_SPEED * dt,
 	)
 	ctx.transform.vel.y = -SAND_SINK_SPEED if ctx.sensor.on_sand else 0
 	ctx.abilities.coyote_timer = PLAYER_COYOTE_TIME_DURATION
+
+	if ctx.sensor.water_immersion > WATER_SWIM_ENTER_THRESHOLD do return .Swimming
 
 	if ctx.sensor.on_platform &&
 	   game.input.axis.y < -PLAYER_INPUT_AXIS_THRESHOLD &&
@@ -60,7 +64,9 @@ player_fsm_grounded_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 	}
 
 	if ctx.abilities.jump_buffer_timer > 0 {
-		jump_factor := max(1.0 - ctx.sensor.sand_immersion * SAND_JUMP_PENALTY, 0)
+		sand_jump := 1.0 - ctx.sensor.sand_immersion * SAND_JUMP_PENALTY
+		water_jump := 1.0 - ctx.sensor.water_immersion * WATER_JUMP_PENALTY
+		jump_factor := max(sand_jump * water_jump, 0)
 		if jump_factor > 0 {
 			ctx.transform.vel.y = PLAYER_JUMP_FORCE * jump_factor
 			ctx.abilities.jump_buffer_timer = 0

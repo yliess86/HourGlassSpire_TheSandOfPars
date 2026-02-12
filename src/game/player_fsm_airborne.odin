@@ -30,6 +30,7 @@ player_fsm_airborne_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 		ctx.transform.vel.y = 0
 		return .Grounded
 	}
+	if ctx.sensor.water_immersion > WATER_SWIM_ENTER_THRESHOLD do return .Swimming
 
 	if ctx.sensor.on_back_wall {
 		if game.input.is_down[.WALL_RUN] && math.abs(game.input.axis.x) > PLAYER_INPUT_AXIS_THRESHOLD && !ctx.abilities.wall_run_used && ctx.abilities.wall_run_cooldown_timer <= 0 do return .Wall_Run_Horizontal

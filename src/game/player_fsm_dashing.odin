@@ -30,6 +30,7 @@ player_fsm_dashing_enter :: proc(ctx: ^Player) {
 player_fsm_dashing_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) {
 	if ctx.abilities.dash_active_timer <= 0 {
 		player_physics_apply_movement(ctx, dt)
+		if ctx.sensor.water_immersion > WATER_SWIM_ENTER_THRESHOLD do return .Swimming
 		if ctx.sensor.on_ground do return .Grounded
 		if ctx.sensor.on_side_wall {
 			if math.abs(ctx.transform.vel.x) > PLAYER_IMPACT_THRESHOLD do player_graphics_trigger_impact(ctx, math.abs(ctx.transform.vel.x), {1, 0})
@@ -41,7 +42,8 @@ player_fsm_dashing_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) 
 
 	speed := PLAYER_DASH_SPEED
 	sand_factor := max(1.0 - ctx.sensor.sand_immersion * SAND_MOVE_PENALTY, 0)
-	speed *= sand_factor
+	water_factor := max(1.0 - ctx.sensor.water_immersion * WATER_MOVE_PENALTY, 0)
+	speed *= max(sand_factor * water_factor, 0)
 	if ctx.sensor.on_slope {
 		uphill := ctx.abilities.dash_dir == ctx.sensor.on_slope_dir
 		if uphill {

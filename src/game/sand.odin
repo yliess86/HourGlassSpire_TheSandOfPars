@@ -4,6 +4,7 @@ Sand_Material :: enum u8 {
 	Empty,
 	Solid, // immovable, derived from level tiles
 	Sand, // falling sand particle
+	Water, // liquid particle: flows horizontally, buoyant
 	Platform, // one-way: blocks sand from above, sand never moves up so pass-through is implicit
 }
 
@@ -17,6 +18,7 @@ Sand_Cell :: struct {
 Sand_Emitter :: struct {
 	tx, ty:      int, // tile coordinates of emitter
 	accumulator: f32, // fractional particle accumulation
+	material:    Sand_Material, // what this emitter spawns (.Sand or .Water)
 }
 
 Sand_World :: struct {
@@ -93,9 +95,20 @@ sand_init :: proc(sand: ^Sand_World, level: ^Level) {
 	}
 	delete(level.sand_piles)
 
+	// Load pre-placed water pools from level
+	for pos in level.water_piles {
+		idx := pos.y * sand.width + pos.x
+		sand.cells[idx].material = .Water
+		sand.cells[idx].color_variant = u8((pos.x * 7 + pos.y * 13) & 3)
+		sand_chunk_mark_dirty(sand, pos.x, pos.y)
+	}
+	delete(level.water_piles)
+
 	// Load emitters from level
-	for pos in level.sand_emitters do append(&sand.emitters, Sand_Emitter{tx = pos.x, ty = pos.y})
+	for pos in level.sand_emitters do append(&sand.emitters, Sand_Emitter{tx = pos.x, ty = pos.y, material = .Sand})
+	for pos in level.water_emitters do append(&sand.emitters, Sand_Emitter{tx = pos.x, ty = pos.y, material = .Water})
 	delete(level.sand_emitters)
+	delete(level.water_emitters)
 	delete(level.original_tiles)
 
 	// Initial chunk active counts

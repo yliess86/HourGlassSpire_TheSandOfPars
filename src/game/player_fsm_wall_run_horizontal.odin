@@ -25,10 +25,11 @@ player_fsm_wall_run_horizontal_enter :: proc(ctx: ^Player) {
 player_fsm_wall_run_horizontal_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) {
 	ctx.abilities.wall_run_timer += dt
 	sand_factor := max(1.0 - ctx.sensor.sand_immersion * SAND_WALL_RUN_PENALTY, 0)
-	ctx.transform.vel.x =
-		PLAYER_WALL_RUN_HORIZONTAL_SPEED * ctx.abilities.wall_run_dir * sand_factor
+	water_factor := max(1.0 - ctx.sensor.water_immersion * WATER_MOVE_PENALTY, 0)
+	combined := max(sand_factor * water_factor, 0)
+	ctx.transform.vel.x = PLAYER_WALL_RUN_HORIZONTAL_SPEED * ctx.abilities.wall_run_dir * combined
 	ctx.transform.vel.y =
-		PLAYER_WALL_RUN_HORIZONTAL_LIFT * sand_factor -
+		PLAYER_WALL_RUN_HORIZONTAL_LIFT * combined -
 		GRAVITY * PLAYER_WALL_RUN_HORIZONTAL_GRAV_MULT * ctx.abilities.wall_run_timer
 
 	if ctx.abilities.jump_buffer_timer > 0 {

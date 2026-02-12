@@ -11,6 +11,8 @@ Player_Sensor :: struct {
 	on_platform:          bool, // surface is a platform (for drop-through)
 	on_sand:              bool, // standing on sand surface (sand is the ground)
 	sand_immersion:       f32, // 0.0 (free) to 1.0 (buried)
+	on_water:             bool, // overlapping water cells (informational, does not count as ground)
+	water_immersion:      f32, // 0.0 (free) to 1.0 (submerged)
 	on_side_wall:         bool,
 	on_side_wall_dir:     f32, // +1 right, -1 left, 0 no side wall
 	on_side_wall_snap_x:  f32, // inner edge X of detected left wall + PLAYER_SIZE/2 or right wall - PLAYER_SIZE/2
@@ -162,6 +164,9 @@ player_sensor_update :: proc(player: ^Player) {
 	player.sensor.on_platform = on_platform
 	player.sensor.on_sand = on_sand
 	player.sensor.sand_immersion = sand_compute_immersion(&game.sand, player)
+	water_immersion := sand_compute_water_immersion(&game.sand, player)
+	player.sensor.on_water = water_immersion > 0
+	player.sensor.water_immersion = water_immersion
 	player.sensor.on_side_wall = on_side_wall
 	player.sensor.on_side_wall_dir = on_side_wall_dir
 	player.sensor.on_side_wall_snap_x = on_side_wall_snap_x
@@ -229,7 +234,9 @@ player_sensor_debug :: proc(player: ^Player, screen_pos: [2]f32) {
 		{"on_ground:", fmt.ctprintf("%v", player.sensor.on_ground)},
 		{"on_platform:", fmt.ctprintf("%v", player.sensor.on_platform)},
 		{"on_sand:", fmt.ctprintf("%v", player.sensor.on_sand)},
-		{"immersion:", fmt.ctprintf("%.2f", player.sensor.sand_immersion)},
+		{"sand_immersion:", fmt.ctprintf("%.2f", player.sensor.sand_immersion)},
+		{"on_water:", fmt.ctprintf("%v", player.sensor.on_water)},
+		{"water_immersion:", fmt.ctprintf("%.2f", player.sensor.water_immersion)},
 		{"on_side_wall:", fmt.ctprintf("%v", player.sensor.on_side_wall)},
 		{"on_side_wall_dir:", fmt.ctprintf("%.0f", player.sensor.on_side_wall_dir)},
 		{"on_side_wall_snap_x:", fmt.ctprintf("%.2f", player.sensor.on_side_wall_snap_x)},

@@ -6,22 +6,23 @@ sand_emitter_update :: proc(sand: ^Sand_World) {
 	dt := 1.0 / (f32(FPS) * f32(FIXED_STEPS))
 
 	for &emitter in sand.emitters {
-		emitter.accumulator += SAND_EMITTER_RATE * dt
+		rate := WATER_EMITTER_RATE if emitter.material == .Water else SAND_EMITTER_RATE
+		emitter.accumulator += rate * dt
 
 		for emitter.accumulator >= 1.0 {
 			emitter.accumulator -= 1.0
 
-			// Spawn one tile below the emitter (sand falls from emitter)
+			// Spawn one tile below the emitter (particle falls from emitter)
 			spawn_y := emitter.ty - 1
 			if !sand_in_bounds(sand, emitter.tx, spawn_y) do continue
 
 			idx := spawn_y * sand.width + emitter.tx
 			if sand.cells[idx].material != .Empty do continue
 
-			// Create sand particle
+			// Create particle
 			hash := u32(emitter.tx * 7 + spawn_y * 13 + int(sand.step_counter))
 			sand.cells[idx] = Sand_Cell {
-				material      = .Sand,
+				material      = emitter.material,
 				sleep_counter = 0,
 				color_variant = u8(hash & 3),
 				flags         = 0,

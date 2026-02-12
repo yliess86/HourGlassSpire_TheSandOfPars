@@ -8,17 +8,24 @@ stateDiagram-v2
     Grounded --> Airborne : !on_ground (fell off)
     Grounded --> Dropping : on_platform && down && jump buffered
     Grounded --> Dashing : DASH && cooldown ready
+    Grounded --> Swimming : water_immersion > enter threshold
     Grounded --> Wall_Run_Vertical : on_side_wall && WALL_RUN held
     Grounded --> Wall_Run_Horizontal : on_back_wall && WALL_RUN && horizontal input
     Grounded --> Wall_Run_Vertical : on_back_wall && WALL_RUN (default)
 
     Airborne --> Grounded : on_ground
     Airborne --> Dashing : DASH && cooldown ready
+    Airborne --> Swimming : water_immersion > enter threshold
     Airborne --> Wall_Run_Horizontal : on_back_wall && WALL_RUN && horizontal input && !wall_run_used && cooldown ready
     Airborne --> Wall_Run_Vertical : on_back_wall && WALL_RUN && cooldown ready && !wall_run_used
     Airborne --> Wall_Slide : on_back_wall && SLIDE held
     Airborne --> Wall_Run_Vertical : on_side_wall && WALL_RUN && cooldown ready && !wall_run_used && vel.y > 0
     Airborne --> Wall_Slide : on_side_wall && SLIDE held
+
+    Swimming --> Airborne : jump pressed near surface
+    Swimming --> Dashing : DASH && cooldown ready
+    Swimming --> Grounded : on_ground && water_immersion < exit threshold
+    Swimming --> Airborne : water_immersion < exit threshold (surfaced)
 
     Wall_Slide --> Airborne : jump buffered && on_side_wall (wall jump)
     Wall_Slide --> Airborne : !on_side_wall && !on_back_wall (detached)
@@ -39,6 +46,7 @@ stateDiagram-v2
     Wall_Run_Horizontal --> Wall_Slide : WALL_RUN released && SLIDE held
     Wall_Run_Horizontal --> Airborne : WALL_RUN released
 
+    Dashing --> Swimming : timer expired && water_immersion > enter threshold
     Dashing --> Grounded : timer expired && on_ground
     Dashing --> Wall_Run_Vertical : timer expired && on_side_wall && WALL_RUN && cooldown ready && !wall_run_used && vel.y > 0
     Dashing --> Wall_Slide : timer expired && on_side_wall && SLIDE held

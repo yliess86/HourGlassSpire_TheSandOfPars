@@ -158,6 +158,28 @@ SAND_DEBUG_COLOR_EMITTER: [4]u8            // emitter marker outline color (cyan
 SAND_DEBUG_SLEEP_DIM: u8                   // overlay alpha for sleeping particles
 SAND_DEBUG_PRESSURE_MAX: f32               // heatmap pressure cap (above this = max color)
 
+// [water]
+WATER_COLOR: [4]u8                         // base water particle color (translucent cyan)
+WATER_COLOR_VARIATION: u8                  // max RGB darkening near ground floor
+WATER_COLOR_DEPTH_MAX: u8                  // cell distance from ground where darkening fades to zero
+WATER_FLOW_DISTANCE: u8                    // max horizontal cells water scans per step
+WATER_EMITTER_RATE: f32                    // particles spawned per second per water emitter
+WATER_PLAYER_DRAG_PER_CELL: f32            // velocity drag added per displaced water cell
+WATER_PLAYER_DRAG_MAX: f32                 // max total drag factor cap (0-1)
+WATER_BUOYANCY_FORCE: f32                  // upward force per immersion ratio (0-1)
+WATER_BUOYANCY_THRESHOLD: f32              // water immersion ratio to trigger buoyancy
+WATER_MOVE_PENALTY: f32                    // run speed reduction per water immersion
+WATER_JUMP_PENALTY: f32                    // jump force reduction per water immersion
+WATER_SWIM_ENTER_THRESHOLD: f32            // immersion ratio to enter swimming
+WATER_SWIM_EXIT_THRESHOLD: f32             // immersion ratio to exit swimming (hysteresis)
+WATER_SWIM_SURFACE_THRESHOLD: f32          // immersion ratio considered "at surface" for jump-out
+WATER_SWIM_GRAVITY_MULT: f32               // gravity multiplier while swimming
+WATER_SWIM_UP_SPEED: f32                   // upward speed when pressing up
+WATER_SWIM_DOWN_SPEED: f32                 // downward speed when pressing down
+WATER_SWIM_FLOAT_SPEED: f32                // passive float-up speed (no input)
+WATER_SWIM_DAMPING: f32                    // velocity damping factor per second
+WATER_SWIM_JUMP_FORCE: f32                 // jump force when leaping out at surface
+
 // [debug_colors]
 DEBUG_COLOR_COLLIDER: [4]u8                // ground collider outline (green)
 DEBUG_COLOR_COLLIDER_BACK_WALL: [4]u8      // back wall collider outline (dark cyan)
@@ -308,6 +330,26 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_EMITTER"); ok do SAND_DEBUG_COLOR_EMITTER = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_DEBUG_SLEEP_DIM"); ok do SAND_DEBUG_SLEEP_DIM = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_DEBUG_PRESSURE_MAX"); ok do SAND_DEBUG_PRESSURE_MAX = val
+	if val, ok := engine.config_get_rgba(&config_game, "WATER_COLOR"); ok do WATER_COLOR = val
+	if val, ok := engine.config_get_u8(&config_game, "WATER_COLOR_VARIATION"); ok do WATER_COLOR_VARIATION = val
+	if val, ok := engine.config_get_u8(&config_game, "WATER_COLOR_DEPTH_MAX"); ok do WATER_COLOR_DEPTH_MAX = val
+	if val, ok := engine.config_get_u8(&config_game, "WATER_FLOW_DISTANCE"); ok do WATER_FLOW_DISTANCE = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_EMITTER_RATE"); ok do WATER_EMITTER_RATE = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_PLAYER_DRAG_PER_CELL"); ok do WATER_PLAYER_DRAG_PER_CELL = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_PLAYER_DRAG_MAX"); ok do WATER_PLAYER_DRAG_MAX = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_BUOYANCY_FORCE"); ok do WATER_BUOYANCY_FORCE = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_BUOYANCY_THRESHOLD"); ok do WATER_BUOYANCY_THRESHOLD = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_MOVE_PENALTY"); ok do WATER_MOVE_PENALTY = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_JUMP_PENALTY"); ok do WATER_JUMP_PENALTY = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_SWIM_ENTER_THRESHOLD"); ok do WATER_SWIM_ENTER_THRESHOLD = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_SWIM_EXIT_THRESHOLD"); ok do WATER_SWIM_EXIT_THRESHOLD = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_SWIM_SURFACE_THRESHOLD"); ok do WATER_SWIM_SURFACE_THRESHOLD = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_SWIM_GRAVITY_MULT"); ok do WATER_SWIM_GRAVITY_MULT = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_SWIM_UP_SPEED"); ok do WATER_SWIM_UP_SPEED = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_SWIM_DOWN_SPEED"); ok do WATER_SWIM_DOWN_SPEED = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_SWIM_FLOAT_SPEED"); ok do WATER_SWIM_FLOAT_SPEED = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_SWIM_DAMPING"); ok do WATER_SWIM_DAMPING = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_SWIM_JUMP_FORCE"); ok do WATER_SWIM_JUMP_FORCE = val
 	if val, ok := engine.config_get_rgba(&config_game, "DEBUG_COLOR_COLLIDER"); ok do DEBUG_COLOR_COLLIDER = val
 	if val, ok := engine.config_get_rgba(&config_game, "DEBUG_COLOR_COLLIDER_BACK_WALL"); ok do DEBUG_COLOR_COLLIDER_BACK_WALL = val
 	if val, ok := engine.config_get_rgba(&config_game, "DEBUG_COLOR_COLLIDER_CEILING"); ok do DEBUG_COLOR_COLLIDER_CEILING = val

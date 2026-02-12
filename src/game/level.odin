@@ -18,6 +18,8 @@ Level_Tile_Kind :: enum u8 {
 	Slope_Ceil_Left, // ceiling, solid top-left /
 	Sand_Pile, // pre-placed sand -> Sand_Material.Sand in sand world, .Empty in level
 	Sand_Emitter, // continuous source -> emitter in sand world, .Solid in level
+	Water_Pile, // pre-placed water -> Sand_Material.Water in sand world, .Empty in level
+	Water_Emitter, // continuous water source -> emitter in sand world, .Solid in level
 }
 
 // BMP palette: editor color → tile kind
@@ -34,6 +36,8 @@ LEVEL_PALETTE :: [Level_Tile_Kind][3]u8 {
 	.Slope_Ceil_Left  = {0, 0, 128},
 	.Sand_Pile        = {255, 255, 0},
 	.Sand_Emitter     = {255, 128, 0},
+	.Water_Pile       = {0, 255, 255},
+	.Water_Emitter    = {0, 255, 128},
 }
 
 Level :: struct {
@@ -52,6 +56,8 @@ Level :: struct {
 	original_tiles:      []Level_Tile_Kind, // pre-reclassification, consumed by sand_init
 	sand_piles:          [dynamic][2]int,
 	sand_emitters:       [dynamic][2]int,
+	water_piles:         [dynamic][2]int,
+	water_emitters:      [dynamic][2]int,
 }
 
 level_load :: proc(path: cstring) -> (level: Level, ok: bool) {
@@ -112,6 +118,12 @@ level_load :: proc(path: cstring) -> (level: Level, ok: bool) {
 				level.tiles[idx] = .Back_Wall
 			} else if kind == .Sand_Emitter {
 				append(&level.sand_emitters, [2]int{x, world_y})
+				level.tiles[idx] = .Solid
+			} else if kind == .Water_Pile {
+				append(&level.water_piles, [2]int{x, world_y})
+				level.tiles[idx] = .Back_Wall
+			} else if kind == .Water_Emitter {
+				append(&level.water_emitters, [2]int{x, world_y})
 				level.tiles[idx] = .Solid
 			}
 		}

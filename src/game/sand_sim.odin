@@ -22,8 +22,8 @@ sand_step :: proc(sand: ^Sand_World) {
 	// Iterate bottom-to-top so lower cells vacate first
 	for y in 0 ..< sand.height {
 		// Alternate horizontal scan direction each step to eliminate bias
-		if parity == 0 do for x in 0 ..< sand.width do sand_update_cell(sand, x, y, parity)
-		else do for x := sand.width - 1; x >= 0; x -= 1 do sand_update_cell(sand, x, y, parity)
+		if parity == 0 do for x in 0 ..< sand.width do sand_dispatch_cell(sand, x, y, parity)
+		else do for x := sand.width - 1; x >= 0; x -= 1 do sand_dispatch_cell(sand, x, y, parity)
 	}
 
 	sand_restore_platforms(sand)
@@ -67,20 +67,32 @@ sand_update_cell :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
 }
 
 // Try to move a sand cell from (sx,sy) to (dx,dy). Returns true if moved.
+// Sand can swap with Water (density: sand sinks through water).
 @(private = "file")
 sand_try_move :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, parity: u32) -> bool {
 	if !sand_in_bounds(sand, dx, dy) do return false
 
 	dst_idx := dy * sand.width + dx
-	if sand.cells[dst_idx].material != .Empty do return false
+	dst_mat := sand.cells[dst_idx].material
+	if dst_mat != .Empty && dst_mat != .Water do return false
 
 	src_idx := sy * sand.width + sx
 
-	// Swap cells
-	sand.cells[dst_idx] = sand.cells[src_idx]
-	sand.cells[dst_idx].flags = u8(parity & 1) // mark as updated this step
-	sand.cells[dst_idx].sleep_counter = 0
-	sand.cells[src_idx] = Sand_Cell{} // Empty
+	if dst_mat == .Water {
+		// Density swap: sand sinks, water floats up
+		tmp := sand.cells[dst_idx]
+		sand.cells[dst_idx] = sand.cells[src_idx]
+		sand.cells[dst_idx].flags = u8(parity & 1)
+		sand.cells[dst_idx].sleep_counter = 0
+		sand.cells[src_idx] = tmp
+		sand.cells[src_idx].sleep_counter = 0
+		sand.cells[src_idx].flags = sand_sim_set_flow_dist(sand.cells[src_idx].flags, 0)
+	} else {
+		sand.cells[dst_idx] = sand.cells[src_idx]
+		sand.cells[dst_idx].flags = u8(parity & 1)
+		sand.cells[dst_idx].sleep_counter = 0
+		sand.cells[src_idx] = Sand_Cell{}
+	}
 
 	// Wake neighbors around both old and new positions
 	sand_wake_neighbors(sand, sx, sy)
@@ -90,11 +102,163 @@ sand_try_move :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, parity: u32) -> bo
 	sand_chunk_mark_dirty(sand, sx, sy)
 	sand_chunk_mark_dirty(sand, dx, dy)
 
-	// Update chunk active counts
+	// Update chunk active counts (only when moving into empty — swap keeps counts balanced)
+	if dst_mat == .Empty {
+		if sx / int(SAND_CHUNK_SIZE) != dx / int(SAND_CHUNK_SIZE) ||
+		   sy / int(SAND_CHUNK_SIZE) != dy / int(SAND_CHUNK_SIZE) {
+			src_chunk := sand_chunk_at(sand, sx, sy)
+			dst_chunk := sand_chunk_at(sand, dx, dy)
+			if src_chunk != nil && src_chunk.active_count > 0 do src_chunk.active_count -= 1
+			if dst_chunk != nil do dst_chunk.active_count += 1
+		}
+	}
+
+	return true
+}
+
+// Flag bit layout for cells:
+// bit 0     : parity (Sand and Water)
+// bits 1-3  : flow_distance (Water only, 0-7)
+// bits 4-7  : reserved
+@(private = "file")
+SAND_SIM_FLAG_PARITY_MASK :: u8(0x01)
+@(private = "file")
+SAND_SIM_FLAG_FLOW_DIST_MASK :: u8(0x0E)
+@(private = "file")
+SAND_SIM_FLAG_FLOW_DIST_SHIFT :: uint(1)
+
+@(private = "file")
+sand_sim_get_flow_dist :: proc(flags: u8) -> u8 {
+	return (flags & SAND_SIM_FLAG_FLOW_DIST_MASK) >> SAND_SIM_FLAG_FLOW_DIST_SHIFT
+}
+
+@(private = "file")
+sand_sim_set_flow_dist :: proc(flags: u8, dist: u8) -> u8 {
+	return(
+		(flags & ~SAND_SIM_FLAG_FLOW_DIST_MASK) |
+		((dist << SAND_SIM_FLAG_FLOW_DIST_SHIFT) & SAND_SIM_FLAG_FLOW_DIST_MASK) \
+	)
+}
+
+// Dispatch cell update based on material
+@(private = "file")
+sand_dispatch_cell :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
+	idx := y * sand.width + x
+	mat := sand.cells[idx].material
+	if mat == .Sand do sand_update_cell(sand, x, y, parity)
+	else if mat == .Water do sand_update_cell_water(sand, x, y, parity)
+}
+
+// Water cell update: down → diagonal-down → horizontal multi-cell flow
+@(private = "file")
+sand_update_cell_water :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
+	idx := y * sand.width + x
+	cell := &sand.cells[idx]
+
+	// Skip if chunk doesn't need simulation
+	chunk := sand_chunk_at(sand, x, y)
+	if chunk != nil && !chunk.needs_sim do return
+
+	// Skip if already updated this step (parity check)
+	cell_parity := u32(cell.flags & SAND_SIM_FLAG_PARITY_MASK)
+	if cell_parity == (parity & 1) do return
+
+	// Erode adjacent platform cells
+	sand_erode_adjacent_platforms(sand, x, y)
+
+	// Skip if sleeping
+	if cell.sleep_counter >= SAND_SLEEP_THRESHOLD do return
+
+	moved := false
+
+	// Try straight down
+	if sand_try_move_water(sand, x, y, x, y - 1, parity) do moved = true
+	else {
+		// Try diagonal down: randomize left/right
+		first_dx: int = (rand.int31() & 1) == 0 ? -1 : 1
+		if sand_try_move_water(sand, x, y, x + first_dx, y - 1, parity) do moved = true
+		else if sand_try_move_water(sand, x, y, x - first_dx, y - 1, parity) do moved = true
+		else {
+			// Try horizontal flow: multi-cell scan in random direction
+			first_dx2: int = (rand.int31() & 1) == 0 ? -1 : 1
+			if sand_try_flow_water(sand, x, y, first_dx2, parity) do moved = true
+			else if sand_try_flow_water(sand, x, y, -first_dx2, parity) do moved = true
+		}
+	}
+
+	// Stuck: increment sleep counter
+	if !moved do if cell.sleep_counter < 255 do cell.sleep_counter += 1
+}
+
+// Try to move a water cell from (sx,sy) to (dx,dy). Water only moves into Empty cells.
+// Used for downward and diagonal moves only.
+@(private = "file")
+sand_try_move_water :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, parity: u32) -> bool {
+	if !sand_in_bounds(sand, dx, dy) do return false
+
+	dst_idx := dy * sand.width + dx
+	if sand.cells[dst_idx].material != .Empty do return false
+
+	src_idx := sy * sand.width + sx
+	sand.cells[dst_idx] = sand.cells[src_idx]
+	sand.cells[dst_idx].flags = u8(parity & 1)
+	sand.cells[dst_idx].sleep_counter = 0
+	sand.cells[src_idx] = Sand_Cell{}
+
+	sand_wake_neighbors(sand, sx, sy)
+	sand_wake_neighbors(sand, dx, dy)
+	sand_chunk_mark_dirty(sand, sx, sy)
+	sand_chunk_mark_dirty(sand, dx, dy)
+
 	if sx / int(SAND_CHUNK_SIZE) != dx / int(SAND_CHUNK_SIZE) ||
 	   sy / int(SAND_CHUNK_SIZE) != dy / int(SAND_CHUNK_SIZE) {
 		src_chunk := sand_chunk_at(sand, sx, sy)
 		dst_chunk := sand_chunk_at(sand, dx, dy)
+		if src_chunk != nil && src_chunk.active_count > 0 do src_chunk.active_count -= 1
+		if dst_chunk != nil do dst_chunk.active_count += 1
+	}
+
+	return true
+}
+
+// Scan up to WATER_FLOW_DISTANCE cells horizontally in direction dx.
+// Finds the furthest empty cell with support below, or a drop-off edge, and moves directly there.
+@(private = "file")
+sand_try_flow_water :: proc(sand: ^Sand_World, x, y, dx: int, parity: u32) -> bool {
+	target_x := -1
+	for i in 1 ..= int(WATER_FLOW_DISTANCE) {
+		nx := x + i * dx
+		if !sand_in_bounds(sand, nx, y) do break
+		if sand.cells[y * sand.width + nx].material != .Empty do break
+
+		// Drop-off: empty cell below — move here immediately (water falls next step)
+		below_empty :=
+			sand_in_bounds(sand, nx, y - 1) &&
+			sand.cells[(y - 1) * sand.width + nx].material == .Empty
+		if below_empty {
+			target_x = nx
+			break
+		}
+		target_x = nx
+	}
+
+	if target_x < 0 do return false
+
+	src_idx := y * sand.width + x
+	dst_idx := y * sand.width + target_x
+	sand.cells[dst_idx] = sand.cells[src_idx]
+	sand.cells[dst_idx].flags = u8(parity & 1)
+	sand.cells[dst_idx].sleep_counter = 0
+	sand.cells[src_idx] = Sand_Cell{}
+
+	sand_wake_neighbors(sand, x, y)
+	sand_wake_neighbors(sand, target_x, y)
+	sand_chunk_mark_dirty(sand, x, y)
+	sand_chunk_mark_dirty(sand, target_x, y)
+
+	if x / int(SAND_CHUNK_SIZE) != target_x / int(SAND_CHUNK_SIZE) {
+		src_chunk := sand_chunk_at(sand, x, y)
+		dst_chunk := sand_chunk_at(sand, target_x, y)
 		if src_chunk != nil && src_chunk.active_count > 0 do src_chunk.active_count -= 1
 		if dst_chunk != nil do dst_chunk.active_count += 1
 	}
@@ -143,12 +307,13 @@ sand_restore_platforms :: proc(sand: ^Sand_World) {
 			continue
 		}
 
-		// Check if any horizontal neighbor is sand
+		// Check if any horizontal neighbor is sand or water
 		has_adjacent_sand := false
 		for dx in ([2]int{-1, 1}) {
 			nx := px + dx
 			if !sand_in_bounds(sand, nx, py) do continue
-			if sand.cells[py * sand.width + nx].material == .Sand {
+			mat := sand.cells[py * sand.width + nx].material
+			if mat == .Sand || mat == .Water {
 				has_adjacent_sand = true
 				break
 			}
@@ -178,7 +343,7 @@ sand_wake_neighbors :: proc(sand: ^Sand_World, x, y: int) {
 			nx, ny := x + dx, y + dy
 			if !sand_in_bounds(sand, nx, ny) do continue
 			cell := &sand.cells[ny * sand.width + nx]
-			if cell.material == .Sand do cell.sleep_counter = 0
+			if cell.material == .Sand || cell.material == .Water do cell.sleep_counter = 0
 		}
 	}
 }

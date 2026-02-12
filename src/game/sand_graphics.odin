@@ -13,12 +13,13 @@ sand_graphics_render :: proc(sand: ^Sand_World) {
 	x1 := min(int(cam_tr.x / TILE_SIZE) + 1, sand.width)
 	y1 := min(int(cam_tr.y / TILE_SIZE) + 1, sand.height)
 
+	// Render sand cells (opaque)
 	for y in y0 ..< y1 {
 		for x in x0 ..< x1 {
 			cell := sand.cells[y * sand.width + x]
 			if cell.material != .Sand do continue
 
-			color := sand_graphics_cell_color(cell)
+			color := sand_graphics_sand_color(cell)
 			world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
 			world_size := [2]f32{TILE_SIZE, TILE_SIZE}
 			rect := game_world_to_screen(world_pos, world_size)
@@ -26,15 +27,66 @@ sand_graphics_render :: proc(sand: ^Sand_World) {
 			sdl.RenderFillRect(game.win.renderer, &rect)
 		}
 	}
+
+	// Render water cells (with alpha blending, depth-based color gradient)
+	sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
+	depth_max := int(WATER_COLOR_DEPTH_MAX)
+	for x in x0 ..< x1 {
+		// Pre-scan below visible area to find initial ground distance
+		dist := 0
+		for y := y0 - 1; y >= max(0, y0 - depth_max); y -= 1 {
+			cell := sand.cells[y * sand.width + x]
+			if cell.material == .Solid || cell.material == .Platform {
+				dist = 0
+				break
+			} else if cell.material == .Water {
+				dist += 1
+			} else {
+				dist = 0
+				break
+			}
+		}
+
+		// Render visible cells bottom-to-top
+		for y in y0 ..< y1 {
+			cell := sand.cells[y * sand.width + x]
+			if cell.material == .Solid || cell.material == .Platform {
+				dist = 0
+			} else if cell.material == .Water {
+				dist += 1
+				color := sand_graphics_water_color(dist)
+				world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
+				world_size := [2]f32{TILE_SIZE, TILE_SIZE}
+				rect := game_world_to_screen(world_pos, world_size)
+				sdl.SetRenderDrawColor(game.win.renderer, color.r, color.g, color.b, color.a)
+				sdl.RenderFillRect(game.win.renderer, &rect)
+			} else {
+				dist = 0
+			}
+		}
+	}
+	sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_NONE)
 }
 
-sand_graphics_cell_color :: proc(cell: Sand_Cell) -> [4]u8 {
+sand_graphics_sand_color :: proc(cell: Sand_Cell) -> [4]u8 {
 	offset := i16(cell.color_variant) * i16(SAND_COLOR_VARIATION) - i16(SAND_COLOR_VARIATION) * 2
 	return {
 		u8(math.clamp(i16(SAND_COLOR.r) + offset, 0, 255)),
 		u8(math.clamp(i16(SAND_COLOR.g) + offset, 0, 255)),
 		u8(math.clamp(i16(SAND_COLOR.b) + offset, 0, 255)),
 		SAND_COLOR.a,
+	}
+}
+
+@(private = "file")
+sand_graphics_water_color :: proc(dist: int) -> [4]u8 {
+	t := math.clamp(f32(dist) / f32(WATER_COLOR_DEPTH_MAX), 0, 1)
+	offset := u8((1 - t) * f32(WATER_COLOR_VARIATION))
+	return {
+		WATER_COLOR.r - min(offset, WATER_COLOR.r),
+		WATER_COLOR.g - min(offset, WATER_COLOR.g),
+		WATER_COLOR.b - min(offset, WATER_COLOR.b),
+		WATER_COLOR.a,
 	}
 }
 
@@ -55,11 +107,11 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 		pressure: f32 = 0
 		for y := min(y1, sand.height) - 1; y >= y0; y -= 1 {
 			cell := sand.cells[y * sand.width + x]
-			if cell.material == .Sand do pressure += 1.0
+			if cell.material == .Sand || cell.material == .Water do pressure += 1.0
 			else if cell.material == .Solid || cell.material == .Platform do pressure = 0
 			else do pressure = max(pressure - 0.5, 0)
 
-			if pressure > 0 && cell.material == .Sand {
+			if pressure > 0 && (cell.material == .Sand || cell.material == .Water) {
 				color: [4]u8
 				t := math.clamp(pressure / SAND_DEBUG_PRESSURE_MAX, 0, 1)
 				if t < 0.33 do color = SAND_DEBUG_COLOR_LOW
@@ -79,7 +131,7 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 	for y in y0 ..< y1 {
 		for x in x0 ..< x1 {
 			cell := sand.cells[y * sand.width + x]
-			if cell.material != .Sand do continue
+			if cell.material != .Sand && cell.material != .Water do continue
 
 			is_sleeping := cell.sleep_counter >= SAND_SLEEP_THRESHOLD
 			if !is_sleeping {
@@ -148,41 +200,62 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 	}
 
 	// Stats text
-	particle_count := 0
-	sleeping_count := 0
+	sand_count := 0
+	water_count := 0
+	sand_sleeping := 0
+	water_sleeping := 0
 	for y in 0 ..< sand.height {
 		for x in 0 ..< sand.width {
 			cell := sand.cells[y * sand.width + x]
-			if cell.material != .Sand do continue
-			particle_count += 1
-			if cell.sleep_counter >= SAND_SLEEP_THRESHOLD do sleeping_count += 1
-			else {
+			is_sleeping := cell.sleep_counter >= SAND_SLEEP_THRESHOLD
+			if !is_sleeping {
 				chunk := sand_chunk_at(sand, x, y)
-				if chunk != nil && !chunk.needs_sim do sleeping_count += 1
+				if chunk != nil && !chunk.needs_sim do is_sleeping = true
+			}
+			if cell.material == .Sand {
+				sand_count += 1
+				if is_sleeping do sand_sleeping += 1
+			} else if cell.material == .Water {
+				water_count += 1
+				if is_sleeping do water_sleeping += 1
 			}
 		}
 	}
 	active_chunks := 0
 	for chunk in sand.chunks do if chunk.needs_sim do active_chunks += 1
+	sleeping_chunks := len(sand.chunks) - active_chunks
 
-	// Render stats below existing debug text
-	stats_y := DEBUG_TEXT_MARGIN_Y + 14 * DEBUG_TEXT_LINE_H
-	debug_value_with_label(
-		DEBUG_TEXT_MARGIN_X,
-		stats_y,
-		"Sand:",
-		fmt.ctprintf("%d", particle_count),
-	)
+	// Render stats below existing debug text (account for 2 extra sensor lines)
+	stats_y := DEBUG_TEXT_MARGIN_Y + 16 * DEBUG_TEXT_LINE_H
+	debug_value_with_label(DEBUG_TEXT_MARGIN_X, stats_y, "Sand:", fmt.ctprintf("%d", sand_count))
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,
 		stats_y + DEBUG_TEXT_LINE_H,
-		"Sleep:",
-		fmt.ctprintf("%d/%d", sleeping_count, particle_count),
+		"Water:",
+		fmt.ctprintf("%d", water_count),
 	)
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,
 		stats_y + 2 * DEBUG_TEXT_LINE_H,
 		"Chunks:",
 		fmt.ctprintf("%d/%d", active_chunks, len(sand.chunks)),
+	)
+	debug_value_with_label(
+		DEBUG_TEXT_MARGIN_X,
+		stats_y + 3 * DEBUG_TEXT_LINE_H,
+		"Sand Sleep:",
+		fmt.ctprintf("%d/%d", sand_sleeping, sand_count),
+	)
+	debug_value_with_label(
+		DEBUG_TEXT_MARGIN_X,
+		stats_y + 4 * DEBUG_TEXT_LINE_H,
+		"Water Sleep:",
+		fmt.ctprintf("%d/%d", water_sleeping, water_count),
+	)
+	debug_value_with_label(
+		DEBUG_TEXT_MARGIN_X,
+		stats_y + 5 * DEBUG_TEXT_LINE_H,
+		"Chunk Sleep:",
+		fmt.ctprintf("%d/%d", sleeping_chunks, len(sand.chunks)),
 	)
 }
