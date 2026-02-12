@@ -12,7 +12,7 @@ player_fsm_dashing_init :: proc(player: ^Player) {
 player_fsm_dashing_enter :: proc(ctx: ^Player) {
 	ctx.abilities.dash_active_timer = PLAYER_DASH_DURATION
 	ctx.abilities.dash_cooldown_timer = PLAYER_DASH_COOLDOWN
-	player_dust_emit(
+	player_particles_dust_emit(
 		&game.dust,
 		ctx.transform.pos + {0, PLAYER_SIZE / 2},
 		{-ctx.abilities.dash_dir * PLAYER_PARTICLE_DUST_SPEED_MAX, 0},
@@ -29,10 +29,10 @@ player_fsm_dashing_enter :: proc(ctx: ^Player) {
 // - Airborne: timer expired (default)
 player_fsm_dashing_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) {
 	if ctx.abilities.dash_active_timer <= 0 {
-		player_apply_movement(ctx, dt)
+		player_physics_apply_movement(ctx, dt)
 		if ctx.sensor.on_ground do return .Grounded
 		if ctx.sensor.on_side_wall {
-			if math.abs(ctx.transform.vel.x) > PLAYER_IMPACT_THRESHOLD do player_trigger_impact(ctx, math.abs(ctx.transform.vel.x), {1, 0})
+			if math.abs(ctx.transform.vel.x) > PLAYER_IMPACT_THRESHOLD do player_graphics_trigger_impact(ctx, math.abs(ctx.transform.vel.x), {1, 0})
 			if game.input.is_down[.WALL_RUN] && ctx.abilities.wall_run_cooldown_timer <= 0 && !ctx.abilities.wall_run_used && ctx.transform.vel.y > 0 do return .Wall_Run_Vertical
 			if game.input.is_down[.SLIDE] do return .Wall_Slide
 		}

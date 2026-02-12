@@ -142,8 +142,8 @@ sand_try_displace_to :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, depth: int 
 
 	sand_wake_neighbors(sand, sx, sy)
 	sand_wake_neighbors(sand, dx, dy)
-	sand_mark_chunk_dirty(sand, sx, sy)
-	sand_mark_chunk_dirty(sand, dx, dy)
+	sand_chunk_mark_dirty(sand, sx, sy)
+	sand_chunk_mark_dirty(sand, dx, dy)
 
 	// Update chunk active counts if crossing chunk boundary
 	if sx / int(SAND_CHUNK_SIZE) != dx / int(SAND_CHUNK_SIZE) ||

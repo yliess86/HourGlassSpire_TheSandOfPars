@@ -3,7 +3,7 @@ package game
 import "core:math"
 import sdl "vendor:sdl3"
 
-player_render :: proc(player: ^Player) {
+player_graphics_render :: proc(player: ^Player) {
 	vel_px := player.transform.vel * PPM
 	size_px: f32 = PLAYER_SIZE * PPM
 
@@ -47,11 +47,11 @@ player_render :: proc(player: ^Player) {
 	w := size_px * w_scale
 
 	// -- Player (deformed size, bottom-center anchored)
-	// Convert deformed pixel size back to world units for world_to_screen
+	// Convert deformed pixel size back to world units for game_world_to_screen
 	w_world := w / PPM
 	h_world := h / PPM
 	player_bl := [2]f32{player.transform.pos.x - w_world / 2, player.transform.pos.y}
-	rect_p := world_to_screen(player_bl, {w_world, h_world})
+	rect_p := game_world_to_screen(player_bl, {w_world, h_world})
 
 	sdl.SetRenderDrawColor(
 		game.win.renderer,
@@ -63,7 +63,7 @@ player_render :: proc(player: ^Player) {
 	sdl.RenderFillRect(game.win.renderer, &rect_p)
 }
 
-player_trigger_impact :: proc(player: ^Player, impact_speed: f32, axis: [2]f32) {
+player_graphics_trigger_impact :: proc(player: ^Player, impact_speed: f32, axis: [2]f32) {
 	strength := math.clamp(impact_speed / PLAYER_JUMP_FORCE, 0, 1)
 	remaining :=
 		player.graphics.impact_strength *

@@ -18,7 +18,7 @@ player_fsm_wall_slide_init :: proc(player: ^Player) {
 // - Airborne: !on_side_wall && !on_back_wall (detached)
 // - Airborne: on_back_wall && !on_side_wall && SLIDE released
 player_fsm_wall_slide_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) {
-	player_apply_movement(ctx, dt)
+	player_physics_apply_movement(ctx, dt)
 
 	if ctx.transform.vel.y < 0 do ctx.transform.vel.y = math.max(ctx.transform.vel.y, -PLAYER_WALL_SLIDE_SPEED)
 	ctx.transform.vel.x = math.lerp(ctx.transform.vel.x, 0, PLAYER_MOVE_LERP_SPEED * dt)
@@ -37,13 +37,13 @@ player_fsm_wall_slide_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_Stat
 			ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2,
 			ctx.transform.pos.y + PLAYER_SIZE / 2,
 		}
-		player_dust_emit(
+		player_particles_dust_emit(
 			&game.dust,
 			wall_pos,
 			{-ctx.sensor.on_side_wall_dir * PLAYER_PARTICLE_DUST_SPEED_MAX, 0},
 			4,
 		)
-		player_step_emit(&game.steps, wall_pos)
+		player_particles_step_emit(&game.steps, wall_pos)
 		return .Airborne
 	}
 
@@ -59,13 +59,23 @@ player_fsm_wall_slide_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_Stat
 				ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2,
 				ctx.transform.pos.y + PLAYER_SIZE,
 			}
-			player_dust_emit(&game.dust, hand_pos, {0, PLAYER_PARTICLE_DUST_SPEED_MIN}, 1)
+			player_particles_dust_emit(
+				&game.dust,
+				hand_pos,
+				{0, PLAYER_PARTICLE_DUST_SPEED_MIN},
+				1,
+			)
 		} else if ctx.sensor.on_back_wall {
 			hand_pos := [2]f32 {
 				ctx.transform.pos.x - PLAYER_SIZE / 2,
 				ctx.transform.pos.y + PLAYER_SIZE,
 			}
-			player_dust_emit(&game.dust, hand_pos, {0, PLAYER_PARTICLE_DUST_SPEED_MIN}, 1)
+			player_particles_dust_emit(
+				&game.dust,
+				hand_pos,
+				{0, PLAYER_PARTICLE_DUST_SPEED_MIN},
+				1,
+			)
 		}
 	}
 

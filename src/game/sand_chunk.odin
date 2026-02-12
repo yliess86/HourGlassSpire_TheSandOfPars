@@ -19,7 +19,7 @@ sand_chunk_at :: proc(sand: ^Sand_World, tx, ty: int) -> ^Sand_Chunk {
 	return &sand.chunks[cy * sand.chunks_w + cx]
 }
 
-sand_mark_chunk_dirty :: proc(sand: ^Sand_World, tx, ty: int) {
+sand_chunk_mark_dirty :: proc(sand: ^Sand_World, tx, ty: int) {
 	chunk := sand_chunk_at(sand, tx, ty)
 	if chunk != nil do chunk.dirty = true
 }
@@ -53,11 +53,11 @@ sand_chunk_propagate_dirty :: proc(sand: ^Sand_World) {
 }
 
 // Post-step cleanup (dirty flags are cleared in sand_chunk_propagate_dirty)
-sand_post_step :: proc(sand: ^Sand_World) {
+sand_chunk_post_step :: proc(sand: ^Sand_World) {
 }
 
 // Recount active cells in all chunks (called once at init)
-sand_recount_chunks :: proc(sand: ^Sand_World) {
+sand_chunk_recount :: proc(sand: ^Sand_World) {
 	for &chunk in sand.chunks {
 		chunk.active_count = 0
 	}

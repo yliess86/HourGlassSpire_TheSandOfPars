@@ -3,7 +3,7 @@ package game
 import engine "../engine"
 import "core:math"
 
-player_apply_movement :: proc(player: ^Player, dt: f32) {
+player_physics_apply_movement :: proc(player: ^Player, dt: f32) {
 	sand_move_factor: f32 = 1.0 - player.sensor.sand_immersion * SAND_MOVE_PENALTY
 	player.transform.vel.x = math.lerp(
 		player.transform.vel.x,
@@ -91,16 +91,16 @@ player_physics_update :: proc(player: ^Player, dt: f32) {
 
 	player.transform.pos.x += player_physics_sweep_x(player, dt)
 	player_sync_collider(player)
-	player_resolve_slopes(player)
-	player_resolve_x(player)
+	player_physics_resolve_slopes(player)
+	player_physics_resolve_x(player)
 
 	player.transform.pos.y += player_physics_sweep_y(player, dt)
 	player_sync_collider(player)
-	player_resolve_y(player)
-	player_resolve_slopes(player)
+	player_physics_resolve_y(player)
+	player_physics_resolve_slopes(player)
 }
 
-player_resolve_x :: proc(player: ^Player) {
+player_physics_resolve_x :: proc(player: ^Player) {
 	pc := &player.collider
 
 	for c in game.level.side_wall_colliders {
@@ -116,7 +116,7 @@ player_resolve_x :: proc(player: ^Player) {
 	}
 }
 
-player_resolve_y :: proc(player: ^Player) {
+player_physics_resolve_y :: proc(player: ^Player) {
 	pc := &player.collider
 
 	for c in game.level.ceiling_colliders {
@@ -155,7 +155,7 @@ player_resolve_y :: proc(player: ^Player) {
 	}
 }
 
-player_resolve_slopes :: proc(player: ^Player) {
+player_physics_resolve_slopes :: proc(player: ^Player) {
 	found_floor := false
 	best_floor_y := f32(-1e18)
 	for c in game.level.slope_colliders {

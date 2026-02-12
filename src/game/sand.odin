@@ -89,7 +89,7 @@ sand_init :: proc(sand: ^Sand_World, level: ^Level) {
 		idx := pos.y * sand.width + pos.x
 		sand.cells[idx].material = .Sand
 		sand.cells[idx].color_variant = u8((pos.x * 7 + pos.y * 13) & 3)
-		sand_mark_chunk_dirty(sand, pos.x, pos.y)
+		sand_chunk_mark_dirty(sand, pos.x, pos.y)
 	}
 	delete(level.sand_piles)
 
@@ -101,7 +101,7 @@ sand_init :: proc(sand: ^Sand_World, level: ^Level) {
 	delete(level.original_tiles)
 
 	// Initial chunk active counts
-	sand_recount_chunks(sand)
+	sand_chunk_recount(sand)
 }
 
 sand_destroy :: proc(sand: ^Sand_World) {

@@ -34,7 +34,7 @@ sand_step :: proc(sand: ^Sand_World) {
 	}
 
 	sand_restore_platforms(sand)
-	sand_post_step(sand)
+	sand_chunk_post_step(sand)
 }
 
 @(private = "file")
@@ -105,8 +105,8 @@ sand_try_move :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, parity: u32) -> bo
 	sand_wake_neighbors(sand, dx, dy)
 
 	// Mark chunks dirty
-	sand_mark_chunk_dirty(sand, sx, sy)
-	sand_mark_chunk_dirty(sand, dx, dy)
+	sand_chunk_mark_dirty(sand, sx, sy)
+	sand_chunk_mark_dirty(sand, dx, dy)
 
 	// Update chunk active counts
 	if sx / int(SAND_CHUNK_SIZE) != dx / int(SAND_CHUNK_SIZE) ||
@@ -132,7 +132,7 @@ sand_erode_adjacent_platforms :: proc(sand: ^Sand_World, x, y: int) {
 		// Erase platform cell
 		sand.cells[n_idx] = Sand_Cell{}
 		sand_wake_neighbors(sand, nx, y)
-		sand_mark_chunk_dirty(sand, nx, y)
+		sand_chunk_mark_dirty(sand, nx, y)
 
 		// Decrement chunk active count (Platform is counted as active)
 		chunk := sand_chunk_at(sand, nx, y)
@@ -180,7 +180,7 @@ sand_restore_platforms :: proc(sand: ^Sand_World) {
 		// Restore platform
 		sand.cells[idx].material = .Platform
 		sand_wake_neighbors(sand, px, py)
-		sand_mark_chunk_dirty(sand, px, py)
+		sand_chunk_mark_dirty(sand, px, py)
 		chunk := sand_chunk_at(sand, px, py)
 		if chunk != nil do chunk.active_count += 1
 

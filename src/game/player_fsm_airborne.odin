@@ -17,7 +17,7 @@ player_fsm_airborne_init :: proc(player: ^Player) {
 // - Wall_Run_Vertical: on_side_wall && WALL_RUN && cooldown ready && !wall_run_used && vel.y > 0
 // - Wall_Slide: on_side_wall && SLIDE held
 player_fsm_airborne_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) {
-	player_apply_movement(ctx, dt)
+	player_physics_apply_movement(ctx, dt)
 
 	if ctx.abilities.jump_buffer_timer > 0 && ctx.abilities.coyote_timer > 0 {
 		ctx.transform.vel.y = PLAYER_JUMP_FORCE
@@ -38,7 +38,7 @@ player_fsm_airborne_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 	}
 
 	if ctx.sensor.on_side_wall {
-		if math.abs(ctx.transform.vel.x) > PLAYER_IMPACT_THRESHOLD do player_trigger_impact(ctx, math.abs(ctx.transform.vel.x), {1, 0})
+		if math.abs(ctx.transform.vel.x) > PLAYER_IMPACT_THRESHOLD do player_graphics_trigger_impact(ctx, math.abs(ctx.transform.vel.x), {1, 0})
 		if ctx.abilities.jump_buffer_timer > 0 {
 			if ctx.sensor.on_side_wall {
 				offset_x := -EPS * ctx.sensor.on_side_wall_dir
@@ -49,7 +49,7 @@ player_fsm_airborne_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 					ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2,
 					ctx.transform.pos.y + PLAYER_SIZE / 2,
 				}
-				player_dust_emit(
+				player_particles_dust_emit(
 					&game.dust,
 					wall_pos,
 					{-ctx.sensor.on_side_wall_dir * PLAYER_PARTICLE_DUST_SPEED_MAX, 0},

@@ -29,7 +29,7 @@ sand_emitter_update :: proc(sand: ^Sand_World) {
 
 			// Wake neighbors and mark chunk dirty
 			sand_wake_neighbors(sand, emitter.tx, spawn_y)
-			sand_mark_chunk_dirty(sand, emitter.tx, spawn_y)
+			sand_chunk_mark_dirty(sand, emitter.tx, spawn_y)
 
 			// Update chunk active count
 			chunk := sand_chunk_at(sand, emitter.tx, spawn_y)

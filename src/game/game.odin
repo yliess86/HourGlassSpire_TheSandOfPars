@@ -5,11 +5,11 @@ import "core:fmt"
 import sdl "vendor:sdl3"
 
 // Convenience wrappers for camera coordinate conversion
-world_to_screen :: proc(world_pos, world_size: [2]f32) -> sdl.FRect {
+game_world_to_screen :: proc(world_pos, world_size: [2]f32) -> sdl.FRect {
 	return engine.camera_world_to_screen(&game.camera, world_pos, world_size)
 }
 
-world_to_screen_point :: proc(world_pos: [2]f32) -> [2]f32 {
+game_world_to_screen_point :: proc(world_pos: [2]f32) -> [2]f32 {
 	return engine.camera_world_to_screen_point(&game.camera, world_pos)
 }
 
@@ -38,7 +38,7 @@ Game_State :: struct {
 
 game: Game_State
 
-config_post_apply :: proc() {
+game_config_post_apply :: proc() {
 	input_binding_apply(&game.input)
 	game.camera.follow_speed_min = CAMERA_FOLLOW_SPEED_MIN
 	game.camera.follow_speed_max = CAMERA_FOLLOW_SPEED_MAX
@@ -48,7 +48,7 @@ config_post_apply :: proc() {
 
 game_clean :: proc() {
 	sand_destroy(&game.sand)
-	engine.config_destroy(&game_config)
+	engine.config_destroy(&config_game)
 	level_destroy(&game.level)
 	engine.window_clean(&game.win)
 }
@@ -94,7 +94,7 @@ game_init :: proc() {
 	sand_init(&game.sand, &game.level)
 
 	// Apply post-config (input bindings + camera params) and snap camera to player spawn
-	config_post_apply()
+	game_config_post_apply()
 	game.camera.pos = game.player.collider.pos
 }
 
@@ -116,8 +116,8 @@ game_fixed_update :: proc(dt: f32) {
 	sand_player_interact(&game.sand, &game.player, dt)
 	sand_sub_step_tick(&game.sand)
 	sand_emitter_update(&game.sand)
-	player_dust_update(&game.dust, dt)
-	player_step_update(&game.steps, dt)
+	player_particles_dust_update(&game.dust, dt)
+	player_particles_step_update(&game.steps, dt)
 	engine.camera_follow(
 		&game.camera,
 		game.player.collider.pos,
@@ -131,23 +131,23 @@ game_fixed_update :: proc(dt: f32) {
 game_render :: proc() {
 	level_render(&game.level)
 	sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
-	player_step_render(&game.steps)
-	player_dust_render(&game.dust)
-	player_render(&game.player)
-	sand_render(&game.sand)
+	player_particles_step_render(&game.steps)
+	player_particles_dust_render(&game.dust)
+	player_graphics_render(&game.player)
+	sand_graphics_render(&game.sand)
 }
 
 game_render_debug :: proc() {
 	sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
 
 	level_debug(&game.level)
-	sand_debug(&game.sand)
+	sand_graphics_debug(&game.sand)
 
 	sensor_pos: [2]f32 = {DEBUG_TEXT_MARGIN_X, DEBUG_TEXT_MARGIN_Y + 2 * DEBUG_TEXT_LINE_H}
 	player_sensor_debug(&game.player, sensor_pos)
 	player_physics_debug(&game.player)
 	player_debug(&game.player)
-	camera_debug()
+	debug_camera()
 
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,
