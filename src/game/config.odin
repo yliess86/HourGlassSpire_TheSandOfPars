@@ -38,6 +38,19 @@ LEVEL_NAME: string                         // BMP filename in assets/ (without e
 LEVEL_COLOR_BG: [4]u8                      // background clear color
 LEVEL_COLOR_TILE_SOLID: [4]u8              // solid tile fill color
 LEVEL_COLOR_TILE_BACK_WALL: [4]u8          // back wall / slope background fill color
+LEVEL_PALETTE_EMPTY: [4]u8                 // BMP palette: empty / air
+LEVEL_PALETTE_SOLID: [4]u8                 // BMP palette: solid wall
+LEVEL_PALETTE_PLATFORM: [4]u8              // BMP palette: one-way platform
+LEVEL_PALETTE_BACK_WALL: [4]u8             // BMP palette: background wall
+LEVEL_PALETTE_SPAWN: [4]u8                 // BMP palette: player spawn point
+LEVEL_PALETTE_SLOPE_RIGHT: [4]u8           // BMP palette: floor slope /
+LEVEL_PALETTE_SLOPE_LEFT: [4]u8            // BMP palette: floor slope \
+LEVEL_PALETTE_SLOPE_CEIL_RIGHT: [4]u8      // BMP palette: ceiling slope \
+LEVEL_PALETTE_SLOPE_CEIL_LEFT: [4]u8       // BMP palette: ceiling slope /
+LEVEL_PALETTE_SAND_PILE: [4]u8             // BMP palette: pre-placed sand
+LEVEL_PALETTE_SAND_EMITTER: [4]u8          // BMP palette: sand emitter
+LEVEL_PALETTE_WATER_PILE: [4]u8            // BMP palette: pre-placed water
+LEVEL_PALETTE_WATER_EMITTER: [4]u8         // BMP palette: water emitter
 
 // [player]
 PLAYER_COLOR: [4]u8                        // player square color (RGBA)
@@ -235,6 +248,19 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_COLOR_BG"); ok do LEVEL_COLOR_BG = val
 	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_COLOR_TILE_SOLID"); ok do LEVEL_COLOR_TILE_SOLID = val
 	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_COLOR_TILE_BACK_WALL"); ok do LEVEL_COLOR_TILE_BACK_WALL = val
+	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_PALETTE_EMPTY"); ok do LEVEL_PALETTE_EMPTY = val
+	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_PALETTE_SOLID"); ok do LEVEL_PALETTE_SOLID = val
+	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_PALETTE_PLATFORM"); ok do LEVEL_PALETTE_PLATFORM = val
+	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_PALETTE_BACK_WALL"); ok do LEVEL_PALETTE_BACK_WALL = val
+	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_PALETTE_SPAWN"); ok do LEVEL_PALETTE_SPAWN = val
+	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_PALETTE_SLOPE_RIGHT"); ok do LEVEL_PALETTE_SLOPE_RIGHT = val
+	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_PALETTE_SLOPE_LEFT"); ok do LEVEL_PALETTE_SLOPE_LEFT = val
+	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_PALETTE_SLOPE_CEIL_RIGHT"); ok do LEVEL_PALETTE_SLOPE_CEIL_RIGHT = val
+	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_PALETTE_SLOPE_CEIL_LEFT"); ok do LEVEL_PALETTE_SLOPE_CEIL_LEFT = val
+	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_PALETTE_SAND_PILE"); ok do LEVEL_PALETTE_SAND_PILE = val
+	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_PALETTE_SAND_EMITTER"); ok do LEVEL_PALETTE_SAND_EMITTER = val
+	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_PALETTE_WATER_PILE"); ok do LEVEL_PALETTE_WATER_PILE = val
+	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_PALETTE_WATER_EMITTER"); ok do LEVEL_PALETTE_WATER_EMITTER = val
 	if val, ok := engine.config_get_rgba(&config_game, "PLAYER_COLOR"); ok do PLAYER_COLOR = val
 	if val, ok := engine.config_get_f32(&config_game, "PLAYER_SIZE"); ok do PLAYER_SIZE = val
 	if val, ok := engine.config_get_f32(&config_game, "PLAYER_CHECK_GROUND_EPS"); ok do PLAYER_CHECK_GROUND_EPS = val

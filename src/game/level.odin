@@ -22,23 +22,6 @@ Level_Tile_Kind :: enum u8 {
 	Water_Emitter, // continuous water source -> emitter in sand world, .Solid in level
 }
 
-// BMP palette: editor color → tile kind
-@(private = "file")
-LEVEL_PALETTE :: [Level_Tile_Kind][3]u8 {
-	.Empty            = {0, 0, 0},
-	.Solid            = {255, 255, 255},
-	.Platform         = {0, 255, 0},
-	.Back_Wall        = {127, 127, 127},
-	.Spawn            = {255, 0, 255},
-	.Slope_Right      = {255, 0, 0},
-	.Slope_Left       = {0, 0, 255},
-	.Slope_Ceil_Right = {128, 0, 0},
-	.Slope_Ceil_Left  = {0, 0, 128},
-	.Sand_Pile        = {255, 255, 0},
-	.Sand_Emitter     = {255, 128, 0},
-	.Water_Pile       = {0, 255, 255},
-	.Water_Emitter    = {0, 255, 128},
-}
 
 Level :: struct {
 	width, height:       int,
@@ -162,11 +145,26 @@ level_load :: proc(path: cstring) -> (level: Level, ok: bool) {
 	return level, true
 }
 
-// Map RGB to tile kind (nearest match)
+// Map RGB to tile kind via config palette (compare RGB, ignore alpha)
 @(private = "file")
 level_color_to_tile :: proc(rgb: [3]u8) -> Level_Tile_Kind {
-	for color, kind in LEVEL_PALETTE {
-		if rgb == color do return kind
+	palette := [Level_Tile_Kind][4]u8 {
+		.Empty            = LEVEL_PALETTE_EMPTY,
+		.Solid            = LEVEL_PALETTE_SOLID,
+		.Platform         = LEVEL_PALETTE_PLATFORM,
+		.Back_Wall        = LEVEL_PALETTE_BACK_WALL,
+		.Spawn            = LEVEL_PALETTE_SPAWN,
+		.Slope_Right      = LEVEL_PALETTE_SLOPE_RIGHT,
+		.Slope_Left       = LEVEL_PALETTE_SLOPE_LEFT,
+		.Slope_Ceil_Right = LEVEL_PALETTE_SLOPE_CEIL_RIGHT,
+		.Slope_Ceil_Left  = LEVEL_PALETTE_SLOPE_CEIL_LEFT,
+		.Sand_Pile        = LEVEL_PALETTE_SAND_PILE,
+		.Sand_Emitter     = LEVEL_PALETTE_SAND_EMITTER,
+		.Water_Pile       = LEVEL_PALETTE_WATER_PILE,
+		.Water_Emitter    = LEVEL_PALETTE_WATER_EMITTER,
+	}
+	for color, kind in palette {
+		if rgb[0] == color[0] && rgb[1] == color[1] && rgb[2] == color[2] do return kind
 	}
 	return .Empty
 }
