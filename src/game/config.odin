@@ -160,9 +160,9 @@ SAND_DEBUG_PRESSURE_MAX: f32               // heatmap pressure cap (above this =
 
 // [water]
 WATER_COLOR: [4]u8                         // base water particle color (translucent cyan)
-WATER_COLOR_VARIATION: u8                  // max RGB darkening near ground floor
-WATER_COLOR_DEPTH_MAX: u8                  // cell distance from ground where darkening fades to zero
-WATER_FLOW_DISTANCE: u8                    // max horizontal cells water scans per step
+WATER_COLOR_VARIATION: u8                  // max RGB darkening at depth
+WATER_COLOR_DEPTH_MAX: u8                  // cell distance from surface where darkening reaches maximum
+WATER_FLOW_DISTANCE: u8                    // max horizontal flow per step (depth-proportional: surface=1, +1 per depth cell)
 WATER_EMITTER_RATE: f32                    // particles spawned per second per water emitter
 WATER_PLAYER_DRAG_PER_CELL: f32            // velocity drag added per displaced water cell
 WATER_PLAYER_DRAG_MAX: f32                 // max total drag factor cap (0-1)

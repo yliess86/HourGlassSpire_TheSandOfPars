@@ -237,12 +237,21 @@ sand_try_move_water :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, parity: u32)
 	return true
 }
 
-// Scan up to WATER_FLOW_DISTANCE cells horizontally in direction dx.
-// Finds the furthest empty cell with support below, or a drop-off edge, and moves directly there.
+// Depth-proportional horizontal flow: surface water moves 1 cell, deeper water flows faster.
+// Scans up to min(1+depth, WATER_FLOW_DISTANCE) cells for an empty cell or drop-off edge.
 @(private = "file")
 sand_try_flow_water :: proc(sand: ^Sand_World, x, y, dx: int, parity: u32) -> bool {
+	// Count contiguous water cells above to determine pressure/depth
+	depth := 0
+	for scan_y := y + 1; scan_y < sand.height; scan_y += 1 {
+		if sand.cells[scan_y * sand.width + x].material != .Water do break
+		depth += 1
+		if depth >= int(WATER_FLOW_DISTANCE) do break
+	}
+	max_flow := min(1 + depth, int(WATER_FLOW_DISTANCE))
+
 	target_x := -1
-	for i in 1 ..= int(WATER_FLOW_DISTANCE) {
+	for i in 1 ..= max_flow {
 		nx := x + i * dx
 		if !sand_in_bounds(sand, nx, y) do break
 		if sand.cells[y * sand.width + nx].material != .Empty do break

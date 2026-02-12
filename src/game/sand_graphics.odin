@@ -34,55 +34,50 @@ sand_graphics_render :: proc(sand: ^Sand_World) {
 		}
 	}
 
-	// Render water cells (with alpha blending, depth-based color gradient)
+	// Render water cells (with alpha blending, top-down depth gradient for stable surface color)
 	sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
 	depth_max := int(WATER_COLOR_DEPTH_MAX)
 	for x in x0 ..< x1 {
-		// Pre-scan below visible area to find initial ground distance
+		// Pre-scan above visible area to find initial surface distance
 		dist := 0
-		for y := y0 - 1; y >= max(0, y0 - depth_max); y -= 1 {
+		above_is_water := false
+		for y := y1; y < min(sand.height, y1 + depth_max); y += 1 {
 			idx := y * sand.width + x
-			cell := sand.cells[idx]
 			if sand.slopes[idx] != .None {
-				if cell.material == .Water do dist = 1
+				above_is_water = sand.cells[idx].material == .Water
+				if above_is_water do dist += 1
 				break
 			}
-			if cell.material == .Solid || cell.material == .Platform {
-				dist = 0
-				break
-			} else if cell.material == .Water {
+			if sand.cells[idx].material == .Water {
 				dist += 1
+				above_is_water = true
 			} else {
-				dist = 0
 				break
 			}
 		}
 
-		// Render visible cells bottom-to-top
-		for y in y0 ..< y1 {
+		// Render visible cells top-to-bottom (dist = distance from surface)
+		for y := y1 - 1; y >= y0; y -= 1 {
 			idx := y * sand.width + x
 			cell := sand.cells[idx]
 			slope := sand.slopes[idx]
-			if slope != .None {
-				if cell.material == .Water {
-					dist = 1
-					color := sand_graphics_water_color(dist)
+			if cell.material == .Water {
+				if !above_is_water do dist = 0
+				color := sand_graphics_water_color(dist)
+				if slope != .None {
 					sand_graphics_slope_tri(x, y, slope, color)
 				} else {
-					dist = 0
+					world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
+					world_size := [2]f32{TILE_SIZE, TILE_SIZE}
+					rect := game_world_to_screen(world_pos, world_size)
+					sdl.SetRenderDrawColor(game.win.renderer, color.r, color.g, color.b, color.a)
+					sdl.RenderFillRect(game.win.renderer, &rect)
 				}
-			} else if cell.material == .Solid || cell.material == .Platform {
-				dist = 0
-			} else if cell.material == .Water {
 				dist += 1
-				color := sand_graphics_water_color(dist)
-				world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
-				world_size := [2]f32{TILE_SIZE, TILE_SIZE}
-				rect := game_world_to_screen(world_pos, world_size)
-				sdl.SetRenderDrawColor(game.win.renderer, color.r, color.g, color.b, color.a)
-				sdl.RenderFillRect(game.win.renderer, &rect)
+				above_is_water = true
 			} else {
 				dist = 0
+				above_is_water = false
 			}
 		}
 	}
@@ -138,7 +133,7 @@ sand_graphics_slope_tri :: proc(x, y: int, slope: Sand_Slope_Kind, color: [4]u8)
 @(private = "file")
 sand_graphics_water_color :: proc(dist: int) -> [4]u8 {
 	t := math.clamp(f32(dist) / f32(WATER_COLOR_DEPTH_MAX), 0, 1)
-	offset := u8((1 - t) * f32(WATER_COLOR_VARIATION))
+	offset := u8(t * f32(WATER_COLOR_VARIATION))
 	return {
 		WATER_COLOR.r - min(offset, WATER_COLOR.r),
 		WATER_COLOR.g - min(offset, WATER_COLOR.g),

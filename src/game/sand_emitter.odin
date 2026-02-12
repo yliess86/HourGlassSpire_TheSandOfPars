@@ -17,24 +17,24 @@ sand_emitter_update :: proc(sand: ^Sand_World) {
 			if !sand_in_bounds(sand, emitter.tx, spawn_y) do continue
 
 			idx := spawn_y * sand.width + emitter.tx
-			if sand.cells[idx].material != .Empty do continue
+			if sand.cells[idx].material == .Empty {
+				// Create particle
+				hash := u32(emitter.tx * 7 + spawn_y * 13 + int(sand.step_counter))
+				sand.cells[idx] = Sand_Cell {
+					material      = emitter.material,
+					sleep_counter = 0,
+					color_variant = u8(hash & 3),
+					flags         = 0,
+				}
 
-			// Create particle
-			hash := u32(emitter.tx * 7 + spawn_y * 13 + int(sand.step_counter))
-			sand.cells[idx] = Sand_Cell {
-				material      = emitter.material,
-				sleep_counter = 0,
-				color_variant = u8(hash & 3),
-				flags         = 0,
+				// Update chunk active count
+				chunk := sand_chunk_at(sand, emitter.tx, spawn_y)
+				if chunk != nil do chunk.active_count += 1
 			}
 
-			// Wake neighbors and mark chunk dirty
+			// Always keep emitter area active so pile drains when space opens
 			sand_wake_neighbors(sand, emitter.tx, spawn_y)
 			sand_chunk_mark_dirty(sand, emitter.tx, spawn_y)
-
-			// Update chunk active count
-			chunk := sand_chunk_at(sand, emitter.tx, spawn_y)
-			if chunk != nil do chunk.active_count += 1
 		}
 	}
 }
