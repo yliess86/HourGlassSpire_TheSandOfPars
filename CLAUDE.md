@@ -45,11 +45,11 @@ Odin lang, SDL3 (`vendor:sdl3`). Main package `src/game/`, reusable engine packa
 | `build/dist.odin` | Distribution: dist targets, SDL3 download/setup, release build + bundle |
 | `src/engine/config.odin` | INI parser, expression evaluator, config load/reload/get API |
 | `src/game/main.odin` | Entry point (`main` proc): game loop (fixed-timestep update, render, present) |
-| `src/game/game.odin` | `Game_State` struct, `game` global, `config_post_apply` (syncs input bindings + camera params on config load/reload), game lifecycle (`game_init`/`game_clean`), `game_update`/`game_fixed_update`/`game_render`/`game_render_debug`, `world_to_screen`/`world_to_screen_point` convenience wrappers |
+| `src/game/game.odin` | `Game_State` struct, `game` global, `game_config_post_apply` (syncs input bindings + camera params on config load/reload), game lifecycle (`game_init`/`game_clean`), `game_update`/`game_fixed_update`/`game_render`/`game_render_debug`, `game_world_to_screen`/`game_world_to_screen_point` convenience wrappers |
 | `src/game/player.odin` | `Player_State` enum, `Player` struct (`Player_Transform`, `Player_Abilities`, `Player_Graphics` sub-structs, `fsm`, `sensor`), `player_init`, `player_fixed_update`, `player_sync_collider`, `player_debug` — all procs take `player: ^Player` |
-| `src/game/player_graphics.odin` | `player_color`, `player_render` (4-layer visual deformation: velocity, look, run bob, impact bounce), `player_trigger_impact` |
+| `src/game/player_graphics.odin` | `player_color`, `player_graphics_render` (4-layer visual deformation: velocity, look, run bob, impact bounce), `player_graphics_trigger_impact` |
 | `src/game/player_sensor.odin` | `Player_Sensor` struct, `player_sensor_update`, `player_sensor_debug` |
-| `src/game/player_physics.odin` | `player_apply_movement`, `player_physics_update` (separated-axis solver), `player_physics_sweep_x` (swept AABB for X axis), `player_physics_sweep_y` (swept AABB for Y axis), `player_resolve_x`, `player_resolve_y`, `player_resolve_slopes`, `player_physics_debug` (collider + position + velocity) |
+| `src/game/player_physics.odin` | `player_physics_apply_movement`, `player_physics_update` (separated-axis solver), `player_physics_sweep_x` (swept AABB for X axis), `player_physics_sweep_y` (swept AABB for Y axis), `player_physics_resolve_x`, `player_physics_resolve_y`, `player_physics_resolve_slopes`, `player_physics_debug` (collider + position + velocity) |
 | `src/game/player_fsm_grounded.odin` | `player_fsm_grounded_init` + `player_fsm_grounded_enter` + `player_fsm_grounded_update` |
 | `src/game/player_fsm_airborne.odin` | `player_fsm_airborne_init` + `player_fsm_airborne_update` |
 | `src/game/player_fsm_dashing.odin` | `player_fsm_dashing_init` + `player_fsm_dashing_enter` + `player_fsm_dashing_update` |
@@ -57,14 +57,14 @@ Odin lang, SDL3 (`vendor:sdl3`). Main package `src/game/`, reusable engine packa
 | `src/game/player_fsm_wall_slide.odin` | `player_fsm_wall_slide_init` + `player_fsm_wall_slide_update` |
 | `src/game/player_fsm_wall_run_vertical.odin` | `player_fsm_wall_run_vertical_init` + `player_fsm_wall_run_vertical_enter` + `player_fsm_wall_run_vertical_update` + `player_fsm_wall_run_vertical_exit` |
 | `src/game/player_fsm_wall_run_horizontal.odin` | `player_fsm_wall_run_horizontal_init` + `player_fsm_wall_run_horizontal_enter` + `player_fsm_wall_run_horizontal_update` |
-| `src/game/debug.odin` | `Debug_State` enum, debug drawing helpers (`debug_collider_rect`, `debug_point`, `debug_vector`, `debug_text`, etc.), `camera_debug` (dead zone rectangle overlay) |
-| `src/game/level.odin` | `Tile_Kind` enum, `Level` struct, BMP loading (`sdl.LoadBMP`), greedy collider merging, diagonal slope merging, tile rendering, `level_debug` (collider outlines + anchors) |
+| `src/game/debug.odin` | `Debug_State` enum, debug drawing helpers (`debug_collider_rect`, `debug_point`, `debug_vector`, `debug_text`, etc.), `debug_camera` (dead zone rectangle overlay) |
+| `src/game/level.odin` | `Level_Tile_Kind` enum, `Level` struct, BMP loading (`sdl.LoadBMP`), greedy collider merging, diagonal slope merging, tile rendering, `level_debug` (collider outlines + anchors) |
 | `src/game/sand.odin` | `Sand_Material` enum, `Sand_Cell`/`Sand_Emitter`/`Sand_World` structs, grid accessors (`sand_get`/`sand_set`/`sand_get_ptr`/`sand_in_bounds`), `sand_init` (populates grid from level tiles + pre-placed piles + emitters), `sand_destroy` |
 | `src/game/sand_chunk.odin` | `Sand_Chunk` struct, `SAND_CHUNK_SIZE :: 32`, chunk init/dirty propagation/recount — spatial partitioning for sleep optimization |
 | `src/game/sand_sim.odin` | `sand_sub_step_tick` (sub-step counter → fires `sand_step`), `sand_step` (cellular automaton: bottom-to-top, alternating horizontal scan), `sand_update_cell` (down/diagonal movement with sleep/wake), `sand_wake_neighbors` |
 | `src/game/sand_emitter.odin` | `sand_emitter_update` — accumulates fractional particles per emitter at `SAND_EMITTER_RATE`, spawns one tile below emitter when ready |
 | `src/game/sand_player.odin` | `sand_player_interact` — bidirectional player-sand coupling: displacement (push sand out of player footprint), drag (slow player per displaced cell), pressure (downward force from sand above), burial (extra gravity when mostly submerged) |
-| `src/game/sand_render.odin` | `sand_render` (camera-culled tile drawing with color variants), `sand_cell_color` (base color ± brightness offset), `sand_debug` (stress heatmap, sleeping particle overlay, chunk boundaries, emitter markers, stats text) |
+| `src/game/sand_graphics.odin` | `sand_graphics_render` (camera-culled tile drawing with color variants), `sand_graphics_cell_color` (base color ± brightness offset), `sand_graphics_debug` (stress heatmap, sleeping particle overlay, chunk boundaries, emitter markers, stats text) |
 | `src/engine/camera.odin` | `Camera` struct (stores `ppm`, `logical_h`, follow parameters), `camera_world_to_screen`/`camera_world_to_screen_point` (world→screen coordinate conversion), dead-zone follow + boundary deceleration + clamp within level bounds |
 | `src/engine/window.odin` | SDL3 window/renderer init, VSync, logical presentation (aspect ratio from primary display) |
 | `src/engine/clock.odin` | Frame timing, fixed timestep accumulator, frame-rate cap via `sdl.Delay`, dt capped at 0.1s |
@@ -150,7 +150,7 @@ Physics uses a **separated-axis solver** (`player_physics_update` in `player_phy
 
 ### Level (`level.odin`)
 
-Levels loaded from BMP files (1 pixel = 1 tile, `TILE_PX :: 8` pixels = `TILE_SIZE = 0.5m`). `sdl.LoadBMP` reads the image; pixels are mapped to `Tile_Kind` via a color palette. Solid tiles are classified by **exposed face** into three arrays: `ground_colliders` (non-solid above, no floor slope above), `ceiling_colliders` (non-solid below, no ceiling slope below), `side_wall_colliders` (interior tiles exposed left/right, excluding slope-adjacent faces). Classification uses pre-reclassification tile kinds so slope fill areas don't generate false colliders. Each array is greedy row-merged into minimal `Collider_Rect`s. Platform tiles are merged separately into `platform_colliders`. Back wall colliders use an **inverted mask** approach: every tile defaults to back wall, with only `.Empty` tiles punched out as holes — this produces 1-2 large `back_wall_colliders` rects instead of many small ones. Slope tiles are merged diagonally via `level_merge_slopes` into `Collider_Slope` entries in `slope_colliders` — each diagonal run of same-kind tiles becomes one slope. Level defines its own dimensions; the camera scrolls within them.
+Levels loaded from BMP files (1 pixel = 1 tile, `LEVEL_TILE_PX :: 8` pixels = `TILE_SIZE = 0.5m`). `sdl.LoadBMP` reads the image; pixels are mapped to `Level_Tile_Kind` via a color palette. Solid tiles are classified by **exposed face** into three arrays: `ground_colliders` (non-solid above, no floor slope above), `ceiling_colliders` (non-solid below, no ceiling slope below), `side_wall_colliders` (interior tiles exposed left/right, excluding slope-adjacent faces). Classification uses pre-reclassification tile kinds so slope fill areas don't generate false colliders. Each array is greedy row-merged into minimal `Collider_Rect`s. Platform tiles are merged separately into `platform_colliders`. Back wall colliders use an **inverted mask** approach: every tile defaults to back wall, with only `.Empty` tiles punched out as holes — this produces 1-2 large `back_wall_colliders` rects instead of many small ones. Slope tiles are merged diagonally via `level_merge_slopes` into `Collider_Slope` entries in `slope_colliders` — each diagonal run of same-kind tiles becomes one slope. Level defines its own dimensions; the camera scrolls within them.
 
 Sand-related tiles are extracted during level load and reclassified: `Sand_Pile` (yellow `{255,255,0}`) → positions stored in `level.sand_piles`, tile becomes `.Back_Wall`. `Sand_Emitter` (orange `{255,128,0}`) → positions stored in `level.sand_emitters`, tile becomes `.Solid`. The `original_tiles` snapshot (pre-reclassification) and both dynamic arrays are consumed by `sand_init` and freed.
 
@@ -158,7 +158,7 @@ Sand-related tiles are extracted during level load and reclassified: `Sand_Pile`
 
 45° slope tiles in 4 variants: `Slope_Right` (floor /), `Slope_Left` (floor \), `Slope_Ceil_Left` (ceiling /), `Slope_Ceil_Right` (ceiling \). BMP palette: red `{255,0,0}`, blue `{0,0,255}`, dark red `{128,0,0}`, dark blue `{0,0,128}`.
 
-`collider_slope_surface_y(slope, world_x)` computes the surface height at any X within the tile. `player_resolve_slopes` (`player_physics.odin`) handles floor and ceiling slopes separately, called twice per frame: once after X move (lateral slope interactions) and once after Y move (final surface snap). Floor slopes (only when `vel.y <= 0`): snap player feet up to surface; grounded uses `2 * PLAYER_STEP_HEIGHT` snap distance, airborne uses `PLAYER_SLOPE_SNAP`. Ceiling slopes: push player down when head (`pos.y + PLAYER_SIZE`) penetrates the ceiling surface, zeroing upward velocity.
+`collider_slope_surface_y(slope, world_x)` computes the surface height at any X within the tile. `player_physics_resolve_slopes` (`player_physics.odin`) handles floor and ceiling slopes separately, called twice per frame: once after X move (lateral slope interactions) and once after Y move (final surface snap). Floor slopes (only when `vel.y <= 0`): snap player feet up to surface; grounded uses `2 * PLAYER_STEP_HEIGHT` snap distance, airborne uses `PLAYER_SLOPE_SNAP`. Ceiling slopes: push player down when head (`pos.y + PLAYER_SIZE`) penetrates the ceiling surface, zeroing upward velocity.
 
 Downhill following: snap-based — slope resolve snaps the player to the surface if slightly above (gap < snap distance), handling both downhill traversal and flat-to-slope transitions.
 
@@ -186,7 +186,7 @@ Cellular automaton sand simulation on a grid aligned to the level tile grid (1 c
 3. **Pressure** — counts contiguous sand cells directly above the player footprint (stops at solid/empty); applies `above_count * SAND_PRESSURE_FORCE` downward force.
 4. **Burial** — if displaced/total cell ratio exceeds `SAND_BURIAL_THRESHOLD`, applies extra `SAND_BURIAL_GRAVITY_MULT * GRAVITY` downward.
 
-**Rendering (`sand_render.odin`):** Camera-culled tile loop. Each sand cell is drawn as a filled `TILE_SIZE` rect with color = `SAND_COLOR` ± brightness offset from `color_variant` (0–3) × `SAND_COLOR_VARIATION`. Rendered after the player in `game_render` (sand on top).
+**Rendering (`sand_graphics.odin`):** Camera-culled tile loop. Each sand cell is drawn as a filled `TILE_SIZE` rect with color = `SAND_COLOR` ± brightness offset from `color_variant` (0–3) × `SAND_COLOR_VARIATION`. Rendered after the player in `game_render` (sand on top).
 
 **Level tile kinds for sand:** `Sand_Pile` (BMP yellow `{255,255,0}`) — pre-placed sand, tile becomes `.Back_Wall` in level grid. `Sand_Emitter` (BMP orange `{255,128,0}`) — continuous source, tile becomes `.Solid` in level grid.
 
@@ -205,7 +205,7 @@ Cellular automaton sand simulation on a grid aligned to the level tile grid (1 c
 
 ### Camera (`engine/camera.odin`)
 
-2D viewport that follows the player with a dead-zone system. Camera stores `ppm`, `logical_h`, and four follow parameters (`follow_speed_min`, `follow_speed_max`, `dead_zone`, `boundary_zone`). `camera_world_to_screen(cam, world_pos, world_size)` converts a world-space rect to an SDL screen rect (Y-flipped); `camera_world_to_screen_point(cam, world_pos)` converts a world point to screen pixel. Game-level `world_to_screen`/`world_to_screen_point` wrappers pass `&game.camera` for convenience.
+2D viewport that follows the player with a dead-zone system. Camera stores `ppm`, `logical_h`, and four follow parameters (`follow_speed_min`, `follow_speed_max`, `dead_zone`, `boundary_zone`). `camera_world_to_screen(cam, world_pos, world_size)` converts a world-space rect to an SDL screen rect (Y-flipped); `camera_world_to_screen_point(cam, world_pos)` converts a world point to screen pixel. Game-level `game_world_to_screen`/`game_world_to_screen_point` wrappers pass `&game.camera` for convenience.
 
 `camera_follow(cam, target, bounds_min, bounds_max, dt)` uses per-axis zone-based follow:
 1. **Dead zone**: player offset from camera center is normalized to half-viewport; a smoothstep ramp from `dead_zone` to `1.0` yields `t = 0` inside the dead zone and `t = 1` at viewport edge
@@ -213,7 +213,7 @@ Cellular automaton sand simulation on a grid aligned to the level tile grid (1 c
 3. **Boundary deceleration**: when the camera viewport edge is within `boundary_zone` of a level bound, speed is reduced toward `follow_speed_min` via another smoothstep
 4. **Exponential smoothing**: `offset * (1 - exp(-speed * dt))` for frame-rate independent follow
 
-`camera_clamp` remains as a hard safety clamp after the smooth follow (centers on axis if level is smaller than viewport). Camera params are synced from config via `config_post_apply` and hot-reload with F5. Camera snaps to player spawn on init (no smooth-in from origin).
+`camera_clamp` remains as a hard safety clamp after the smooth follow (centers on axis if level is smaller than viewport). Camera params are synced from config via `game_config_post_apply` and hot-reload with F5. Camera snaps to player spawn on init (no smooth-in from origin).
 
 ## Configuration (`assets/game.ini`)
 
@@ -231,8 +231,8 @@ INI sections: `[game]`, `[version]` (version stamp: `VERSION_NAME`, `VERSION_DAT
 
 - **All physics in meters.** `PPM = 16` (pixels per meter, power of 2 for exact f32 math) converts to pixel space.
 - Physics constants are defined in pixel-intuitive values divided by PPM in `assets/game.ini` (e.g. `PLAYER_JUMP_FORCE = 700 / PPM`), evaluated at load time.
-- Y-axis points **up** in game logic. Rendering flips via `world_to_screen(world_pos, world_size)` (camera-relative).
-- `TILE_PX :: 8`, `TILE_SIZE = 8 / PPM` (0.5m) — each BMP pixel = one tile = 0.5m.
+- Y-axis points **up** in game logic. Rendering flips via `game_world_to_screen(world_pos, world_size)` (camera-relative).
+- `LEVEL_TILE_PX :: 8`, `TILE_SIZE = 8 / PPM` (0.5m) — each BMP pixel = one tile = 0.5m.
 - `LOGICAL_H = 480`, logical width computed from display aspect ratio at runtime (`window_compute_logical_w`).
 - `WINDOW_SCALE = 3` — integer multiplier on logical resolution.
 - `FPS = 60`, `FIXED_STEPS = 4` — fixed timestep = `1 / (FIXED_STEPS * FPS)`.
@@ -255,7 +255,7 @@ INI sections: `[game]`, `[version]` (version stamp: `VERSION_NAME`, `VERSION_DAT
 | Drop through | Down + jump on platform → nudge down and enter `Dropping` state |
 | Gravity | `GRAVITY` with 3× multiplier when ascending with jump released (variable jump height / short hop). Grounded state zeroes Y velocity each frame to stay flush; slope snap keeps player on surface going downhill |
 | Step height | `PLAYER_STEP_HEIGHT` — tolerance to step over small obstacles and slope tops; also used for wall collision filtering and slope snap distance when grounded |
-| Impact bounce | Damped cosine spring deformation on ground/wall/platform impact. `PLAYER_IMPACT_SCALE`, `PLAYER_IMPACT_FREQ`, `PLAYER_IMPACT_DECAY`, `PLAYER_IMPACT_THRESHOLD`. Purely visual — triggered by `player_trigger_impact`, "stronger wins" policy prevents small bumps from resetting ongoing bounces |
+| Impact bounce | Damped cosine spring deformation on ground/wall/platform impact. `PLAYER_IMPACT_SCALE`, `PLAYER_IMPACT_FREQ`, `PLAYER_IMPACT_DECAY`, `PLAYER_IMPACT_THRESHOLD`. Purely visual — triggered by `player_graphics_trigger_impact`, "stronger wins" policy prevents small bumps from resetting ongoing bounces |
 
 ## Debug Overlays
 
@@ -303,8 +303,43 @@ Constants prefixed `DEBUG_COLOR_*` (colors) and `DEBUG_*` (sizes/scales). Sand d
 
 `Input_Action` enum defined in `src/game/input.odin`: `MOVE_UP`, `MOVE_DOWN`, `MOVE_LEFT`, `MOVE_RIGHT`, `JUMP`, `DASH`, `WALL_RUN`, `SLIDE`, `DEBUG`, `RELOAD`, `QUIT`.
 
-Engine `Input($Action)` is generic (parametric on action enum, like the FSM pattern). `Game_State.input` is `engine.Input(Input_Action)`. Bindings are data-driven via `[input]` section in `assets/game.ini` — keyboard keys as SDL scancode names (`INPUT_KB_*`), gamepad buttons as SDL button names (`INPUT_GP_*`). `input_binding_apply` reads config strings, converts via `sdl.GetScancodeFromName`/`sdl.GetGamepadButtonFromString`, falls back to `INPUT_DEFAULT_BINDINGS` on invalid names. Bindings hot-reload with F5 (`config_reload_all` calls `config_post_apply`, which calls `input_binding_apply` and syncs camera params).
+Engine `Input($Action)` is generic (parametric on action enum, like the FSM pattern). `Game_State.input` is `engine.Input(Input_Action)`. Bindings are data-driven via `[input]` section in `assets/game.ini` — keyboard keys as SDL scancode names (`INPUT_KB_*`), gamepad buttons as SDL button names (`INPUT_GP_*`). `input_binding_apply` reads config strings, converts via `sdl.GetScancodeFromName`/`sdl.GetGamepadButtonFromString`, falls back to `INPUT_DEFAULT_BINDINGS` on invalid names. Bindings hot-reload with F5 (`config_reload_all` calls `game_config_post_apply`, which calls `input_binding_apply` and syncs camera params).
 
 Default keyboard: WASD move, Space jump, L dash, LShift wall run, LCtrl slide, F3 debug, F5 reload config, Esc quit.
 Default gamepad: left stick / dpad move, South(A) jump, North(Y) dash, RB wall run, LB slide, Back debug, Start quit.
 Input auto-switches between keyboard/gamepad based on last device event. Release events always clear `is_down` regardless of active input type. Axis input is normalized for diagonals. Gamepad axis deadzone: `INPUT_AXIS_DEADZONE` (0.1, config-loaded).
+
+## Odin Coding Style
+
+### Naming — File Prefix
+All symbols (functions, types, enums, structs, constants) must be prefixed with the file name — including `@(private = "file")` items. Examples: `player.odin` → `player_init`, `Player_State`; `sand_sim.odin` → `sand_update_cell`.
+
+### Naming — Case
+- Functions: `snake_case` (`player_sync_collider`)
+- Types/Structs/Enums: `Pascal_Snake_Case` (`Sand_Material`, `Collider_Rect`)
+- Constants: `UPPER_SNAKE_CASE` (`PLAYER_RUN_SPEED`)
+- Variables: `snake_case`
+
+### Naming — Length
+Names should be clear but not verbose — no unnecessary words. Use well-known abbreviations naturally (e.g. `pos`, `vel`, `dt`, `ctx`, `dir`, `idx`) but don't invent ad-hoc shortcuts. If a name reads clearly without abbreviation, don't abbreviate it.
+
+### Function Calls — Keep Single Line
+Proactively keep function calls on one line so `odinfmt` doesn't wrap them. Introduce intermediate variables to shorten argument lists rather than accepting multi-line calls. Trailing comma on last argument when multi-line is unavoidable.
+
+### Function Length — Use Judgment
+Split into sub-functions when logic has clearly separable steps. No hard line limit — but prefer shorter, focused functions. Mark local helpers `@(private = "file")`.
+
+### Early Returns
+Use guard clauses to exit early for edge cases — reduces nesting.
+
+### Comments
+Doc comments only when logic is non-obvious (complex algorithms, FSM state handlers with transition tables). Inline comments for non-obvious math, coordinate flips, tricky logic. No redundant comments on self-explanatory code.
+
+### Imports
+Order: local (`"../engine"`) → core (`"core:math"`) → vendor (`"vendor:sdl3"`).
+
+### Spacing
+Single blank line between top-level declarations. No blank lines between related struct fields or enum variants.
+
+### Scope
+`@(private = "file")` for file-local helpers. Keep helpers close to their caller in the same file.
