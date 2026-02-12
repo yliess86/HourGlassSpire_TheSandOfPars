@@ -166,11 +166,11 @@ Downhill: snap-based — resolve snaps player to surface if gap < snap distance.
 
 ### Sand System
 
-CA sand/water sim on level-aligned grid (1 cell = 1 tile). `Sand_World` stores flat `[]Sand_Cell` (y*w+x, y=0=bottom) + chunks + emitters.
+CA sand/water sim on level-aligned grid (1 cell = 1 tile). `Sand_World` stores flat `[]Sand_Cell` (y*w+x, y=0=bottom) + parallel `[]Sand_Slope_Kind` (immutable structural data from level) + chunks + emitters.
 
 **Materials:** Empty, Solid (level), Sand (falls), Water (flows horizontally, buoyant), Platform (one-way).
 
-**Sim:** Every `SAND_SIM_INTERVAL` fixed steps. Bottom-to-top, alternating L/R parity. Sand: down → diagonal; sinks through water. Water: down → diagonal → horizontal (up to `WATER_FLOW_DISTANCE` cells). Sleep after `SAND_SLEEP_THRESHOLD` idle steps; movement wakes 8 neighbors. Parity flag prevents double-moves.
+**Sim:** Every `SAND_SIM_INTERVAL` fixed steps. Bottom-to-top, alternating L/R parity. Sand: down → diagonal; sinks through water. On slope cells, sand/water slides only in the slope's downhill diagonal direction. Water: down → diagonal → horizontal (up to `WATER_FLOW_DISTANCE` cells). Sleep after `SAND_SLEEP_THRESHOLD` idle steps; movement wakes 8 neighbors. Parity flag prevents double-moves.
 
 **Chunks:** 32x32 partitions. Track active_count, dirty/needs_sim. Dirty propagates to 8-neighbors. Skip chunks with needs_sim=false.
 
@@ -183,7 +183,7 @@ CA sand/water sim on level-aligned grid (1 cell = 1 tile). `Sand_World` stores f
 4. **Burial** — sand ratio > threshold → extra gravity. Sand only
 5. **Buoyancy** — water immersion > threshold → upward force
 
-**Rendering:** Sand = opaque rects, color variants via `SAND_COLOR_VARIATION`. Water = alpha-blended, depth-darkened gradient. Rendered after player.
+**Rendering:** Sand = opaque rects (triangles on slope cells), color variants via `SAND_COLOR_VARIATION`. Water = alpha-blended, depth-darkened gradient (triangles on slopes). Rendered after player.
 
 ### Camera
 

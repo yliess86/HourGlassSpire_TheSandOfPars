@@ -16,15 +16,21 @@ sand_graphics_render :: proc(sand: ^Sand_World) {
 	// Render sand cells (opaque)
 	for y in y0 ..< y1 {
 		for x in x0 ..< x1 {
-			cell := sand.cells[y * sand.width + x]
+			idx := y * sand.width + x
+			cell := sand.cells[idx]
 			if cell.material != .Sand do continue
 
 			color := sand_graphics_sand_color(cell)
-			world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
-			world_size := [2]f32{TILE_SIZE, TILE_SIZE}
-			rect := game_world_to_screen(world_pos, world_size)
-			sdl.SetRenderDrawColor(game.win.renderer, color.r, color.g, color.b, color.a)
-			sdl.RenderFillRect(game.win.renderer, &rect)
+			slope := sand.slopes[idx]
+			if slope != .None {
+				sand_graphics_slope_tri(x, y, slope, color)
+			} else {
+				world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
+				world_size := [2]f32{TILE_SIZE, TILE_SIZE}
+				rect := game_world_to_screen(world_pos, world_size)
+				sdl.SetRenderDrawColor(game.win.renderer, color.r, color.g, color.b, color.a)
+				sdl.RenderFillRect(game.win.renderer, &rect)
+			}
 		}
 	}
 
@@ -35,7 +41,12 @@ sand_graphics_render :: proc(sand: ^Sand_World) {
 		// Pre-scan below visible area to find initial ground distance
 		dist := 0
 		for y := y0 - 1; y >= max(0, y0 - depth_max); y -= 1 {
-			cell := sand.cells[y * sand.width + x]
+			idx := y * sand.width + x
+			cell := sand.cells[idx]
+			if sand.slopes[idx] != .None {
+				if cell.material == .Water do dist = 1
+				break
+			}
 			if cell.material == .Solid || cell.material == .Platform {
 				dist = 0
 				break
@@ -49,8 +60,18 @@ sand_graphics_render :: proc(sand: ^Sand_World) {
 
 		// Render visible cells bottom-to-top
 		for y in y0 ..< y1 {
-			cell := sand.cells[y * sand.width + x]
-			if cell.material == .Solid || cell.material == .Platform {
+			idx := y * sand.width + x
+			cell := sand.cells[idx]
+			slope := sand.slopes[idx]
+			if slope != .None {
+				if cell.material == .Water {
+					dist = 1
+					color := sand_graphics_water_color(dist)
+					sand_graphics_slope_tri(x, y, slope, color)
+				} else {
+					dist = 0
+				}
+			} else if cell.material == .Solid || cell.material == .Platform {
 				dist = 0
 			} else if cell.material == .Water {
 				dist += 1
@@ -76,6 +97,42 @@ sand_graphics_sand_color :: proc(cell: Sand_Cell) -> [4]u8 {
 		u8(math.clamp(i16(SAND_COLOR.b) + offset, 0, 255)),
 		SAND_COLOR.a,
 	}
+}
+
+// Render the open triangle of a slope cell with the given color
+@(private = "file")
+sand_graphics_slope_tri :: proc(x, y: int, slope: Sand_Slope_Kind, color: [4]u8) {
+	wx := f32(x) * TILE_SIZE
+	wy := f32(y) * TILE_SIZE
+
+	v0, v1, v2: [2]f32
+	if slope == .Right {
+		// / open triangle: BL → TL → TR
+		v0 = {wx, wy}
+		v1 = {wx, wy + TILE_SIZE}
+		v2 = {wx + TILE_SIZE, wy + TILE_SIZE}
+	} else {
+		// \ open triangle: TL → TR → BR
+		v0 = {wx, wy + TILE_SIZE}
+		v1 = {wx + TILE_SIZE, wy + TILE_SIZE}
+		v2 = {wx + TILE_SIZE, wy}
+	}
+
+	sp0 := game_world_to_screen_point(v0)
+	sp1 := game_world_to_screen_point(v1)
+	sp2 := game_world_to_screen_point(v2)
+	fc := sdl.FColor {
+		f32(color.r) / 255,
+		f32(color.g) / 255,
+		f32(color.b) / 255,
+		f32(color.a) / 255,
+	}
+	verts := [3]sdl.Vertex {
+		{position = sdl.FPoint(sp0), color = fc, tex_coord = {0, 0}},
+		{position = sdl.FPoint(sp1), color = fc, tex_coord = {0, 0}},
+		{position = sdl.FPoint(sp2), color = fc, tex_coord = {0, 0}},
+	}
+	sdl.RenderGeometry(game.win.renderer, nil, raw_data(&verts), 3, nil, 0)
 }
 
 @(private = "file")

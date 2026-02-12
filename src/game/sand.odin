@@ -8,6 +8,12 @@ Sand_Material :: enum u8 {
 	Platform, // one-way: blocks sand from above, sand never moves up so pass-through is implicit
 }
 
+Sand_Slope_Kind :: enum u8 {
+	None,
+	Right, // floor / — solid bottom-right, open top-left
+	Left, // floor \ — solid bottom-left, open top-right
+}
+
 Sand_Cell :: struct {
 	material:      Sand_Material, // 1 byte
 	sleep_counter: u8, // frames without movement; sleeps at threshold
@@ -24,6 +30,7 @@ Sand_Emitter :: struct {
 Sand_World :: struct {
 	width, height:      int, // grid dimensions (= level.width, level.height)
 	cells:              []Sand_Cell, // flat [y * width + x], y=0 = bottom
+	slopes:             []Sand_Slope_Kind, // parallel to cells; immutable structural data from level
 
 	// Chunks
 	chunks_w, chunks_h: int,
@@ -60,28 +67,43 @@ sand_in_bounds :: proc(sand: ^Sand_World, x, y: int) -> bool {
 	return x >= 0 && x < sand.width && y >= 0 && y < sand.height
 }
 
+sand_get_slope :: proc(sand: ^Sand_World, x, y: int) -> Sand_Slope_Kind {
+	if x < 0 || x >= sand.width || y < 0 || y >= sand.height do return .None
+	return sand.slopes[y * sand.width + x]
+}
+
 sand_init :: proc(sand: ^Sand_World, level: ^Level) {
 	sand.width = level.width
 	sand.height = level.height
-	sand.cells = make([]Sand_Cell, sand.width * sand.height)
-	sand.step_counter = 0
+	n := sand.width * sand.height
+	sand.cells = make([]Sand_Cell, n)
+	sand.slopes = make([]Sand_Slope_Kind, n)
+	sand.step_counter = 1
 	sand.sub_step_acc = 0
 
 	// Initialize chunks
 	sand_chunk_init(sand)
 
-	// Populate grid from level tiles: solid tiles become Solid cells
+	// Populate grid from level tiles. Surface floor slopes (post-reclassification)
+	// become slope cells with Empty material; everything else solid/slope → Solid.
 	for y in 0 ..< sand.height {
 		for x in 0 ..< sand.width {
-			kind := level.original_tiles[y * sand.width + x]
-			if kind == .Solid ||
-			   kind == .Slope_Right ||
-			   kind == .Slope_Left ||
-			   kind == .Slope_Ceil_Right ||
-			   kind == .Slope_Ceil_Left {
-				sand.cells[y * sand.width + x].material = .Solid
-			} else if kind == .Platform {
-				sand.cells[y * sand.width + x].material = .Platform
+			idx := y * sand.width + x
+			tile := level.tiles[idx]
+			orig := level.original_tiles[idx]
+
+			if tile == .Slope_Right {
+				sand.slopes[idx] = .Right
+			} else if tile == .Slope_Left {
+				sand.slopes[idx] = .Left
+			} else if orig == .Solid ||
+			   orig == .Slope_Right ||
+			   orig == .Slope_Left ||
+			   orig == .Slope_Ceil_Right ||
+			   orig == .Slope_Ceil_Left {
+				sand.cells[idx].material = .Solid
+			} else if orig == .Platform {
+				sand.cells[idx].material = .Platform
 			}
 		}
 	}
@@ -117,6 +139,7 @@ sand_init :: proc(sand: ^Sand_World, level: ^Level) {
 
 sand_destroy :: proc(sand: ^Sand_World) {
 	delete(sand.cells)
+	delete(sand.slopes)
 	delete(sand.chunks)
 	delete(sand.emitters)
 	delete(sand.eroded_platforms)
