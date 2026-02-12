@@ -53,14 +53,12 @@ sand_update_cell :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
 	moved := false
 	slope := sand.slopes[idx]
 
-	if slope == .Right {
-		// / slope: slide diagonal down-left only
-		moved = sand_try_move(sand, x, y, x - 1, y - 1, parity)
-	} else if slope == .Left {
-		// \ slope: slide diagonal down-right only
-		moved = sand_try_move(sand, x, y, x + 1, y - 1, parity)
-	} else {
-		// Normal: down, then diagonal
+	// / slope: slide diagonal down-left only
+	// \ slope: slide diagonal down-right only
+	// Normal: down, then diagonal
+	if slope == .Right do moved = sand_try_move(sand, x, y, x - 1, y - 1, parity)
+	else if slope == .Left do moved = sand_try_move(sand, x, y, x + 1, y - 1, parity)
+	else {
 		if sand_try_move(sand, x, y, x, y - 1, parity) do moved = true
 		else {
 			first_dx: int = (rand.int31() & 1) == 0 ? -1 : 1
@@ -179,16 +177,16 @@ sand_update_cell_water :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
 	moved := false
 	slope := sand.slopes[idx]
 
+	// / slope: diagonal down-left, then flow left
+	// \ slope: diagonal down-right, then flow right
+	// Normal: down → diagonal → horizontal flow
 	if slope == .Right {
-		// / slope: diagonal down-left, then flow left
 		if sand_try_move_water(sand, x, y, x - 1, y - 1, parity) do moved = true
 		else if sand_try_flow_water(sand, x, y, -1, parity) do moved = true
 	} else if slope == .Left {
-		// \ slope: diagonal down-right, then flow right
 		if sand_try_move_water(sand, x, y, x + 1, y - 1, parity) do moved = true
 		else if sand_try_flow_water(sand, x, y, 1, parity) do moved = true
 	} else {
-		// Normal: down → diagonal → horizontal flow
 		if sand_try_move_water(sand, x, y, x, y - 1, parity) do moved = true
 		else {
 			first_dx: int = (rand.int31() & 1) == 0 ? -1 : 1

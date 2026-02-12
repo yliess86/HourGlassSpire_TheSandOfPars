@@ -121,9 +121,7 @@ level_load :: proc(path: cstring) -> (level: Level, ok: bool) {
 				nx, ny := spawn_x + dx, spawn_y + dy
 				if nx < 0 || nx >= w || ny < 0 || ny >= h do continue
 				nk := level.tiles[ny * w + nx]
-				if nk != .Empty && nk != .Spawn {
-					counts[nk] += 1
-				}
+				if nk != .Empty && nk != .Spawn do counts[nk] += 1
 			}
 		}
 		best: Level_Tile_Kind
@@ -134,9 +132,7 @@ level_load :: proc(path: cstring) -> (level: Level, ok: bool) {
 				best_count = counts[kind]
 			}
 		}
-		if best_count > 0 {
-			level.tiles[spawn_y * w + spawn_x] = best
-		}
+		if best_count > 0 do level.tiles[spawn_y * w + spawn_x] = best
 	}
 
 	// Merge tiles into collider rects
@@ -270,9 +266,7 @@ level_merge_colliders :: proc(level: ^Level) {
 					exposed_right = false
 				}
 
-				if exposed_left || exposed_right {
-					side_wall_mask[idx] = true
-				}
+				if exposed_left || exposed_right do side_wall_mask[idx] = true
 			}
 		}
 	}
@@ -310,9 +304,7 @@ level_merge_colliders :: proc(level: ^Level) {
 				continue
 			}
 			x0 := x
-			for x < level.width && level.tiles[y * level.width + x] == kind {
-				x += 1
-			}
+			for x < level.width && level.tiles[y * level.width + x] == kind do x += 1
 			append(&row_runs, Level_Merge_Run{kind = kind, x0 = x0, x1 = x, y0 = y, y1 = y + 1})
 		}
 
@@ -338,21 +330,13 @@ level_merge_colliders :: proc(level: ^Level) {
 			if active[i].y1 <= y {
 				level_emit_run(level, active[i])
 				ordered_remove(&active, i)
-			} else {
-				i += 1
-			}
+			} else do i += 1
 		}
 
-		for rr, ri in row_runs {
-			if !matched[ri] {
-				append(&active, rr)
-			}
-		}
+		for rr, ri in row_runs do if !matched[ri] do append(&active, rr)
 	}
 
-	for ar in active {
-		level_emit_run(level, ar)
-	}
+	for ar in active do level_emit_run(level, ar)
 
 	// Merge slope tiles into diagonal runs
 	level_merge_slopes(level)
@@ -393,9 +377,7 @@ level_merge_mask :: proc(
 				continue
 			}
 			x0 := x
-			for x < width && mask[y * width + x] {
-				x += 1
-			}
+			for x < width && mask[y * width + x] do x += 1
 			append(&row_runs, Level_Merge_Run{kind = .Solid, x0 = x0, x1 = x, y0 = y, y1 = y + 1})
 		}
 
@@ -417,21 +399,13 @@ level_merge_mask :: proc(
 			if active[i].y1 <= y {
 				level_emit_rect(target, active[i])
 				ordered_remove(&active, i)
-			} else {
-				i += 1
-			}
+			} else do i += 1
 		}
 
-		for rr, ri in row_runs {
-			if !matched[ri] {
-				append(&active, rr)
-			}
-		}
+		for rr, ri in row_runs do if !matched[ri] do append(&active, rr)
 	}
 
-	for ar in active {
-		level_emit_rect(target, ar)
-	}
+	for ar in active do level_emit_rect(target, ar)
 }
 
 @(private = "file")
@@ -481,19 +455,14 @@ level_merge_slopes :: proc(level: ^Level) {
 				prev_y = y + 1
 			}
 			if prev_x >= 0 && prev_y >= 0 && prev_y < level.height {
-				if level.tiles[prev_y * level.width + prev_x] == kind {
-					continue // not the start of a run
-				}
+				if level.tiles[prev_y * level.width + prev_x] == kind do continue // not the start of a run
 			}
 
 			// This is the start of a diagonal run — trace forward
 			run := 1
 			dx, dy: int
-			if kind == .Slope_Right || kind == .Slope_Ceil_Left {
-				dx = 1; dy = 1
-			} else {
-				dx = 1; dy = -1
-			}
+			if kind == .Slope_Right ||
+			   kind == .Slope_Ceil_Left {dx = 1; dy = 1} else {dx = 1; dy = -1}
 			nx, ny := x + dx, y + dy
 			for nx < level.width && ny >= 0 && ny < level.height {
 				if level.tiles[ny * level.width + nx] != kind do break
@@ -503,16 +472,13 @@ level_merge_slopes :: proc(level: ^Level) {
 			}
 
 			// Compute merged slope
+			// / — start tile is bottom-left of the run
+			// \ — start tile is top-left; bottom is (run-1) tiles lower
 			span := f32(run) * TILE_SIZE
 			base_x := f32(x) * TILE_SIZE
 			base_y: f32
-			if kind == .Slope_Right || kind == .Slope_Ceil_Left {
-				// / — start tile is bottom-left of the run
-				base_y = f32(y) * TILE_SIZE
-			} else {
-				// \ — start tile is top-left; bottom is (run-1) tiles lower
-				base_y = f32(y - run + 1) * TILE_SIZE
-			}
+			if kind == .Slope_Right || kind == .Slope_Ceil_Left do base_y = f32(y) * TILE_SIZE
+			else do base_y = f32(y - run + 1) * TILE_SIZE
 
 			append(
 				&level.slope_colliders,

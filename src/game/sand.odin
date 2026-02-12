@@ -92,19 +92,11 @@ sand_init :: proc(sand: ^Sand_World, level: ^Level) {
 			tile := level.tiles[idx]
 			orig := level.original_tiles[idx]
 
-			if tile == .Slope_Right {
-				sand.slopes[idx] = .Right
-			} else if tile == .Slope_Left {
-				sand.slopes[idx] = .Left
-			} else if orig == .Solid ||
-			   orig == .Slope_Right ||
-			   orig == .Slope_Left ||
-			   orig == .Slope_Ceil_Right ||
-			   orig == .Slope_Ceil_Left {
+			if tile == .Slope_Right do sand.slopes[idx] = .Right
+			else if tile == .Slope_Left do sand.slopes[idx] = .Left
+			else if orig == .Solid || orig == .Slope_Right || orig == .Slope_Left || orig == .Slope_Ceil_Right || orig == .Slope_Ceil_Left {
 				sand.cells[idx].material = .Solid
-			} else if orig == .Platform {
-				sand.cells[idx].material = .Platform
-			}
+			} else if orig == .Platform do sand.cells[idx].material = .Platform
 		}
 	}
 

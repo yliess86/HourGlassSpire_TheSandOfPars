@@ -22,9 +22,8 @@ sand_graphics_render :: proc(sand: ^Sand_World) {
 
 			color := sand_graphics_sand_color(cell)
 			slope := sand.slopes[idx]
-			if slope != .None {
-				sand_graphics_slope_tri(x, y, slope, color)
-			} else {
+			if slope != .None do sand_graphics_slope_tri(x, y, slope, color)
+			else {
 				world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
 				world_size := [2]f32{TILE_SIZE, TILE_SIZE}
 				rect := game_world_to_screen(world_pos, world_size)
@@ -51,9 +50,7 @@ sand_graphics_render :: proc(sand: ^Sand_World) {
 			if sand.cells[idx].material == .Water {
 				dist += 1
 				above_is_water = true
-			} else {
-				break
-			}
+			} else do break
 		}
 
 		// Render visible cells top-to-bottom (dist = distance from surface)
