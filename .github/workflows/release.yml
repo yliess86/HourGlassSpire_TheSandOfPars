@@ -44,9 +44,12 @@ jobs:
           build-type: Release
           install-linux-dependencies: true
 
-      - name: Copy SDL3 lib for Linux dist
+      - name: Install SDL3 lib for Linux
         if: runner.os == 'Linux'
         run: |
+          sudo cp ${{ steps.sdl.outputs.prefix }}/lib/libSDL3.so* /usr/local/lib/
+          sudo cp -r ${{ steps.sdl.outputs.prefix }}/include/SDL3 /usr/local/include/
+          sudo ldconfig
           mkdir -p libs/linux
           cp ${{ steps.sdl.outputs.prefix }}/lib/libSDL3.so.0 libs/linux/
 
