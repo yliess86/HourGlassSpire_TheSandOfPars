@@ -32,29 +32,23 @@ jobs:
       - name: Install Odin
         uses: laytan/setup-odin@v2
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           release: dev-2026-02
 
       - name: Setup SDL3 for Linux
         if: runner.os == 'Linux'
+        id: sdl
+        uses: libsdl-org/setup-sdl@main
+        with:
+          version: 3.4.0
+          build-type: Release
+          install-linux-dependencies: true
+
+      - name: Copy SDL3 lib for Linux dist
+        if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libx11-dev libxext-dev libxcursor-dev libxi-dev libxrandr-dev \
-            libxfixes-dev libxss-dev libxtst-dev libxkbcommon-dev \
-            libwayland-dev libdecor-0-dev \
-            libegl-dev libgl-dev libdrm-dev libgbm-dev \
-            libpulse-dev libasound2-dev libpipewire-0.3-dev \
-            libudev-dev libdbus-1-dev
-          curl -L -o SDL3.tar.gz https://github.com/libsdl-org/SDL/releases/download/release-3.4.0/SDL3-3.4.0.tar.gz
-          tar xzf SDL3.tar.gz
-          cd SDL3-3.4.0
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build -j$(nproc)
-          sudo cmake --install build
-          sudo ldconfig
-          cd ..
           mkdir -p libs/linux
-          cp /usr/local/lib/libSDL3.so.0 libs/linux/
+          cp ${{ steps.sdl.outputs.prefix }}/lib/libSDL3.so.0 libs/linux/
 
       - name: Setup SDL3 for macOS
         if: runner.os == 'macOS'
