@@ -4,9 +4,10 @@ import engine "../engine"
 import "core:math"
 
 player_apply_movement :: proc(player: ^Player, dt: f32) {
+	sand_move_factor: f32 = 1.0 - player.sensor.sand_immersion * SAND_MOVE_PENALTY
 	player.transform.vel.x = math.lerp(
 		player.transform.vel.x,
-		game.input.axis.x * PLAYER_RUN_SPEED,
+		game.input.axis.x * PLAYER_RUN_SPEED * max(sand_move_factor, 0),
 		PLAYER_MOVE_LERP_SPEED * dt,
 	)
 	gravity_mult: f32 =

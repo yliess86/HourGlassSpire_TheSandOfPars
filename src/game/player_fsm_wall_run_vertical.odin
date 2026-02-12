@@ -32,7 +32,8 @@ player_fsm_wall_run_vertical_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Play
 
 	speed := PLAYER_WALL_RUN_VERTICAL_SPEED
 	decay := PLAYER_WALL_RUN_VERTICAL_DECAY
-	ctx.transform.vel.y = speed * math.exp(-decay * ctx.abilities.wall_run_timer)
+	sand_factor := max(1.0 - ctx.sensor.sand_immersion * SAND_WALL_RUN_PENALTY, 0)
+	ctx.transform.vel.y = speed * sand_factor * math.exp(-decay * ctx.abilities.wall_run_timer)
 	ctx.transform.vel.x = 0
 
 	if ctx.sensor.on_side_wall {

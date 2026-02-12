@@ -11,12 +11,13 @@ Tile_Kind :: enum u8 {
 	Solid,
 	Platform,
 	Back_Wall,
-	Window,
 	Spawn,
 	Slope_Right, // floor, rises left→right /
 	Slope_Left, // floor, rises right→left \
 	Slope_Ceil_Right, // ceiling, solid top-right \
 	Slope_Ceil_Left, // ceiling, solid top-left /
+	Sand_Pile, // pre-placed sand -> Sand_Material.Sand in sand world, .Empty in level
+	Sand_Emitter, // continuous source -> emitter in sand world, .Solid in level
 }
 
 // BMP palette: editor color → tile kind
@@ -26,12 +27,13 @@ PALETTE :: [Tile_Kind][3]u8 {
 	.Solid            = {255, 255, 255},
 	.Platform         = {0, 255, 0},
 	.Back_Wall        = {127, 127, 127},
-	.Window           = {255, 255, 0},
 	.Spawn            = {255, 0, 255},
 	.Slope_Right      = {255, 0, 0},
 	.Slope_Left       = {0, 0, 255},
 	.Slope_Ceil_Right = {128, 0, 0},
 	.Slope_Ceil_Left  = {0, 0, 128},
+	.Sand_Pile        = {255, 255, 0},
+	.Sand_Emitter     = {255, 128, 0},
 }
 
 Level :: struct {
@@ -45,6 +47,11 @@ Level :: struct {
 	platform_colliders:  [dynamic]engine.Collider_Rect,
 	back_wall_colliders: [dynamic]engine.Collider_Rect,
 	slope_colliders:     [dynamic]engine.Collider_Slope,
+
+	// Temp fields: populated during level_load, consumed by sand_init
+	original_tiles:      []Tile_Kind, // pre-reclassification, consumed by sand_init
+	sand_piles:          [dynamic][2]int,
+	sand_emitters:       [dynamic][2]int,
 }
 
 level_load :: proc(path: cstring) -> (level: Level, ok: bool) {
@@ -100,6 +107,12 @@ level_load :: proc(path: cstring) -> (level: Level, ok: bool) {
 				spawn_y = world_y
 				has_spawn = true
 				level.tiles[idx] = .Empty
+			} else if kind == .Sand_Pile {
+				append(&level.sand_piles, [2]int{x, world_y})
+				level.tiles[idx] = .Back_Wall
+			} else if kind == .Sand_Emitter {
+				append(&level.sand_emitters, [2]int{x, world_y})
+				level.tiles[idx] = .Solid
 			}
 		}
 	}
@@ -170,9 +183,8 @@ level_merge_colliders :: proc(level: ^Level) {
 	// Save original tile kinds before reclassification so the
 	// classification pass can detect slope neighbors that get cleared.
 	n := level.width * level.height
-	original_tiles := make([]Tile_Kind, n)
-	defer delete(original_tiles)
-	copy(original_tiles, level.tiles)
+	level.original_tiles = make([]Tile_Kind, n)
+	copy(level.original_tiles, level.tiles)
 
 	// Reclassify interior slope tiles to .Empty so only surface
 	// (hypotenuse) tiles remain as slopes for diagonal merging.
@@ -214,11 +226,12 @@ level_merge_colliders :: proc(level: ^Level) {
 
 			// Floor slope above → slope handles the surface, no ground needed
 			above_kind :=
-				original_tiles[(y + 1) * level.width + x] if y < level.height - 1 else Tile_Kind.Empty
+				level.original_tiles[(y + 1) * level.width + x] if y < level.height - 1 else Tile_Kind.Empty
 			floor_slope_above := above_kind == .Slope_Right || above_kind == .Slope_Left
 
 			// Ceiling slope below → slope handles the surface, no ceiling needed
-			below_kind := original_tiles[(y - 1) * level.width + x] if y > 0 else Tile_Kind.Empty
+			below_kind :=
+				level.original_tiles[(y - 1) * level.width + x] if y > 0 else Tile_Kind.Empty
 			ceil_slope_below := below_kind == .Slope_Ceil_Right || below_kind == .Slope_Ceil_Left
 
 			is_ground := !above_solid && !floor_slope_above
@@ -238,12 +251,12 @@ level_merge_colliders :: proc(level: ^Level) {
 				// Check original tiles for slope neighbors (reclassified ones are .Empty now)
 				if exposed_left &&
 				   x > 0 &&
-				   slope_is_kind(original_tiles[y * level.width + (x - 1)]) {
+				   slope_is_kind(level.original_tiles[y * level.width + (x - 1)]) {
 					exposed_left = false
 				}
 				if exposed_right &&
 				   x < level.width - 1 &&
-				   slope_is_kind(original_tiles[y * level.width + (x + 1)]) {
+				   slope_is_kind(level.original_tiles[y * level.width + (x + 1)]) {
 					exposed_right = false
 				}
 
@@ -258,13 +271,13 @@ level_merge_colliders :: proc(level: ^Level) {
 	level_merge_mask(level.width, level.height, ceiling_mask, &level.ceiling_colliders)
 	level_merge_mask(level.width, level.height, side_wall_mask, &level.side_wall_colliders)
 
-	// Inverted back wall mask: everything is back wall except Window tiles
+	// Inverted back wall mask: everything is back wall except Empty tiles
 	back_wall_mask := make([]bool, n)
 	defer delete(back_wall_mask)
 	for i in 0 ..< n {back_wall_mask[i] = true}
 	for y in 0 ..< level.height {
 		for x in 0 ..< level.width {
-			if level.tiles[y * level.width + x] == .Window {
+			if level.original_tiles[y * level.width + x] == .Empty {
 				back_wall_mask[y * level.width + x] = false
 			}
 		}
@@ -505,19 +518,12 @@ level_merge_slopes :: proc(level: ^Level) {
 }
 
 level_render :: proc(level: ^Level) {
-	// Backdrop tiles first (Behind_Wall, Window)
+	// Backdrop tiles first (Back_Wall)
 	for y in 0 ..< level.height {
 		for x in 0 ..< level.width {
 			kind := level.tiles[y * level.width + x]
-			color: [4]u8
-			#partial switch kind {
-			case .Back_Wall:
-				color = LEVEL_COLOR_TILE_BACK_WALL
-			case .Window:
-				color = LEVEL_COLOR_TILE_WINDOW
-			case:
-				continue
-			}
+			if kind != .Back_Wall do continue
+			color := LEVEL_COLOR_TILE_BACK_WALL
 			world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
 			world_size := [2]f32{TILE_SIZE, TILE_SIZE}
 			rect := world_to_screen(world_pos, world_size)

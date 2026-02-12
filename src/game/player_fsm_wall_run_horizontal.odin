@@ -24,9 +24,11 @@ player_fsm_wall_run_horizontal_enter :: proc(ctx: ^Player) {
 // - Airborne: on_side_wall (hit side wall)
 player_fsm_wall_run_horizontal_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) {
 	ctx.abilities.wall_run_timer += dt
-	ctx.transform.vel.x = PLAYER_WALL_RUN_HORIZONTAL_SPEED * ctx.abilities.wall_run_dir
+	sand_factor := max(1.0 - ctx.sensor.sand_immersion * SAND_WALL_RUN_PENALTY, 0)
+	ctx.transform.vel.x =
+		PLAYER_WALL_RUN_HORIZONTAL_SPEED * ctx.abilities.wall_run_dir * sand_factor
 	ctx.transform.vel.y =
-		PLAYER_WALL_RUN_HORIZONTAL_LIFT -
+		PLAYER_WALL_RUN_HORIZONTAL_LIFT * sand_factor -
 		GRAVITY * PLAYER_WALL_RUN_HORIZONTAL_GRAV_MULT * ctx.abilities.wall_run_timer
 
 	if ctx.abilities.jump_buffer_timer > 0 {
@@ -54,7 +56,12 @@ player_fsm_wall_run_horizontal_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Pl
 	bob_mult := 1.0 + fall_speed / PLAYER_WALL_RUN_HORIZONTAL_LIFT
 	ctx.graphics.run_anim_timer += PLAYER_RUN_BOB_SPEED * bob_mult * dt
 	if math.floor(prev / math.PI) != math.floor(ctx.graphics.run_anim_timer / math.PI) {
-		player_dust_emit(&game.dust, ctx.transform.pos, {-ctx.abilities.wall_run_dir * PLAYER_PARTICLE_DUST_SPEED_MIN, 0}, 2)
+		player_dust_emit(
+			&game.dust,
+			ctx.transform.pos,
+			{-ctx.abilities.wall_run_dir * PLAYER_PARTICLE_DUST_SPEED_MIN, 0},
+			2,
+		)
 		player_step_emit(&game.steps, ctx.transform.pos)
 	}
 

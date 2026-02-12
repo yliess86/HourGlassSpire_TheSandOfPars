@@ -31,6 +31,9 @@ Game_State :: struct {
 	player:  Player,
 	dust:    engine.Particle_Pool,
 	steps:   engine.Particle_Pool,
+
+	// Sand
+	sand:    Sand_World,
 }
 
 game: Game_State
@@ -44,6 +47,7 @@ config_post_apply :: proc() {
 }
 
 game_clean :: proc() {
+	sand_destroy(&game.sand)
 	engine.config_destroy(&game_config)
 	level_destroy(&game.level)
 	engine.window_clean(&game.win)
@@ -86,6 +90,9 @@ game_init :: proc() {
 	game.player.abilities.dash_dir = 1
 	player_init(&game.player)
 
+	// Sand
+	sand_init(&game.sand, &game.level)
+
 	// Apply post-config (input bindings + camera params) and snap camera to player spawn
 	config_post_apply()
 	game.camera.pos = game.player.collider.pos
@@ -106,6 +113,9 @@ game_update :: proc(dt: f32) {
 
 game_fixed_update :: proc(dt: f32) {
 	player_fixed_update(&game.player, dt)
+	sand_player_interact(&game.sand, &game.player, dt)
+	sand_sub_step_tick(&game.sand)
+	sand_emitter_update(&game.sand)
 	player_dust_update(&game.dust, dt)
 	player_step_update(&game.steps, dt)
 	engine.camera_follow(
@@ -124,12 +134,14 @@ game_render :: proc() {
 	player_step_render(&game.steps)
 	player_dust_render(&game.dust)
 	player_render(&game.player)
+	sand_render(&game.sand)
 }
 
 game_render_debug :: proc() {
 	sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
 
 	level_debug(&game.level)
+	sand_debug(&game.sand)
 
 	sensor_pos: [2]f32 = {DEBUG_TEXT_MARGIN_X, DEBUG_TEXT_MARGIN_Y + 2 * DEBUG_TEXT_LINE_H}
 	player_sensor_debug(&game.player, sensor_pos)

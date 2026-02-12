@@ -40,6 +40,8 @@ player_fsm_dashing_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) 
 	}
 
 	speed := PLAYER_DASH_SPEED
+	sand_factor := max(1.0 - ctx.sensor.sand_immersion * SAND_MOVE_PENALTY, 0)
+	speed *= sand_factor
 	if ctx.sensor.on_slope {
 		uphill := ctx.abilities.dash_dir == ctx.sensor.on_slope_dir
 		if uphill {

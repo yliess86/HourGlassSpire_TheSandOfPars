@@ -9,6 +9,8 @@ Player_Sensor :: struct {
 	on_ground:            bool, // any upward surface (ground + platform + slope)
 	on_ground_snap_y:     f32, // surface Y of detected ground (for snapping on land)
 	on_platform:          bool, // surface is a platform (for drop-through)
+	on_sand:              bool, // standing on sand surface (sand is the ground)
+	sand_immersion:       f32, // 0.0 (free) to 1.0 (buried)
 	on_side_wall:         bool,
 	on_side_wall_dir:     f32, // +1 right, -1 left, 0 no side wall
 	on_side_wall_snap_x:  f32, // inner edge X of detected left wall + PLAYER_SIZE/2 or right wall - PLAYER_SIZE/2
@@ -29,6 +31,7 @@ player_sensor_update :: proc(player: ^Player) {
 	on_ground: bool
 	on_ground_snap_y: f32 = -1e18
 	on_platform: bool
+	on_sand: bool
 	on_side_wall: bool
 	on_side_wall_dir: f32
 	on_side_wall_snap_x: f32
@@ -130,11 +133,35 @@ player_sensor_update :: proc(player: ^Player) {
 		}
 	}
 
+	// Sand ground detection (only if no solid/slope/platform ground)
+	if !on_ground {
+		foot_tx0 := int((player.transform.pos.x - PLAYER_SIZE / 2) / TILE_SIZE)
+		foot_tx1 := int((player.transform.pos.x + PLAYER_SIZE / 2) / TILE_SIZE)
+		foot_ty := int(player.transform.pos.y / TILE_SIZE)
+
+		for check_ty in ([2]int{foot_ty, foot_ty - 1}) {
+			if on_sand do break
+			for tx in foot_tx0 ..= foot_tx1 {
+				if !sand_in_bounds(&game.sand, tx, check_ty) do continue
+				if sand_get(&game.sand, tx, check_ty).material != .Sand do continue
+				surface_y := f32(check_ty + 1) * TILE_SIZE
+				dist := player.transform.pos.y - surface_y
+				if dist >= -PLAYER_STEP_HEIGHT && dist <= PLAYER_CHECK_GROUND_EPS {
+					on_ground = true
+					on_sand = true
+					if surface_y > on_ground_snap_y do on_ground_snap_y = surface_y
+				}
+			}
+		}
+	}
+
 	player.sensor.in_platform = in_platform
 	player.sensor.on_back_wall = on_back_wall
 	player.sensor.on_ground = on_ground
 	player.sensor.on_ground_snap_y = on_ground_snap_y
 	player.sensor.on_platform = on_platform
+	player.sensor.on_sand = on_sand
+	player.sensor.sand_immersion = sand_compute_immersion(&game.sand, player)
 	player.sensor.on_side_wall = on_side_wall
 	player.sensor.on_side_wall_dir = on_side_wall_dir
 	player.sensor.on_side_wall_snap_x = on_side_wall_snap_x
@@ -201,6 +228,8 @@ player_sensor_debug :: proc(player: ^Player, screen_pos: [2]f32) {
 		{"on_back_wall:", fmt.ctprintf("%v", player.sensor.on_back_wall)},
 		{"on_ground:", fmt.ctprintf("%v", player.sensor.on_ground)},
 		{"on_platform:", fmt.ctprintf("%v", player.sensor.on_platform)},
+		{"on_sand:", fmt.ctprintf("%v", player.sensor.on_sand)},
+		{"immersion:", fmt.ctprintf("%.2f", player.sensor.sand_immersion)},
 		{"on_side_wall:", fmt.ctprintf("%v", player.sensor.on_side_wall)},
 		{"on_side_wall_dir:", fmt.ctprintf("%.0f", player.sensor.on_side_wall_dir)},
 		{"on_side_wall_snap_x:", fmt.ctprintf("%.2f", player.sensor.on_side_wall_snap_x)},

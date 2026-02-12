@@ -38,7 +38,6 @@ LEVEL_NAME: string
 LEVEL_COLOR_BG: [4]u8
 LEVEL_COLOR_TILE_SOLID: [4]u8
 LEVEL_COLOR_TILE_BACK_WALL: [4]u8
-LEVEL_COLOR_TILE_WINDOW: [4]u8
 
 // [player]
 PLAYER_COLOR: [4]u8
@@ -132,6 +131,33 @@ INPUT_GP_SLIDE: string
 INPUT_GP_DEBUG: string
 INPUT_GP_QUIT: string
 
+// [sand]
+SAND_CHUNK_SIZE: u8
+SAND_SIM_INTERVAL: u8
+SAND_SLEEP_THRESHOLD: u8
+SAND_COLOR: [4]u8
+SAND_COLOR_VARIATION: u8
+SAND_EMITTER_RATE: f32
+SAND_PLAYER_DRAG_PER_CELL: f32
+SAND_PLAYER_DRAG_MAX: f32
+SAND_PRESSURE_FORCE: f32
+SAND_BURIAL_THRESHOLD: f32
+SAND_BURIAL_GRAVITY_MULT: f32
+SAND_DISPLACE_CHAIN: u8
+SAND_SINK_SPEED: f32
+SAND_MOVE_PENALTY: f32
+SAND_JUMP_PENALTY: f32
+SAND_WALL_RUN_PENALTY: f32
+
+// [sand_debug]
+SAND_DEBUG_COLOR_LOW: [4]u8
+SAND_DEBUG_COLOR_MID: [4]u8
+SAND_DEBUG_COLOR_HIGH: [4]u8
+SAND_DEBUG_COLOR_CHUNK: [4]u8
+SAND_DEBUG_COLOR_EMITTER: [4]u8
+SAND_DEBUG_SLEEP_DIM: u8
+SAND_DEBUG_PRESSURE_MAX: f32
+
 // [debug_colors]
 DEBUG_COLOR_COLLIDER: [4]u8
 DEBUG_COLOR_COLLIDER_BACK_WALL: [4]u8
@@ -187,7 +213,6 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_rgba(&game_config, "LEVEL_COLOR_BG"); ok do LEVEL_COLOR_BG = val
 	if val, ok := engine.config_get_rgba(&game_config, "LEVEL_COLOR_TILE_SOLID"); ok do LEVEL_COLOR_TILE_SOLID = val
 	if val, ok := engine.config_get_rgba(&game_config, "LEVEL_COLOR_TILE_BACK_WALL"); ok do LEVEL_COLOR_TILE_BACK_WALL = val
-	if val, ok := engine.config_get_rgba(&game_config, "LEVEL_COLOR_TILE_WINDOW"); ok do LEVEL_COLOR_TILE_WINDOW = val
 	if val, ok := engine.config_get_rgba(&game_config, "PLAYER_COLOR"); ok do PLAYER_COLOR = val
 	if val, ok := engine.config_get_f32(&game_config, "PLAYER_SIZE"); ok do PLAYER_SIZE = val
 	if val, ok := engine.config_get_f32(&game_config, "PLAYER_CHECK_GROUND_EPS"); ok do PLAYER_CHECK_GROUND_EPS = val
@@ -260,6 +285,29 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_string(&game_config, "INPUT_GP_SLIDE"); ok do INPUT_GP_SLIDE = val
 	if val, ok := engine.config_get_string(&game_config, "INPUT_GP_DEBUG"); ok do INPUT_GP_DEBUG = val
 	if val, ok := engine.config_get_string(&game_config, "INPUT_GP_QUIT"); ok do INPUT_GP_QUIT = val
+	if val, ok := engine.config_get_u8(&game_config, "SAND_CHUNK_SIZE"); ok do SAND_CHUNK_SIZE = val
+	if val, ok := engine.config_get_u8(&game_config, "SAND_SIM_INTERVAL"); ok do SAND_SIM_INTERVAL = val
+	if val, ok := engine.config_get_u8(&game_config, "SAND_SLEEP_THRESHOLD"); ok do SAND_SLEEP_THRESHOLD = val
+	if val, ok := engine.config_get_rgba(&game_config, "SAND_COLOR"); ok do SAND_COLOR = val
+	if val, ok := engine.config_get_u8(&game_config, "SAND_COLOR_VARIATION"); ok do SAND_COLOR_VARIATION = val
+	if val, ok := engine.config_get_f32(&game_config, "SAND_EMITTER_RATE"); ok do SAND_EMITTER_RATE = val
+	if val, ok := engine.config_get_f32(&game_config, "SAND_PLAYER_DRAG_PER_CELL"); ok do SAND_PLAYER_DRAG_PER_CELL = val
+	if val, ok := engine.config_get_f32(&game_config, "SAND_PLAYER_DRAG_MAX"); ok do SAND_PLAYER_DRAG_MAX = val
+	if val, ok := engine.config_get_f32(&game_config, "SAND_PRESSURE_FORCE"); ok do SAND_PRESSURE_FORCE = val
+	if val, ok := engine.config_get_f32(&game_config, "SAND_BURIAL_THRESHOLD"); ok do SAND_BURIAL_THRESHOLD = val
+	if val, ok := engine.config_get_f32(&game_config, "SAND_BURIAL_GRAVITY_MULT"); ok do SAND_BURIAL_GRAVITY_MULT = val
+	if val, ok := engine.config_get_u8(&game_config, "SAND_DISPLACE_CHAIN"); ok do SAND_DISPLACE_CHAIN = val
+	if val, ok := engine.config_get_f32(&game_config, "SAND_SINK_SPEED"); ok do SAND_SINK_SPEED = val
+	if val, ok := engine.config_get_f32(&game_config, "SAND_MOVE_PENALTY"); ok do SAND_MOVE_PENALTY = val
+	if val, ok := engine.config_get_f32(&game_config, "SAND_JUMP_PENALTY"); ok do SAND_JUMP_PENALTY = val
+	if val, ok := engine.config_get_f32(&game_config, "SAND_WALL_RUN_PENALTY"); ok do SAND_WALL_RUN_PENALTY = val
+	if val, ok := engine.config_get_rgba(&game_config, "SAND_DEBUG_COLOR_LOW"); ok do SAND_DEBUG_COLOR_LOW = val
+	if val, ok := engine.config_get_rgba(&game_config, "SAND_DEBUG_COLOR_MID"); ok do SAND_DEBUG_COLOR_MID = val
+	if val, ok := engine.config_get_rgba(&game_config, "SAND_DEBUG_COLOR_HIGH"); ok do SAND_DEBUG_COLOR_HIGH = val
+	if val, ok := engine.config_get_rgba(&game_config, "SAND_DEBUG_COLOR_CHUNK"); ok do SAND_DEBUG_COLOR_CHUNK = val
+	if val, ok := engine.config_get_rgba(&game_config, "SAND_DEBUG_COLOR_EMITTER"); ok do SAND_DEBUG_COLOR_EMITTER = val
+	if val, ok := engine.config_get_u8(&game_config, "SAND_DEBUG_SLEEP_DIM"); ok do SAND_DEBUG_SLEEP_DIM = val
+	if val, ok := engine.config_get_f32(&game_config, "SAND_DEBUG_PRESSURE_MAX"); ok do SAND_DEBUG_PRESSURE_MAX = val
 	if val, ok := engine.config_get_rgba(&game_config, "DEBUG_COLOR_COLLIDER"); ok do DEBUG_COLOR_COLLIDER = val
 	if val, ok := engine.config_get_rgba(&game_config, "DEBUG_COLOR_COLLIDER_BACK_WALL"); ok do DEBUG_COLOR_COLLIDER_BACK_WALL = val
 	if val, ok := engine.config_get_rgba(&game_config, "DEBUG_COLOR_COLLIDER_CEILING"); ok do DEBUG_COLOR_COLLIDER_CEILING = val

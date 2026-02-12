@@ -1,0 +1,204 @@
+package game
+
+import "core:math/rand"
+
+// Tick the sub-step counter; fires sand_step when interval is reached
+sand_sub_step_tick :: proc(sand: ^Sand_World) {
+	sand.sub_step_acc += 1
+	if sand.sub_step_acc >= SAND_SIM_INTERVAL {
+		sand.sub_step_acc = 0
+		sand_step(sand)
+	}
+}
+
+// Core simulation step: cellular automaton rules with sleep/wake
+sand_step :: proc(sand: ^Sand_World) {
+	parity := sand.step_counter & 1
+	sand.step_counter += 1
+
+	// Propagate dirty flags to determine which chunks need simulation
+	sand_chunk_propagate_dirty(sand)
+
+	// Iterate bottom-to-top so lower cells vacate first
+	for y in 0 ..< sand.height {
+		// Alternate horizontal scan direction each step to eliminate bias
+		if parity == 0 {
+			for x in 0 ..< sand.width {
+				sand_update_cell(sand, x, y, parity)
+			}
+		} else {
+			for x := sand.width - 1; x >= 0; x -= 1 {
+				sand_update_cell(sand, x, y, parity)
+			}
+		}
+	}
+
+	sand_restore_platforms(sand)
+	sand_post_step(sand)
+}
+
+@(private = "file")
+sand_update_cell :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
+	idx := y * sand.width + x
+	cell := &sand.cells[idx]
+
+	if cell.material != .Sand do return
+
+	// Skip if chunk doesn't need simulation
+	chunk := sand_chunk_at(sand, x, y)
+	if chunk != nil && !chunk.needs_sim do return
+
+	// Skip if already updated this step (parity check)
+	cell_parity := u32(cell.flags & 1)
+	if cell_parity == (parity & 1) do return
+
+	// Erode adjacent platform cells
+	sand_erode_adjacent_platforms(sand, x, y)
+
+	// Skip if sleeping
+	if cell.sleep_counter >= SAND_SLEEP_THRESHOLD do return
+
+	// Try to move: down, then diagonal
+	moved := false
+
+	// Try straight down
+	if sand_try_move(sand, x, y, x, y - 1, parity) {
+		moved = true
+	} else {
+		// Try diagonal: randomize left/right
+		first_dx: int = (rand.int31() & 1) == 0 ? -1 : 1
+
+		if sand_try_move(sand, x, y, x + first_dx, y - 1, parity) {
+			moved = true
+		} else if sand_try_move(sand, x, y, x - first_dx, y - 1, parity) {
+			moved = true
+		}
+	}
+
+	if !moved {
+		// Stuck: increment sleep counter
+		if cell.sleep_counter < 255 {
+			cell.sleep_counter += 1
+		}
+	}
+}
+
+// Try to move a sand cell from (sx,sy) to (dx,dy). Returns true if moved.
+@(private = "file")
+sand_try_move :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, parity: u32) -> bool {
+	if !sand_in_bounds(sand, dx, dy) do return false
+
+	dst_idx := dy * sand.width + dx
+	if sand.cells[dst_idx].material != .Empty do return false
+
+	src_idx := sy * sand.width + sx
+
+	// Swap cells
+	sand.cells[dst_idx] = sand.cells[src_idx]
+	sand.cells[dst_idx].flags = u8(parity & 1) // mark as updated this step
+	sand.cells[dst_idx].sleep_counter = 0
+
+	sand.cells[src_idx] = Sand_Cell{} // Empty
+
+	// Wake neighbors around both old and new positions
+	sand_wake_neighbors(sand, sx, sy)
+	sand_wake_neighbors(sand, dx, dy)
+
+	// Mark chunks dirty
+	sand_mark_chunk_dirty(sand, sx, sy)
+	sand_mark_chunk_dirty(sand, dx, dy)
+
+	// Update chunk active counts
+	if sx / int(SAND_CHUNK_SIZE) != dx / int(SAND_CHUNK_SIZE) ||
+	   sy / int(SAND_CHUNK_SIZE) != dy / int(SAND_CHUNK_SIZE) {
+		src_chunk := sand_chunk_at(sand, sx, sy)
+		dst_chunk := sand_chunk_at(sand, dx, dy)
+		if src_chunk != nil && src_chunk.active_count > 0 do src_chunk.active_count -= 1
+		if dst_chunk != nil do dst_chunk.active_count += 1
+	}
+
+	return true
+}
+
+// Erode platform cells horizontally adjacent to a sand cell
+@(private = "file")
+sand_erode_adjacent_platforms :: proc(sand: ^Sand_World, x, y: int) {
+	for dx in ([2]int{-1, 1}) {
+		nx := x + dx
+		if !sand_in_bounds(sand, nx, y) do continue
+		n_idx := y * sand.width + nx
+		if sand.cells[n_idx].material != .Platform do continue
+
+		// Erase platform cell
+		sand.cells[n_idx] = Sand_Cell{}
+		sand_wake_neighbors(sand, nx, y)
+		sand_mark_chunk_dirty(sand, nx, y)
+
+		// Decrement chunk active count (Platform is counted as active)
+		chunk := sand_chunk_at(sand, nx, y)
+		if chunk != nil && chunk.active_count > 0 do chunk.active_count -= 1
+
+		// Track for restoration when sand moves away
+		append(&sand.eroded_platforms, [2]int{nx, y})
+
+		// Wake this cell so it can move into the freed space
+		sand.cells[y * sand.width + x].sleep_counter = 0
+	}
+}
+
+// Restore eroded platforms when no sand is horizontally adjacent
+@(private = "file")
+sand_restore_platforms :: proc(sand: ^Sand_World) {
+	i := 0
+	for i < len(sand.eroded_platforms) {
+		pos := sand.eroded_platforms[i]
+		px, py := pos.x, pos.y
+		idx := py * sand.width + px
+
+		// Cell occupied — can't restore yet, keep tracking
+		if sand.cells[idx].material != .Empty {
+			i += 1
+			continue
+		}
+
+		// Check if any horizontal neighbor is sand
+		has_adjacent_sand := false
+		for dx in ([2]int{-1, 1}) {
+			nx := px + dx
+			if !sand_in_bounds(sand, nx, py) do continue
+			if sand.cells[py * sand.width + nx].material == .Sand {
+				has_adjacent_sand = true
+				break
+			}
+		}
+
+		if has_adjacent_sand {
+			i += 1
+			continue
+		}
+
+		// Restore platform
+		sand.cells[idx].material = .Platform
+		sand_wake_neighbors(sand, px, py)
+		sand_mark_chunk_dirty(sand, px, py)
+		chunk := sand_chunk_at(sand, px, py)
+		if chunk != nil do chunk.active_count += 1
+
+		unordered_remove(&sand.eroded_platforms, i)
+	}
+}
+
+// Wake all 8 neighbors of a cell (reset their sleep counter)
+sand_wake_neighbors :: proc(sand: ^Sand_World, x, y: int) {
+	for dy in -1 ..= 1 {
+		for dx in -1 ..= 1 {
+			if dx == 0 && dy == 0 do continue
+			nx, ny := x + dx, y + dy
+			if !sand_in_bounds(sand, nx, ny) do continue
+			cell := &sand.cells[ny * sand.width + nx]
+			if cell.material == .Sand {
+				cell.sleep_counter = 0
+			}
+		}
+	}
+}

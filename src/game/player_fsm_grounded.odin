@@ -41,12 +41,13 @@ player_fsm_grounded_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 		uphill := math.sign(game.input.axis.x) == ctx.sensor.on_slope_dir
 		speed_factor = PLAYER_SLOPE_UPHILL_FACTOR if uphill else PLAYER_SLOPE_DOWNHILL_FACTOR
 	}
+	sand_move_factor: f32 = 1.0 - ctx.sensor.sand_immersion * SAND_MOVE_PENALTY
 	ctx.transform.vel.x = math.lerp(
 		ctx.transform.vel.x,
-		game.input.axis.x * PLAYER_RUN_SPEED * speed_factor,
+		game.input.axis.x * PLAYER_RUN_SPEED * speed_factor * max(sand_move_factor, 0),
 		PLAYER_MOVE_LERP_SPEED * dt,
 	)
-	ctx.transform.vel.y = 0
+	ctx.transform.vel.y = -SAND_SINK_SPEED if ctx.sensor.on_sand else 0
 	ctx.abilities.coyote_timer = PLAYER_COYOTE_TIME_DURATION
 
 	if ctx.sensor.on_platform &&
@@ -59,11 +60,20 @@ player_fsm_grounded_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 	}
 
 	if ctx.abilities.jump_buffer_timer > 0 {
-		ctx.transform.vel.y = PLAYER_JUMP_FORCE
+		jump_factor := max(1.0 - ctx.sensor.sand_immersion * SAND_JUMP_PENALTY, 0)
+		if jump_factor > 0 {
+			ctx.transform.vel.y = PLAYER_JUMP_FORCE * jump_factor
+			ctx.abilities.jump_buffer_timer = 0
+			ctx.abilities.coyote_timer = 0
+			player_dust_emit(
+				&game.dust,
+				ctx.transform.pos,
+				{0, -PLAYER_PARTICLE_DUST_SPEED_MAX},
+				4,
+			)
+			return .Airborne
+		}
 		ctx.abilities.jump_buffer_timer = 0
-		ctx.abilities.coyote_timer = 0
-		player_dust_emit(&game.dust, ctx.transform.pos, {0, -PLAYER_PARTICLE_DUST_SPEED_MAX}, 4)
-		return .Airborne
 	}
 
 	if game.input.is_pressed[.DASH] && ctx.abilities.dash_cooldown_timer <= 0 do return .Dashing

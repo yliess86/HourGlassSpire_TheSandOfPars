@@ -7,6 +7,7 @@ Debug_State :: enum u8 {
 	NONE,
 	PLAYER,
 	BACKGROUND,
+	SAND,
 	ALL,
 }
 
