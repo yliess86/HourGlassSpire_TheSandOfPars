@@ -6,6 +6,10 @@
         "hooks": [
           {
             "type": "command",
+            "command": "FILE=$(jq -r '.tool_input.file_path'); if [[ \"$FILE\" == */game.ini ]]; then odin run build/ -- align 2>&1; fi"
+          },
+          {
+            "type": "command",
             "command": "FILE=$(jq -r '.tool_input.file_path'); if [[ \"$FILE\" == *.odin ]]; then odinfmt -w \"$FILE\" 2>/dev/null; fi"
           },
           {

@@ -51,14 +51,22 @@ main :: proc() {
 		return
 	}
 
+	if mode == "align" {
+		path := "assets/game.ini"
+		if len(os.args) > 2 do path = os.args[2]
+		if !align_ini_file(path) do os.exit(1)
+		return
+	}
+
 	switch mode {
 	case "run", "build", "check", "gen", "dist", "version", "release":
 	case:
-		fmt.eprintf("Usage: odin run build/ -- [run|build|check|gen|dist|setup|clean]\n")
+		fmt.eprintf("Usage: odin run build/ -- [run|build|check|gen|align|dist|setup|clean]\n")
 		fmt.eprintf("  run [release]    — gen_config + build + run (default: -debug)\n")
 		fmt.eprintf("  build [release]  — gen_config + build only (default: -debug)\n")
 		fmt.eprintf("  check            — gen_config + type-check only\n")
 		fmt.eprintf("  gen              — regenerate config.odin only\n")
+		fmt.eprintf("  align [path]     — align = signs and # comments in INI file\n")
 		fmt.eprintf("  dist [target]    — gen_config + release build + bundle\n")
 		fmt.eprintf("  version          — stamp current UTC date/time into game.ini\n")
 		fmt.eprintf("  release          — stamp version, commit, tag, and push\n")
@@ -82,6 +90,7 @@ main :: proc() {
 		if !stamp_ok do os.exit(1)
 	}
 
+	if !align_ini_file("assets/game.ini") do os.exit(1)
 	if !config_gen() do os.exit(1)
 	if mode == "gen" do return
 	if mode == "version" do return

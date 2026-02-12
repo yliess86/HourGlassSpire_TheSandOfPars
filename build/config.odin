@@ -16,6 +16,7 @@ Config_Entry :: struct {
 	type:      Config_Entry_Type,
 	section:   string,
 	raw_value: string,
+	comment:   string,
 }
 
 config_infer_type :: proc(raw_value: string, entries: []Config_Entry) -> Config_Entry_Type {
@@ -56,6 +57,70 @@ config_infer_type :: proc(raw_value: string, entries: []Config_Entry) -> Config_
 	return .F32
 }
 
+// Extract the human-readable description comment from a raw INI value.
+// Handles hex colors (#RRGGBBAA), type hints (# :u8), strings, and em-dash separators.
+config_extract_comment :: proc(raw_value: string) -> string {
+	in_str := false
+	first_hash := -1
+	second_hash := -1
+
+	i := 0
+	for i < len(raw_value) {
+		c := raw_value[i]
+		if c == '"' {
+			in_str = !in_str
+			i += 1
+			continue
+		}
+		if in_str {
+			i += 1
+			continue
+		}
+		if c == '#' {
+			// Skip hex colors: #RRGGBB or #RRGGBBAA
+			hex_len := 0
+			for j := i + 1; j < len(raw_value); j += 1 {
+				d := raw_value[j]
+				if (d >= '0' && d <= '9') || (d >= 'a' && d <= 'f') || (d >= 'A' && d <= 'F') {
+					hex_len += 1
+				} else {
+					break
+				}
+			}
+			if hex_len >= 6 && hex_len <= 8 {
+				i += 1 + hex_len
+				continue
+			}
+
+			if first_hash < 0 {
+				first_hash = i
+			} else if second_hash < 0 {
+				second_hash = i
+				break
+			}
+		}
+		i += 1
+	}
+
+	if first_hash < 0 do return ""
+
+	first := raw_value[first_hash:]
+
+	// Type hint: "# :type" pattern
+	if len(first) >= 3 && first[1] == ' ' && first[2] == ':' {
+		if second_hash >= 0 {
+			return strings.trim_space(raw_value[second_hash + 1:])
+		}
+		// Fallback: em-dash separator within single comment
+		if idx := strings.index(first, "\xe2\x80\x94"); idx >= 0 {
+			return strings.trim_space(first[idx + 3:])
+		}
+		return ""
+	}
+
+	return strings.trim_space(first[1:])
+}
+
 game_name: string
 
 config_gen :: proc() -> bool {
@@ -92,9 +157,16 @@ config_gen :: proc() -> bool {
 
 		// Pass 1: infer types from literal patterns only (no identifier lookup)
 		type := config_infer_type(raw_value, {})
+		comment := config_extract_comment(raw_value)
 		append(
 			&entries,
-			Config_Entry{key = key, type = type, section = current_section, raw_value = raw_value},
+			Config_Entry {
+				key = key,
+				type = type,
+				section = current_section,
+				raw_value = raw_value,
+				comment = comment,
+			},
 		)
 
 		if key == "GAME_TITLE" && type == .String {
@@ -124,7 +196,27 @@ config_gen :: proc() -> bool {
 	strings.write_string(&b, "import engine \"../engine\"\n")
 	strings.write_string(&b, "import \"core:fmt\"\n")
 
-	// Variable declarations grouped by section
+	// Compute max declaration length for comment alignment
+	type_str_len :: proc(t: Config_Entry_Type) -> int {
+		switch t {
+		case .F32:
+			return 3 // "f32"
+		case .U8:
+			return 2 // "u8"
+		case .RGBA:
+			return 5 // "[4]u8"
+		case .String:
+			return 6 // "string"
+		}
+		return 0
+	}
+	max_decl_len := 0
+	for entry in entries {
+		decl_len := len(entry.key) + 2 + type_str_len(entry.type) // "key: type"
+		if decl_len > max_decl_len do max_decl_len = decl_len
+	}
+
+	// Variable declarations grouped by section with aligned comments
 	prev_section := ""
 	for entry in entries {
 		if entry.section != prev_section {
@@ -133,17 +225,26 @@ config_gen :: proc() -> bool {
 			strings.write_string(&b, "]\n")
 			prev_section = entry.section
 		}
-		strings.write_string(&b, entry.key)
+		type_str: string
 		switch entry.type {
 		case .F32:
-			strings.write_string(&b, ": f32\n")
+			type_str = ": f32"
 		case .U8:
-			strings.write_string(&b, ": u8\n")
+			type_str = ": u8"
 		case .RGBA:
-			strings.write_string(&b, ": [4]u8\n")
+			type_str = ": [4]u8"
 		case .String:
-			strings.write_string(&b, ": string\n")
+			type_str = ": string"
 		}
+		strings.write_string(&b, entry.key)
+		strings.write_string(&b, type_str)
+		if len(entry.comment) > 0 {
+			decl_len := len(entry.key) + len(type_str)
+			for _ in 0 ..< max_decl_len - decl_len do strings.write_byte(&b, ' ')
+			strings.write_string(&b, "  // ")
+			strings.write_string(&b, entry.comment)
+		}
+		strings.write_byte(&b, '\n')
 	}
 
 	// config_apply proc
