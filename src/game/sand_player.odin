@@ -10,9 +10,9 @@ sand_compute_immersion :: proc(sand: ^Sand_World, player: ^Player) -> f32 {
 	sand_count := 0
 	for ty in y0 ..= y1 {
 		for tx in x0 ..= x1 {
-			if sand_in_bounds(sand, tx, ty) && sand_get(sand, tx, ty).material == .Sand {
-				sand_count += 1
-			}
+			in_bound := sand_in_bounds(sand, tx, ty)
+			is_sand := sand_get(sand, tx, ty).material == .Sand
+			if in_bound && is_sand do sand_count += 1
 		}
 	}
 	return f32(sand_count) / f32(total)
@@ -39,9 +39,7 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 			player_cx := int(player.transform.pos.x / TILE_SIZE)
 			push_dx: int = tx >= player_cx ? 1 : -1
 
-			if sand_displace_cell(sand, tx, ty, push_dx) {
-				displaced_count += 1
-			}
+			if sand_displace_cell(sand, tx, ty, push_dx) do displaced_count += 1
 		}
 	}
 
@@ -57,13 +55,9 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 	for tx in x0 ..= x1 {
 		for ty := y1 + 1; ty < sand.height; ty += 1 {
 			cell := sand_get(sand, tx, ty)
-			if cell.material == .Sand {
-				above_count += 1
-			} else if cell.material == .Solid {
-				break
-			} else {
-				break
-			}
+			if cell.material == .Sand do above_count += 1
+			else if cell.material == .Solid do break
+			else do break
 		}
 	}
 
@@ -95,25 +89,14 @@ sand_player_footprint :: proc(sand: ^Sand_World, player: ^Player) -> (x0, y0, x1
 
 // Try to displace a sand cell at (tx,ty) in push_dx direction.
 // Returns true if successfully displaced, false if no space found even with chaining.
+// Priority order: sideways and down only (sand never displaces upward)
 @(private = "file")
 sand_displace_cell :: proc(sand: ^Sand_World, tx, ty, push_dx: int) -> bool {
-	// Priority order: sideways and down only (sand never displaces upward)
-	// 1. Primary push direction (horizontal)
 	if sand_try_displace_to(sand, tx, ty, tx + push_dx, ty) do return true
-
-	// 2. Down
 	if sand_try_displace_to(sand, tx, ty, tx, ty - 1) do return true
-
-	// 3. Diagonal down in push direction
 	if sand_try_displace_to(sand, tx, ty, tx + push_dx, ty - 1) do return true
-
-	// 4. Opposite direction (horizontal)
 	if sand_try_displace_to(sand, tx, ty, tx - push_dx, ty) do return true
-
-	// 5. Diagonal down in opposite direction
 	if sand_try_displace_to(sand, tx, ty, tx - push_dx, ty - 1) do return true
-
-	// No neighbor found even with chaining: leave cell in place
 	return false
 }
 
@@ -127,13 +110,9 @@ sand_try_displace_to :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, depth: int 
 
 	// Chain: if destination is sand, try to push it further in the same direction
 	if dst_mat == .Sand && depth < int(SAND_DISPLACE_CHAIN) {
-		if !sand_try_displace_to(sand, dx, dy, dx + (dx - sx), dy + (dy - sy), depth + 1) {
-			return false
-		}
+		if !sand_try_displace_to(sand, dx, dy, dx + (dx - sx), dy + (dy - sy), depth + 1) do return false
 		// Destination cell was moved, fall through to move source into the now-empty space
-	} else if dst_mat != .Empty {
-		return false
-	}
+	} else if dst_mat != .Empty do return false
 
 	src_idx := sy * sand.width + sx
 	sand.cells[dst_idx] = sand.cells[src_idx]

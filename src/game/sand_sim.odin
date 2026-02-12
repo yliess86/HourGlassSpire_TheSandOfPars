@@ -22,19 +22,11 @@ sand_step :: proc(sand: ^Sand_World) {
 	// Iterate bottom-to-top so lower cells vacate first
 	for y in 0 ..< sand.height {
 		// Alternate horizontal scan direction each step to eliminate bias
-		if parity == 0 {
-			for x in 0 ..< sand.width {
-				sand_update_cell(sand, x, y, parity)
-			}
-		} else {
-			for x := sand.width - 1; x >= 0; x -= 1 {
-				sand_update_cell(sand, x, y, parity)
-			}
-		}
+		if parity == 0 do for x in 0 ..< sand.width do sand_update_cell(sand, x, y, parity)
+		else do for x := sand.width - 1; x >= 0; x -= 1 do sand_update_cell(sand, x, y, parity)
 	}
 
 	sand_restore_platforms(sand)
-	sand_chunk_post_step(sand)
 }
 
 @(private = "file")
@@ -62,25 +54,16 @@ sand_update_cell :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
 	moved := false
 
 	// Try straight down
-	if sand_try_move(sand, x, y, x, y - 1, parity) {
-		moved = true
-	} else {
+	if sand_try_move(sand, x, y, x, y - 1, parity) do moved = true
+	else {
 		// Try diagonal: randomize left/right
 		first_dx: int = (rand.int31() & 1) == 0 ? -1 : 1
-
-		if sand_try_move(sand, x, y, x + first_dx, y - 1, parity) {
-			moved = true
-		} else if sand_try_move(sand, x, y, x - first_dx, y - 1, parity) {
-			moved = true
-		}
+		if sand_try_move(sand, x, y, x + first_dx, y - 1, parity) do moved = true
+		else if sand_try_move(sand, x, y, x - first_dx, y - 1, parity) do moved = true
 	}
 
-	if !moved {
-		// Stuck: increment sleep counter
-		if cell.sleep_counter < 255 {
-			cell.sleep_counter += 1
-		}
-	}
+	// Stuck: increment sleep counter
+	if !moved do if cell.sleep_counter < 255 do cell.sleep_counter += 1
 }
 
 // Try to move a sand cell from (sx,sy) to (dx,dy). Returns true if moved.
@@ -97,7 +80,6 @@ sand_try_move :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, parity: u32) -> bo
 	sand.cells[dst_idx] = sand.cells[src_idx]
 	sand.cells[dst_idx].flags = u8(parity & 1) // mark as updated this step
 	sand.cells[dst_idx].sleep_counter = 0
-
 	sand.cells[src_idx] = Sand_Cell{} // Empty
 
 	// Wake neighbors around both old and new positions
@@ -196,9 +178,7 @@ sand_wake_neighbors :: proc(sand: ^Sand_World, x, y: int) {
 			nx, ny := x + dx, y + dy
 			if !sand_in_bounds(sand, nx, ny) do continue
 			cell := &sand.cells[ny * sand.width + nx]
-			if cell.material == .Sand {
-				cell.sleep_counter = 0
-			}
+			if cell.material == .Sand do cell.sleep_counter = 0
 		}
 	}
 }

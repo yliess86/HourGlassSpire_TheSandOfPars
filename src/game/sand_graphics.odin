@@ -4,7 +4,6 @@ import "core:fmt"
 import "core:math"
 import sdl "vendor:sdl3"
 
-// Render sand particles (camera-culled)
 sand_graphics_render :: proc(sand: ^Sand_World) {
 	cam_bl := game.camera.pos - game.camera.size / 2
 	cam_tr := game.camera.pos + game.camera.size / 2
@@ -39,7 +38,6 @@ sand_graphics_cell_color :: proc(cell: Sand_Cell) -> [4]u8 {
 	}
 }
 
-// Debug visualization: stress heatmap, chunk outlines, stats, emitter markers
 sand_graphics_debug :: proc(sand: ^Sand_World) {
 	if game.debug != .SAND && game.debug != .ALL do return
 
@@ -57,24 +55,16 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 		pressure: f32 = 0
 		for y := min(y1, sand.height) - 1; y >= y0; y -= 1 {
 			cell := sand.cells[y * sand.width + x]
-			if cell.material == .Sand {
-				pressure += 1.0
-			} else if cell.material == .Solid || cell.material == .Platform {
-				pressure = 0
-			} else {
-				pressure = max(pressure - 0.5, 0)
-			}
+			if cell.material == .Sand do pressure += 1.0
+			else if cell.material == .Solid || cell.material == .Platform do pressure = 0
+			else do pressure = max(pressure - 0.5, 0)
 
 			if pressure > 0 && cell.material == .Sand {
 				color: [4]u8
 				t := math.clamp(pressure / SAND_DEBUG_PRESSURE_MAX, 0, 1)
-				if t < 0.33 {
-					color = SAND_DEBUG_COLOR_LOW
-				} else if t < 0.66 {
-					color = SAND_DEBUG_COLOR_MID
-				} else {
-					color = SAND_DEBUG_COLOR_HIGH
-				}
+				if t < 0.33 do color = SAND_DEBUG_COLOR_LOW
+				else if t < 0.66 do color = SAND_DEBUG_COLOR_MID
+				else do color = SAND_DEBUG_COLOR_HIGH
 
 				world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
 				world_size := [2]f32{TILE_SIZE, TILE_SIZE}
@@ -95,8 +85,8 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 			if !is_sleeping {
 				chunk := sand_chunk_at(sand, x, y)
 				is_sleeping = chunk != nil && !chunk.needs_sim
+				continue
 			}
-			if !is_sleeping do continue
 
 			world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
 			world_size := [2]f32{TILE_SIZE, TILE_SIZE}
@@ -109,16 +99,11 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 	// Chunk boundaries and active chunk highlighting
 	for cy in 0 ..< sand.chunks_h {
 		for cx in 0 ..< sand.chunks_w {
-			chunk_x0 := f32(cx * int(SAND_CHUNK_SIZE)) * TILE_SIZE
-			chunk_y0 := f32(cy * int(SAND_CHUNK_SIZE)) * TILE_SIZE
-			chunk_w :=
-				f32(min((cx + 1) * int(SAND_CHUNK_SIZE), sand.width) - cx * int(SAND_CHUNK_SIZE)) *
-				TILE_SIZE
-			chunk_h :=
-				f32(
-					min((cy + 1) * int(SAND_CHUNK_SIZE), sand.height) - cy * int(SAND_CHUNK_SIZE),
-				) *
-				TILE_SIZE
+			cs := int(SAND_CHUNK_SIZE)
+			chunk_x0 := f32(cx * cs) * TILE_SIZE
+			chunk_y0 := f32(cy * cs) * TILE_SIZE
+			chunk_w := f32(min((cx + 1) * cs, sand.width) - cx * cs) * TILE_SIZE
+			chunk_h := f32(min((cy + 1) * cs, sand.height) - cy * cs) * TILE_SIZE
 
 			world_pos := [2]f32{chunk_x0, chunk_y0}
 			world_size := [2]f32{chunk_w, chunk_h}
@@ -170,20 +155,15 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 			cell := sand.cells[y * sand.width + x]
 			if cell.material != .Sand do continue
 			particle_count += 1
-			if cell.sleep_counter >= SAND_SLEEP_THRESHOLD {
-				sleeping_count += 1
-			} else {
+			if cell.sleep_counter >= SAND_SLEEP_THRESHOLD do sleeping_count += 1
+			else {
 				chunk := sand_chunk_at(sand, x, y)
-				if chunk != nil && !chunk.needs_sim {
-					sleeping_count += 1
-				}
+				if chunk != nil && !chunk.needs_sim do sleeping_count += 1
 			}
 		}
 	}
 	active_chunks := 0
-	for chunk in sand.chunks {
-		if chunk.needs_sim do active_chunks += 1
-	}
+	for chunk in sand.chunks do if chunk.needs_sim do active_chunks += 1
 
 	// Render stats below existing debug text
 	stats_y := DEBUG_TEXT_MARGIN_Y + 14 * DEBUG_TEXT_LINE_H

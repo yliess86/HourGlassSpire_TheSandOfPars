@@ -94,9 +94,7 @@ sand_init :: proc(sand: ^Sand_World, level: ^Level) {
 	delete(level.sand_piles)
 
 	// Load emitters from level
-	for pos in level.sand_emitters {
-		append(&sand.emitters, Sand_Emitter{tx = pos.x, ty = pos.y})
-	}
+	for pos in level.sand_emitters do append(&sand.emitters, Sand_Emitter{tx = pos.x, ty = pos.y})
 	delete(level.sand_emitters)
 	delete(level.original_tiles)
 
