@@ -67,14 +67,14 @@ config_load :: proc(path: string) -> (config: Config, ok: bool) {
 
 		key := strings.trim_space(trimmed[:eq_idx])
 		raw_value := strings.trim_space(trimmed[eq_idx + 1:])
-		expr := _strip_inline_comment(raw_value)
+		expr := _config_strip_inline_comment(raw_value)
 
 		if len(key) == 0 || len(expr) == 0 {
 			fmt.eprintf("[config] Line %d: empty key or value\n", line_num)
 			continue
 		}
 
-		val, eval_ok := _eval_expression(expr, &config)
+		val, eval_ok := _config_eval_expression(expr, &config)
 		if !eval_ok {
 			fmt.eprintf("[config] Line %d: failed to evaluate '%s'\n", line_num, expr)
 			continue
@@ -122,11 +122,11 @@ config_reload :: proc(config: ^Config) -> bool {
 
 		key := strings.trim_space(trimmed[:eq_idx])
 		raw_value := strings.trim_space(trimmed[eq_idx + 1:])
-		expr := _strip_inline_comment(raw_value)
+		expr := _config_strip_inline_comment(raw_value)
 
 		if len(key) == 0 || len(expr) == 0 do continue
 
-		val, eval_ok := _eval_expression(expr, config)
+		val, eval_ok := _config_eval_expression(expr, config)
 		if !eval_ok {
 			fmt.eprintf("[config] Line %d: failed to evaluate '%s'\n", line_num, expr)
 			continue
@@ -184,7 +184,7 @@ config_destroy :: proc(config: ^Config) {
 }
 
 @(private = "file")
-Token_Kind :: enum u8 {
+Config_Token_Kind :: enum u8 {
 	Number,
 	Ident,
 	Hex_Color,
@@ -199,26 +199,26 @@ Token_Kind :: enum u8 {
 }
 
 @(private = "file")
-Token_Value :: union {
+Config_Token_Value :: union {
 	f32,
 	[4]u8,
 	string,
 }
 
 @(private = "file")
-Token :: struct {
-	kind:  Token_Kind,
-	value: Token_Value,
+Config_Token :: struct {
+	kind:  Config_Token_Kind,
+	value: Config_Token_Value,
 }
 
 @(private = "file")
-Tokenizer :: struct {
+Config_Tokenizer :: struct {
 	src: string,
 	pos: int,
 }
 
 @(private = "file")
-_strip_inline_comment :: proc(s: string) -> string {
+_config_strip_inline_comment :: proc(s: string) -> string {
 	if len(s) > 0 && s[0] == '"' {
 		for i in 1 ..< len(s) {
 			if s[i] == '"' {
@@ -251,27 +251,27 @@ _strip_inline_comment :: proc(s: string) -> string {
 }
 
 @(private = "file")
-_skip_whitespace :: proc(t: ^Tokenizer) {
+_config_skip_whitespace :: proc(t: ^Config_Tokenizer) {
 	for t.pos < len(t.src) && (t.src[t.pos] == ' ' || t.src[t.pos] == '\t') do t.pos += 1
 }
 
 @(private = "file")
-_is_alpha :: proc(c: u8) -> bool {
+_config_is_alpha :: proc(c: u8) -> bool {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
 }
 
 @(private = "file")
-_is_alnum :: proc(c: u8) -> bool {
-	return _is_alpha(c) || (c >= '0' && c <= '9')
+_config_is_alnum :: proc(c: u8) -> bool {
+	return _config_is_alpha(c) || (c >= '0' && c <= '9')
 }
 
 @(private = "file")
-_is_hex :: proc(c: u8) -> bool {
+_config_is_hex :: proc(c: u8) -> bool {
 	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
 }
 
 @(private = "file")
-_hex_digit :: proc(c: u8) -> u8 {
+_config_hex_digit :: proc(c: u8) -> u8 {
 	if c >= '0' && c <= '9' do return c - '0'
 	if c >= 'a' && c <= 'f' do return c - 'a' + 10
 	if c >= 'A' && c <= 'F' do return c - 'A' + 10
@@ -279,7 +279,7 @@ _hex_digit :: proc(c: u8) -> u8 {
 }
 
 @(private = "file")
-SINGLE_CHAR_TOKENS := [256]Maybe(Token_Kind) {
+CONFIG_SINGLE_CHAR_TOKENS := [256]Maybe(Config_Token_Kind) {
 	'+' = .Plus,
 	'-' = .Minus,
 	'*' = .Star,
@@ -289,24 +289,24 @@ SINGLE_CHAR_TOKENS := [256]Maybe(Token_Kind) {
 }
 
 @(private = "file")
-_next_token :: proc(t: ^Tokenizer) -> (tok: Token, ok: bool) {
-	_skip_whitespace(t)
-	if t.pos >= len(t.src) do return Token{kind = .EOF}, true
+_config_next_token :: proc(t: ^Config_Tokenizer) -> (tok: Config_Token, ok: bool) {
+	_config_skip_whitespace(t)
+	if t.pos >= len(t.src) do return Config_Token{kind = .EOF}, true
 
 	c := t.src[t.pos]
 
 	if c == '#' {
 		start := t.pos + 1
 		end := start
-		for end < len(t.src) && _is_hex(t.src[end]) do end += 1
+		for end < len(t.src) && _config_is_hex(t.src[end]) do end += 1
 		hex_len := end - start
 		if hex_len == 8 {
-			r := _hex_digit(t.src[start + 0]) * 16 + _hex_digit(t.src[start + 1])
-			g := _hex_digit(t.src[start + 2]) * 16 + _hex_digit(t.src[start + 3])
-			b := _hex_digit(t.src[start + 4]) * 16 + _hex_digit(t.src[start + 5])
-			a := _hex_digit(t.src[start + 6]) * 16 + _hex_digit(t.src[start + 7])
+			r := _config_hex_digit(t.src[start + 0]) * 16 + _config_hex_digit(t.src[start + 1])
+			g := _config_hex_digit(t.src[start + 2]) * 16 + _config_hex_digit(t.src[start + 3])
+			b := _config_hex_digit(t.src[start + 4]) * 16 + _config_hex_digit(t.src[start + 5])
+			a := _config_hex_digit(t.src[start + 6]) * 16 + _config_hex_digit(t.src[start + 7])
 			t.pos = end
-			return Token{kind = .Hex_Color, value = [4]u8{r, g, b, a}}, true
+			return Config_Token{kind = .Hex_Color, value = [4]u8{r, g, b, a}}, true
 		}
 		return {}, false
 	}
@@ -316,7 +316,7 @@ _next_token :: proc(t: ^Tokenizer) -> (tok: Token, ok: bool) {
 		end := start
 		for end < len(t.src) && t.src[end] != '"' do end += 1
 		if end >= len(t.src) do return {}, false
-		tok = Token {
+		tok = Config_Token {
 			kind  = .String_Lit,
 			value = t.src[start:end],
 		}
@@ -339,18 +339,18 @@ _next_token :: proc(t: ^Tokenizer) -> (tok: Token, ok: bool) {
 		num_str := t.src[start:t.pos]
 		val, parse_ok := strconv.parse_f32(num_str)
 		if !parse_ok do return {}, false
-		return Token{kind = .Number, value = val}, true
+		return Config_Token{kind = .Number, value = val}, true
 	}
 
-	if _is_alpha(c) {
+	if _config_is_alpha(c) {
 		start := t.pos
-		for t.pos < len(t.src) && _is_alnum(t.src[t.pos]) do t.pos += 1
-		return Token{kind = .Ident, value = t.src[start:t.pos]}, true
+		for t.pos < len(t.src) && _config_is_alnum(t.src[t.pos]) do t.pos += 1
+		return Config_Token{kind = .Ident, value = t.src[start:t.pos]}, true
 	}
 
 	t.pos += 1
-	kind, is_single := SINGLE_CHAR_TOKENS[c].?
-	if is_single do return Token{kind = kind}, true
+	kind, is_single := CONFIG_SINGLE_CHAR_TOKENS[c].?
+	if is_single do return Config_Token{kind = kind}, true
 	return {}, false
 }
 
@@ -362,45 +362,45 @@ _next_token :: proc(t: ^Tokenizer) -> (tok: Token, ok: bool) {
 // primary → NUMBER  |  IDENT  |  '(' expr ')'
 
 @(private = "file")
-Parser :: struct {
-	tokenizer: Tokenizer,
-	current:   Token,
+Config_Parser :: struct {
+	tokenizer: Config_Tokenizer,
+	current:   Config_Token,
 	config:    ^Config,
 	ok:        bool,
 }
 
 @(private = "file")
-_parser_init :: proc(src: string, config: ^Config) -> Parser {
-	p := Parser {
-		tokenizer = Tokenizer{src = src, pos = 0},
+_config_parser_init :: proc(src: string, config: ^Config) -> Config_Parser {
+	p := Config_Parser {
+		tokenizer = Config_Tokenizer{src = src, pos = 0},
 		config = config,
 		ok = true,
 	}
-	tok, tok_ok := _next_token(&p.tokenizer)
+	tok, tok_ok := _config_next_token(&p.tokenizer)
 	p.current = tok
 	p.ok = tok_ok
 	return p
 }
 
 @(private = "file")
-_parser_advance :: proc(p: ^Parser) {
-	tok, tok_ok := _next_token(&p.tokenizer)
+_config_parser_advance :: proc(p: ^Config_Parser) {
+	tok, tok_ok := _config_next_token(&p.tokenizer)
 	p.current = tok
 	if !tok_ok do p.ok = false
 }
 
 @(private = "file")
-_parse_primary :: proc(p: ^Parser) -> f32 {
+_config_parse_primary :: proc(p: ^Config_Parser) -> f32 {
 	if !p.ok do return 0
 
 	#partial switch p.current.kind {
 	case .Number:
 		val := p.current.value.(f32)
-		_parser_advance(p)
+		_config_parser_advance(p)
 		return val
 	case .Ident:
 		name := p.current.value.(string)
-		_parser_advance(p)
+		_config_parser_advance(p)
 
 		idx, found := p.config.lookup[name]
 		if !found {
@@ -414,13 +414,13 @@ _parse_primary :: proc(p: ^Parser) -> f32 {
 		}
 		return expr.value
 	case .Lparen:
-		_parser_advance(p) // consume '('
-		val := _parse_expr(p)
+		_config_parser_advance(p) // consume '('
+		val := _config_parse_expr(p)
 		if p.current.kind != .Rparen {
 			p.ok = false
 			return 0
 		}
-		_parser_advance(p) // consume ')'
+		_config_parser_advance(p) // consume ')'
 		return val
 	}
 
@@ -429,23 +429,23 @@ _parse_primary :: proc(p: ^Parser) -> f32 {
 }
 
 @(private = "file")
-_parse_unary :: proc(p: ^Parser) -> f32 {
+_config_parse_unary :: proc(p: ^Config_Parser) -> f32 {
 	if !p.ok do return 0
 	if p.current.kind == .Minus {
-		_parser_advance(p)
-		return -_parse_unary(p)
+		_config_parser_advance(p)
+		return -_config_parse_unary(p)
 	}
-	return _parse_primary(p)
+	return _config_parse_primary(p)
 }
 
 @(private = "file")
-_parse_term :: proc(p: ^Parser) -> f32 {
+_config_parse_term :: proc(p: ^Config_Parser) -> f32 {
 	if !p.ok do return 0
-	left := _parse_unary(p)
+	left := _config_parse_unary(p)
 	for p.ok && (p.current.kind == .Star || p.current.kind == .Slash) {
 		op := p.current.kind
-		_parser_advance(p)
-		right := _parse_unary(p)
+		_config_parser_advance(p)
+		right := _config_parse_unary(p)
 		if op == .Star do left *= right
 		else {
 			if right == 0 {
@@ -459,13 +459,13 @@ _parse_term :: proc(p: ^Parser) -> f32 {
 }
 
 @(private = "file")
-_parse_expr :: proc(p: ^Parser) -> f32 {
+_config_parse_expr :: proc(p: ^Config_Parser) -> f32 {
 	if !p.ok do return 0
-	left := _parse_term(p)
+	left := _config_parse_term(p)
 	for p.ok && (p.current.kind == .Plus || p.current.kind == .Minus) {
 		op := p.current.kind
-		_parser_advance(p)
-		right := _parse_term(p)
+		_config_parser_advance(p)
+		right := _config_parse_term(p)
 		if op == .Plus do left += right
 		else do left -= right
 	}
@@ -473,13 +473,19 @@ _parse_expr :: proc(p: ^Parser) -> f32 {
 }
 
 @(private = "file")
-_eval_string_concat :: proc(expr: string, config: ^Config) -> (val: Config_String, ok: bool) {
-	t := Tokenizer {
+_config_eval_string_concat :: proc(
+	expr: string,
+	config: ^Config,
+) -> (
+	val: Config_String,
+	ok: bool,
+) {
+	t := Config_Tokenizer {
 		src = expr,
 		pos = 0,
 	}
 
-	tok, tok_ok := _next_token(&t)
+	tok, tok_ok := _config_next_token(&t)
 	if !tok_ok do return {}, false
 
 	b := strings.builder_make()
@@ -490,7 +496,7 @@ _eval_string_concat :: proc(expr: string, config: ^Config) -> (val: Config_Strin
 		if !first {
 			if tok.kind == .EOF do break
 			if tok.kind != .Plus do return {}, false
-			tok, tok_ok = _next_token(&t)
+			tok, tok_ok = _config_next_token(&t)
 			if !tok_ok do return {}, false
 		}
 		first = false
@@ -509,7 +515,7 @@ _eval_string_concat :: proc(expr: string, config: ^Config) -> (val: Config_Strin
 			return {}, false
 		}
 
-		tok, tok_ok = _next_token(&t)
+		tok, tok_ok = _config_next_token(&t)
 		if !tok_ok do return {}, false
 	}
 
@@ -517,7 +523,13 @@ _eval_string_concat :: proc(expr: string, config: ^Config) -> (val: Config_Strin
 }
 
 @(private = "file")
-_eval_expression :: proc(expr: string, config: ^Config) -> (val: Config_Entry_Value, ok: bool) {
+_config_eval_expression :: proc(
+	expr: string,
+	config: ^Config,
+) -> (
+	val: Config_Entry_Value,
+	ok: bool,
+) {
 	trimmed := strings.trim_space(expr)
 
 	if len(trimmed) >= 2 && trimmed[0] == '"' {
@@ -528,20 +540,20 @@ _eval_expression :: proc(expr: string, config: ^Config) -> (val: Config_Entry_Va
 	}
 
 	if len(trimmed) > 0 && trimmed[0] == '#' {
-		t := Tokenizer {
+		t := Config_Tokenizer {
 			src = trimmed,
 			pos = 0,
 		}
-		tok, tok_ok := _next_token(&t)
+		tok, tok_ok := _config_next_token(&t)
 		if tok_ok && tok.kind == .Hex_Color do return Config_Color{value = tok.value.([4]u8)}, true
 		return nil, false
 	}
 
-	p := _parser_init(trimmed, config)
-	result := _parse_expr(&p)
+	p := _config_parser_init(trimmed, config)
+	result := _config_parse_expr(&p)
 	if p.ok && p.current.kind == .EOF do return Config_Expression{value = result}, true
 
-	str_val, str_ok := _eval_string_concat(trimmed, config)
+	str_val, str_ok := _config_eval_string_concat(trimmed, config)
 	if str_ok do return str_val, true
 
 	return nil, false

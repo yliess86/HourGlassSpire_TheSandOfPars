@@ -89,7 +89,7 @@ player_fixed_update :: proc(player: ^Player, dt: f32) {
 }
 
 player_debug :: proc(player: ^Player) {
-	player_top := world_to_screen_point(
+	player_top := game_world_to_screen_point(
 		{player.transform.pos.x, player.transform.pos.y + PLAYER_SIZE},
 	)
 	player_subti := player_top - {0, DEBUG_TEXT_STATE_GAP}

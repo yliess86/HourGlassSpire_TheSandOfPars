@@ -43,7 +43,7 @@ debug_value_with_label :: proc(
 }
 
 debug_point :: proc(pos: [2]f32, color: [4]u8 = DEBUG_COLOR_STATE) {
-	sp := world_to_screen_point(pos)
+	sp := game_world_to_screen_point(pos)
 	debug_set_color(color)
 	sdl.RenderLine(game.win.renderer, sp.x - DEBUG_CROSS_HALF, sp.y, sp.x + DEBUG_CROSS_HALF, sp.y)
 	sdl.RenderLine(game.win.renderer, sp.x, sp.y - DEBUG_CROSS_HALF, sp.x, sp.y + DEBUG_CROSS_HALF)
@@ -54,8 +54,8 @@ debug_point_player :: proc(pos: [2]f32) {
 }
 
 debug_vector :: proc(pos: [2]f32, dir: [2]f32, color: [4]u8) {
-	sp := world_to_screen_point(pos)
-	sd := world_to_screen_point(pos + dir)
+	sp := game_world_to_screen_point(pos)
+	sd := game_world_to_screen_point(pos + dir)
 	debug_set_color(color)
 	sdl.RenderLine(game.win.renderer, sp.x, sp.y, sd.x, sd.y)
 }
@@ -65,7 +65,7 @@ debug_collider_rect :: proc(
 	color: [4]u8 = DEBUG_COLOR_COLLIDER,
 ) {
 	bottom_left := collider_rect.pos - collider_rect.size / 2
-	rect := world_to_screen(bottom_left, collider_rect.size)
+	rect := game_world_to_screen(bottom_left, collider_rect.size)
 	debug_set_color(color)
 	sdl.RenderRect(game.win.renderer, &rect)
 }
@@ -75,10 +75,10 @@ debug_ray :: proc(
 	hit: engine.Collider_Raycast_Hit,
 	hit_color: [4]u8 = DEBUG_COLOR_RAY_GROUND,
 ) {
-	sp := world_to_screen_point(origin)
-	ep := world_to_screen_point(endpoint)
+	sp := game_world_to_screen_point(origin)
+	ep := game_world_to_screen_point(endpoint)
 	if hit.hit {
-		hp := world_to_screen_point(hit.point)
+		hp := game_world_to_screen_point(hit.point)
 		debug_set_color(hit_color)
 		sdl.RenderLine(game.win.renderer, sp.x, sp.y, hp.x, hp.y)
 		debug_set_color(DEBUG_COLOR_RAY_MISS)
@@ -119,16 +119,16 @@ debug_collider_slope :: proc(collider_slope: engine.Collider_Slope) {
 		p1 = {base_x + span, base_y + span}
 		p2 = {base_x, base_y}
 	}
-	sp0 := world_to_screen_point(p0)
-	sp1 := world_to_screen_point(p1)
-	sp2 := world_to_screen_point(p2)
+	sp0 := game_world_to_screen_point(p0)
+	sp1 := game_world_to_screen_point(p1)
+	sp2 := game_world_to_screen_point(p2)
 	debug_set_color(DEBUG_COLOR_COLLIDER)
 	sdl.RenderLine(game.win.renderer, sp0.x, sp0.y, sp1.x, sp1.y)
 	sdl.RenderLine(game.win.renderer, sp1.x, sp1.y, sp2.x, sp2.y)
 	sdl.RenderLine(game.win.renderer, sp2.x, sp2.y, sp0.x, sp0.y)
 }
 
-camera_debug :: proc() {
+debug_camera :: proc() {
 	dz := game.camera.dead_zone
 	lw := f32(game.win.logical_w)
 	lh := f32(game.win.logical_h)

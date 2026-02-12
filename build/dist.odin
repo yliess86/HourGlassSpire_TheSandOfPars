@@ -123,7 +123,7 @@ dist_setup_sdl :: proc(target_os: string) -> bool {
 dist_build :: proc(target: Dist_Target) {
 	tmp_dir := fmt.tprintf(".dist_tmp_%s", target.name)
 	tmp_assets := fmt.tprintf("%s/assets", tmp_dir)
-	tmp_bin := fmt.tprintf("%s/%s%s", tmp_dir, game_name, target.exe_ext)
+	tmp_bin := fmt.tprintf("%s/%s%s", tmp_dir, config_game_name, target.exe_ext)
 
 	dist_dir := fmt.tprintf("dist/%s", target.name)
 

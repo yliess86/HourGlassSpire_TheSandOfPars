@@ -4,9 +4,9 @@ import engine "../engine"
 import "core:fmt"
 import sdl "vendor:sdl3"
 
-TILE_PX :: 8
+LEVEL_TILE_PX :: 8
 
-Tile_Kind :: enum u8 {
+Level_Tile_Kind :: enum u8 {
 	Empty,
 	Solid,
 	Platform,
@@ -22,7 +22,7 @@ Tile_Kind :: enum u8 {
 
 // BMP palette: editor color → tile kind
 @(private = "file")
-PALETTE :: [Tile_Kind][3]u8 {
+LEVEL_PALETTE :: [Level_Tile_Kind][3]u8 {
 	.Empty            = {0, 0, 0},
 	.Solid            = {255, 255, 255},
 	.Platform         = {0, 255, 0},
@@ -38,7 +38,7 @@ PALETTE :: [Tile_Kind][3]u8 {
 
 Level :: struct {
 	width, height:       int,
-	tiles:               []Tile_Kind, // [y * width + x], y=0 = world bottom
+	tiles:               []Level_Tile_Kind, // [y * width + x], y=0 = world bottom
 	world_w, world_h:    f32, // meters
 	player_spawn:        [2]f32, // bottom-center, meters
 	ground_colliders:    [dynamic]engine.Collider_Rect,
@@ -49,7 +49,7 @@ Level :: struct {
 	slope_colliders:     [dynamic]engine.Collider_Slope,
 
 	// Temp fields: populated during level_load, consumed by sand_init
-	original_tiles:      []Tile_Kind, // pre-reclassification, consumed by sand_init
+	original_tiles:      []Level_Tile_Kind, // pre-reclassification, consumed by sand_init
 	sand_piles:          [dynamic][2]int,
 	sand_emitters:       [dynamic][2]int,
 }
@@ -76,7 +76,7 @@ level_load :: proc(path: cstring) -> (level: Level, ok: bool) {
 	level.height = h
 	level.world_w = f32(w) * TILE_SIZE
 	level.world_h = f32(h) * TILE_SIZE
-	level.tiles = make([]Tile_Kind, w * h)
+	level.tiles = make([]Level_Tile_Kind, w * h)
 
 	pixels := ([^]u8)(surface.pixels)
 	pitch := int(surface.pitch)
@@ -97,7 +97,7 @@ level_load :: proc(path: cstring) -> (level: Level, ok: bool) {
 			b := pixels[offset + 2]
 
 			rgb := [3]u8{r, g, b}
-			kind := color_to_tile(rgb)
+			kind := level_color_to_tile(rgb)
 			idx := world_y * w + x
 			level.tiles[idx] = kind
 
@@ -119,7 +119,7 @@ level_load :: proc(path: cstring) -> (level: Level, ok: bool) {
 
 	// Fill spawn tile with the most common neighbor type
 	if has_spawn {
-		counts: [Tile_Kind]int
+		counts: [Level_Tile_Kind]int
 		for dy in -1 ..= 1 {
 			for dx in -1 ..= 1 {
 				if dx == 0 && dy == 0 do continue
@@ -131,9 +131,9 @@ level_load :: proc(path: cstring) -> (level: Level, ok: bool) {
 				}
 			}
 		}
-		best: Tile_Kind
+		best: Level_Tile_Kind
 		best_count := 0
-		for kind in Tile_Kind {
+		for kind in Level_Tile_Kind {
 			if counts[kind] > best_count {
 				best = kind
 				best_count = counts[kind]
@@ -152,8 +152,8 @@ level_load :: proc(path: cstring) -> (level: Level, ok: bool) {
 
 // Map RGB to tile kind (nearest match)
 @(private = "file")
-color_to_tile :: proc(rgb: [3]u8) -> Tile_Kind {
-	for color, kind in PALETTE {
+level_color_to_tile :: proc(rgb: [3]u8) -> Level_Tile_Kind {
+	for color, kind in LEVEL_PALETTE {
 		if rgb == color do return kind
 	}
 	return .Empty
@@ -161,15 +161,15 @@ color_to_tile :: proc(rgb: [3]u8) -> Tile_Kind {
 
 // Greedy row-merge: converts tile grid → minimal axis-aligned rectangles
 @(private = "file")
-Merge_Run :: struct {
-	kind:   Tile_Kind,
+Level_Merge_Run :: struct {
+	kind:   Level_Tile_Kind,
 	x0, x1: int, // tile x range [x0, x1)
 	y0:     int, // bottom row
 	y1:     int, // top row (exclusive)
 }
 
 @(private = "file")
-slope_is_kind :: proc(kind: Tile_Kind) -> bool {
+level_slope_is_kind :: proc(kind: Level_Tile_Kind) -> bool {
 	return(
 		kind == .Slope_Right ||
 		kind == .Slope_Left ||
@@ -183,7 +183,7 @@ level_merge_colliders :: proc(level: ^Level) {
 	// Save original tile kinds before reclassification so the
 	// classification pass can detect slope neighbors that get cleared.
 	n := level.width * level.height
-	level.original_tiles = make([]Tile_Kind, n)
+	level.original_tiles = make([]Level_Tile_Kind, n)
 	copy(level.original_tiles, level.tiles)
 
 	// Reclassify interior slope tiles to .Empty so only surface
@@ -191,7 +191,7 @@ level_merge_colliders :: proc(level: ^Level) {
 	for y in 0 ..< level.height {
 		for x in 0 ..< level.width {
 			kind := level.tiles[y * level.width + x]
-			if !slope_is_kind(kind) do continue
+			if !level_slope_is_kind(kind) do continue
 
 			// Floor slopes: interior if same-kind tile directly above
 			// Ceiling slopes: interior if same-kind tile directly below
@@ -226,12 +226,12 @@ level_merge_colliders :: proc(level: ^Level) {
 
 			// Floor slope above → slope handles the surface, no ground needed
 			above_kind :=
-				level.original_tiles[(y + 1) * level.width + x] if y < level.height - 1 else Tile_Kind.Empty
+				level.original_tiles[(y + 1) * level.width + x] if y < level.height - 1 else Level_Tile_Kind.Empty
 			floor_slope_above := above_kind == .Slope_Right || above_kind == .Slope_Left
 
 			// Ceiling slope below → slope handles the surface, no ceiling needed
 			below_kind :=
-				level.original_tiles[(y - 1) * level.width + x] if y > 0 else Tile_Kind.Empty
+				level.original_tiles[(y - 1) * level.width + x] if y > 0 else Level_Tile_Kind.Empty
 			ceil_slope_below := below_kind == .Slope_Ceil_Right || below_kind == .Slope_Ceil_Left
 
 			is_ground := !above_solid && !floor_slope_above
@@ -251,12 +251,12 @@ level_merge_colliders :: proc(level: ^Level) {
 				// Check original tiles for slope neighbors (reclassified ones are .Empty now)
 				if exposed_left &&
 				   x > 0 &&
-				   slope_is_kind(level.original_tiles[y * level.width + (x - 1)]) {
+				   level_slope_is_kind(level.original_tiles[y * level.width + (x - 1)]) {
 					exposed_left = false
 				}
 				if exposed_right &&
 				   x < level.width - 1 &&
-				   slope_is_kind(level.original_tiles[y * level.width + (x + 1)]) {
+				   level_slope_is_kind(level.original_tiles[y * level.width + (x + 1)]) {
 					exposed_right = false
 				}
 
@@ -285,11 +285,11 @@ level_merge_colliders :: proc(level: ^Level) {
 	level_merge_mask(level.width, level.height, back_wall_mask, &level.back_wall_colliders)
 
 	// Greedy row-merge for Platform tiles
-	active: [dynamic]Merge_Run
+	active: [dynamic]Level_Merge_Run
 	defer delete(active)
 
 	for y in 0 ..< level.height {
-		row_runs: [dynamic]Merge_Run
+		row_runs: [dynamic]Level_Merge_Run
 		defer delete(row_runs)
 
 		x := 0
@@ -303,7 +303,7 @@ level_merge_colliders :: proc(level: ^Level) {
 			for x < level.width && level.tiles[y * level.width + x] == kind {
 				x += 1
 			}
-			append(&row_runs, Merge_Run{kind = kind, x0 = x0, x1 = x, y0 = y, y1 = y + 1})
+			append(&row_runs, Level_Merge_Run{kind = kind, x0 = x0, x1 = x, y0 = y, y1 = y + 1})
 		}
 
 		matched := make([]bool, len(row_runs))
@@ -326,7 +326,7 @@ level_merge_colliders :: proc(level: ^Level) {
 		i := 0
 		for i < len(active) {
 			if active[i].y1 <= y {
-				emit_run(level, active[i])
+				level_emit_run(level, active[i])
 				ordered_remove(&active, i)
 			} else {
 				i += 1
@@ -341,7 +341,7 @@ level_merge_colliders :: proc(level: ^Level) {
 	}
 
 	for ar in active {
-		emit_run(level, ar)
+		level_emit_run(level, ar)
 	}
 
 	// Merge slope tiles into diagonal runs
@@ -349,7 +349,7 @@ level_merge_colliders :: proc(level: ^Level) {
 }
 
 @(private = "file")
-emit_run :: proc(level: ^Level, run: Merge_Run) {
+level_emit_run :: proc(level: ^Level, run: Level_Merge_Run) {
 	w := f32(run.x1 - run.x0) * TILE_SIZE
 	h := f32(run.y1 - run.y0) * TILE_SIZE
 	cx := f32(run.x0) * TILE_SIZE + w / 2
@@ -369,11 +369,11 @@ level_merge_mask :: proc(
 	mask: []bool,
 	target: ^[dynamic]engine.Collider_Rect,
 ) {
-	active: [dynamic]Merge_Run
+	active: [dynamic]Level_Merge_Run
 	defer delete(active)
 
 	for y in 0 ..< height {
-		row_runs: [dynamic]Merge_Run
+		row_runs: [dynamic]Level_Merge_Run
 		defer delete(row_runs)
 
 		x := 0
@@ -386,7 +386,7 @@ level_merge_mask :: proc(
 			for x < width && mask[y * width + x] {
 				x += 1
 			}
-			append(&row_runs, Merge_Run{kind = .Solid, x0 = x0, x1 = x, y0 = y, y1 = y + 1})
+			append(&row_runs, Level_Merge_Run{kind = .Solid, x0 = x0, x1 = x, y0 = y, y1 = y + 1})
 		}
 
 		matched := make([]bool, len(row_runs))
@@ -405,7 +405,7 @@ level_merge_mask :: proc(
 		i := 0
 		for i < len(active) {
 			if active[i].y1 <= y {
-				emit_rect(target, active[i])
+				level_emit_rect(target, active[i])
 				ordered_remove(&active, i)
 			} else {
 				i += 1
@@ -420,12 +420,12 @@ level_merge_mask :: proc(
 	}
 
 	for ar in active {
-		emit_rect(target, ar)
+		level_emit_rect(target, ar)
 	}
 }
 
 @(private = "file")
-emit_rect :: proc(target: ^[dynamic]engine.Collider_Rect, run: Merge_Run) {
+level_emit_rect :: proc(target: ^[dynamic]engine.Collider_Rect, run: Level_Merge_Run) {
 	w := f32(run.x1 - run.x0) * TILE_SIZE
 	h := f32(run.y1 - run.y0) * TILE_SIZE
 	cx := f32(run.x0) * TILE_SIZE + w / 2
@@ -434,7 +434,7 @@ emit_rect :: proc(target: ^[dynamic]engine.Collider_Rect, run: Merge_Run) {
 }
 
 @(private = "file")
-tile_to_slope_kind :: proc(kind: Tile_Kind) -> engine.Collider_Slope_Kind {
+level_tile_to_slope_kind :: proc(kind: Level_Tile_Kind) -> engine.Collider_Slope_Kind {
 	#partial switch kind {
 	case .Slope_Right:
 		return .Right
@@ -456,7 +456,7 @@ level_merge_slopes :: proc(level: ^Level) {
 	for y in 0 ..< level.height {
 		for x in 0 ..< level.width {
 			kind := level.tiles[y * level.width + x]
-			if !slope_is_kind(kind) do continue
+			if !level_slope_is_kind(kind) do continue
 
 			// Check if previous diagonal neighbor is the same kind.
 			// If so, skip — this tile will be merged from the start of its run.
@@ -507,7 +507,7 @@ level_merge_slopes :: proc(level: ^Level) {
 			append(
 				&level.slope_colliders,
 				engine.Collider_Slope {
-					kind = tile_to_slope_kind(kind),
+					kind = level_tile_to_slope_kind(kind),
 					base_x = base_x,
 					base_y = base_y,
 					span = span,
@@ -526,7 +526,7 @@ level_render :: proc(level: ^Level) {
 			color := LEVEL_COLOR_TILE_BACK_WALL
 			world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
 			world_size := [2]f32{TILE_SIZE, TILE_SIZE}
-			rect := world_to_screen(world_pos, world_size)
+			rect := game_world_to_screen(world_pos, world_size)
 			sdl.SetRenderDrawColor(game.win.renderer, color.r, color.g, color.b, color.a)
 			sdl.RenderFillRect(game.win.renderer, &rect)
 		}
@@ -543,7 +543,7 @@ level_render :: proc(level: ^Level) {
 	for s in level.slope_colliders {
 		world_pos := [2]f32{s.base_x, s.base_y}
 		world_size := [2]f32{s.span, s.span}
-		rect := world_to_screen(world_pos, world_size)
+		rect := game_world_to_screen(world_pos, world_size)
 		sdl.RenderFillRect(game.win.renderer, &rect)
 	}
 
@@ -554,7 +554,7 @@ level_render :: proc(level: ^Level) {
 			if kind != .Solid && kind != .Platform do continue
 			world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
 			world_size := [2]f32{TILE_SIZE, TILE_SIZE}
-			rect := world_to_screen(world_pos, world_size)
+			rect := game_world_to_screen(world_pos, world_size)
 			sdl.SetRenderDrawColor(
 				game.win.renderer,
 				LEVEL_COLOR_TILE_SOLID.r,
@@ -593,9 +593,9 @@ level_render :: proc(level: ^Level) {
 			v1 = {s.base_x, s.base_y + s.span}
 			v2 = {s.base_x + s.span, s.base_y + s.span}
 		}
-		sp0 := world_to_screen_point(v0)
-		sp1 := world_to_screen_point(v1)
-		sp2 := world_to_screen_point(v2)
+		sp0 := game_world_to_screen_point(v0)
+		sp1 := game_world_to_screen_point(v1)
+		sp2 := game_world_to_screen_point(v2)
 		verts := [3]sdl.Vertex {
 			{position = sdl.FPoint(sp0), color = slope_color, tex_coord = {0, 0}},
 			{position = sdl.FPoint(sp1), color = slope_color, tex_coord = {0, 0}},
@@ -653,16 +653,16 @@ level_debug_grid :: proc(level: ^Level) {
 	// Vertical lines
 	for x in x0 ..= x1 {
 		wx := f32(x) * TILE_SIZE
-		sp0 := world_to_screen_point({wx, f32(y0) * TILE_SIZE})
-		sp1 := world_to_screen_point({wx, f32(y1) * TILE_SIZE})
+		sp0 := game_world_to_screen_point({wx, f32(y0) * TILE_SIZE})
+		sp1 := game_world_to_screen_point({wx, f32(y1) * TILE_SIZE})
 		sdl.RenderLine(game.win.renderer, sp0.x, sp0.y, sp1.x, sp1.y)
 	}
 
 	// Horizontal lines
 	for y in y0 ..= y1 {
 		wy := f32(y) * TILE_SIZE
-		sp0 := world_to_screen_point({f32(x0) * TILE_SIZE, wy})
-		sp1 := world_to_screen_point({f32(x1) * TILE_SIZE, wy})
+		sp0 := game_world_to_screen_point({f32(x0) * TILE_SIZE, wy})
+		sp1 := game_world_to_screen_point({f32(x1) * TILE_SIZE, wy})
 		sdl.RenderLine(game.win.renderer, sp0.x, sp0.y, sp1.x, sp1.y)
 	}
 }

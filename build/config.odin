@@ -121,7 +121,7 @@ config_extract_comment :: proc(raw_value: string) -> string {
 	return strings.trim_space(first[1:])
 }
 
-game_name: string
+config_game_name: string
 
 config_gen :: proc() -> bool {
 	data, ok := os.read_entire_file("assets/game.ini")
@@ -170,10 +170,14 @@ config_gen :: proc() -> bool {
 		)
 
 		if key == "GAME_TITLE" && type == .String {
-			title := strings.trim(raw_value, "\"")
-			parts := strings.fields(title)
-			game_name = strings.concatenate(parts)
-			delete(parts)
+			start := strings.index_byte(raw_value, '"')
+			end := strings.last_index_byte(raw_value, '"')
+			if start >= 0 && end > start {
+				title := raw_value[start + 1:end]
+				parts := strings.fields(title)
+				config_game_name = strings.concatenate(parts)
+				delete(parts)
+			}
 		}
 	}
 
@@ -185,7 +189,7 @@ config_gen :: proc() -> bool {
 		}
 	}
 
-	if len(game_name) == 0 do game_name = "game"
+	if len(config_game_name) == 0 do config_game_name = "game"
 
 	// Generate output
 	b := strings.builder_make()
@@ -261,7 +265,7 @@ config_gen :: proc() -> bool {
 		case .String:
 			strings.write_string(&b, "string")
 		}
-		strings.write_string(&b, "(&game_config, \"")
+		strings.write_string(&b, "(&config_game, \"")
 		strings.write_string(&b, entry.key)
 		strings.write_string(&b, "\"); ok do ")
 		strings.write_string(&b, entry.key)
@@ -269,8 +273,8 @@ config_gen :: proc() -> bool {
 	}
 	strings.write_string(&b, "}\n")
 
-	// game_config global
-	strings.write_string(&b, "\ngame_config: engine.Config\n")
+	// config_game global
+	strings.write_string(&b, "\nconfig_game: engine.Config\n")
 
 	// config_load_and_apply proc
 	strings.write_string(&b, "\nconfig_load_and_apply :: proc() {\n")
@@ -279,20 +283,20 @@ config_gen :: proc() -> bool {
 	strings.write_string(&b, "\t\tfmt.eprintf(\"[config] Failed to load config\\n\")\n")
 	strings.write_string(&b, "\t\treturn\n")
 	strings.write_string(&b, "\t}\n")
-	strings.write_string(&b, "\tgame_config = config\n")
+	strings.write_string(&b, "\tconfig_game = config\n")
 	strings.write_string(&b, "\tconfig_apply()\n")
 	strings.write_string(&b, "}\n")
 
 	// config_reload_all proc
 	strings.write_string(&b, "\nconfig_reload_all :: proc() {\n")
-	strings.write_string(&b, "\tif len(game_config.path) == 0 {\n")
+	strings.write_string(&b, "\tif len(config_game.path) == 0 {\n")
 	strings.write_string(&b, "\t\tconfig_load_and_apply()\n")
-	strings.write_string(&b, "\t\tconfig_post_apply()\n")
+	strings.write_string(&b, "\t\tgame_config_post_apply()\n")
 	strings.write_string(&b, "\t\treturn\n")
 	strings.write_string(&b, "\t}\n")
-	strings.write_string(&b, "\tif engine.config_reload(&game_config) {\n")
+	strings.write_string(&b, "\tif engine.config_reload(&config_game) {\n")
 	strings.write_string(&b, "\t\tconfig_apply()\n")
-	strings.write_string(&b, "\t\tconfig_post_apply()\n")
+	strings.write_string(&b, "\t\tgame_config_post_apply()\n")
 	strings.write_string(&b, "\t\tfmt.eprintf(\"[config] Reloaded\\n\")\n")
 	strings.write_string(&b, "\t}\n")
 	strings.write_string(&b, "}\n")

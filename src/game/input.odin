@@ -64,7 +64,7 @@ input_binding_apply :: proc(input: ^engine.Input(Input_Action)) {
 
 		// Keyboard binding override from config
 		kb_key := fmt.tprintf("INPUT_KB_%s", name)
-		if kb_name, ok := engine.config_get_string(&game_config, kb_key); ok {
+		if kb_name, ok := engine.config_get_string(&config_game, kb_key); ok {
 			scancode := sdl.GetScancodeFromName(
 				strings.clone_to_cstring(kb_name, context.temp_allocator),
 			)
@@ -74,7 +74,7 @@ input_binding_apply :: proc(input: ^engine.Input(Input_Action)) {
 
 		// Gamepad binding override from config
 		gp_key := fmt.tprintf("INPUT_GP_%s", name)
-		if gp_name, ok := engine.config_get_string(&game_config, gp_key); ok {
+		if gp_name, ok := engine.config_get_string(&config_game, gp_key); ok {
 			button := sdl.GetGamepadButtonFromString(
 				strings.clone_to_cstring(gp_name, context.temp_allocator),
 			)

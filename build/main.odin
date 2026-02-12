@@ -3,17 +3,17 @@ package build
 import "core:fmt"
 import "core:os"
 
-when ODIN_OS == .Windows {EXE_EXT :: ".exe"} else do EXE_EXT :: ""
-CLEAN_DIRS :: [?]string{"bin", "dist", "libs"}
+when ODIN_OS == .Windows {MAIN_EXE_EXT :: ".exe"} else do MAIN_EXE_EXT :: ""
+MAIN_CLEAN_DIRS :: [?]string{"bin", "dist", "libs"}
 
-clean :: proc(args: []string) {
-	targets: [len(CLEAN_DIRS)]bool
+main_clean :: proc(args: []string) {
+	targets: [len(MAIN_CLEAN_DIRS)]bool
 
 	if len(args) == 0 do for &t in targets do t = true
 	else {
 		for arg in args {
 			found := false
-			for dir, i in CLEAN_DIRS {
+			for dir, i in MAIN_CLEAN_DIRS {
 				if arg == dir {
 					targets[i] = true
 					found = true
@@ -28,7 +28,7 @@ clean :: proc(args: []string) {
 		}
 	}
 
-	for dir, i in CLEAN_DIRS {
+	for dir, i in MAIN_CLEAN_DIRS {
 		if !targets[i] do continue
 		if os.exists(dir) {
 			sys_run(fmt.tprintf("rm -rf %s", dir))
@@ -47,7 +47,7 @@ main :: proc() {
 	}
 
 	if mode == "clean" {
-		clean(os.args[2:])
+		main_clean(os.args[2:])
 		return
 	}
 
@@ -107,7 +107,7 @@ main :: proc() {
 		return
 	}
 
-	game_bin := fmt.tprintf("bin/%s%s", game_name, EXE_EXT)
+	game_bin := fmt.tprintf("bin/%s%s", config_game_name, MAIN_EXE_EXT)
 
 	if mode == "dist" {
 		target_name := dist_default_target()

@@ -5,7 +5,7 @@ import "core:math"
 import sdl "vendor:sdl3"
 
 // Render sand particles (camera-culled)
-sand_render :: proc(sand: ^Sand_World) {
+sand_graphics_render :: proc(sand: ^Sand_World) {
 	cam_bl := game.camera.pos - game.camera.size / 2
 	cam_tr := game.camera.pos + game.camera.size / 2
 
@@ -19,17 +19,17 @@ sand_render :: proc(sand: ^Sand_World) {
 			cell := sand.cells[y * sand.width + x]
 			if cell.material != .Sand do continue
 
-			color := sand_cell_color(cell)
+			color := sand_graphics_cell_color(cell)
 			world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
 			world_size := [2]f32{TILE_SIZE, TILE_SIZE}
-			rect := world_to_screen(world_pos, world_size)
+			rect := game_world_to_screen(world_pos, world_size)
 			sdl.SetRenderDrawColor(game.win.renderer, color.r, color.g, color.b, color.a)
 			sdl.RenderFillRect(game.win.renderer, &rect)
 		}
 	}
 }
 
-sand_cell_color :: proc(cell: Sand_Cell) -> [4]u8 {
+sand_graphics_cell_color :: proc(cell: Sand_Cell) -> [4]u8 {
 	offset := i16(cell.color_variant) * i16(SAND_COLOR_VARIATION) - i16(SAND_COLOR_VARIATION) * 2
 	return {
 		u8(math.clamp(i16(SAND_COLOR.r) + offset, 0, 255)),
@@ -40,7 +40,7 @@ sand_cell_color :: proc(cell: Sand_Cell) -> [4]u8 {
 }
 
 // Debug visualization: stress heatmap, chunk outlines, stats, emitter markers
-sand_debug :: proc(sand: ^Sand_World) {
+sand_graphics_debug :: proc(sand: ^Sand_World) {
 	if game.debug != .SAND && game.debug != .ALL do return
 
 	cam_bl := game.camera.pos - game.camera.size / 2
@@ -78,7 +78,7 @@ sand_debug :: proc(sand: ^Sand_World) {
 
 				world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
 				world_size := [2]f32{TILE_SIZE, TILE_SIZE}
-				rect := world_to_screen(world_pos, world_size)
+				rect := game_world_to_screen(world_pos, world_size)
 				sdl.SetRenderDrawColor(game.win.renderer, color.r, color.g, color.b, color.a)
 				sdl.RenderFillRect(game.win.renderer, &rect)
 			}
@@ -100,7 +100,7 @@ sand_debug :: proc(sand: ^Sand_World) {
 
 			world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
 			world_size := [2]f32{TILE_SIZE, TILE_SIZE}
-			rect := world_to_screen(world_pos, world_size)
+			rect := game_world_to_screen(world_pos, world_size)
 			sdl.SetRenderDrawColor(game.win.renderer, 0, 0, 0, SAND_DEBUG_SLEEP_DIM)
 			sdl.RenderFillRect(game.win.renderer, &rect)
 		}
@@ -122,7 +122,7 @@ sand_debug :: proc(sand: ^Sand_World) {
 
 			world_pos := [2]f32{chunk_x0, chunk_y0}
 			world_size := [2]f32{chunk_w, chunk_h}
-			rect := world_to_screen(world_pos, world_size)
+			rect := game_world_to_screen(world_pos, world_size)
 
 			chunk := sand.chunks[cy * sand.chunks_w + cx]
 			if chunk.needs_sim {
@@ -151,7 +151,7 @@ sand_debug :: proc(sand: ^Sand_World) {
 	for emitter in sand.emitters {
 		world_pos := [2]f32{f32(emitter.tx) * TILE_SIZE, f32(emitter.ty) * TILE_SIZE}
 		world_size := [2]f32{TILE_SIZE, TILE_SIZE}
-		rect := world_to_screen(world_pos, world_size)
+		rect := game_world_to_screen(world_pos, world_size)
 		sdl.SetRenderDrawColor(
 			game.win.renderer,
 			SAND_DEBUG_COLOR_EMITTER.r,
