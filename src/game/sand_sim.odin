@@ -133,18 +133,21 @@ sand_update_cell_flat :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
 		return
 	}
 
-	// No downward movement: try diagonal
+	// No downward movement: try diagonal (probability-gated for steeper piles)
 	cell = &sand.cells[cy * sand.width + cx]
-	first_dx: int = (rand.int31() & 1) == 0 ? -1 : 1
-	if sand_try_move(sand, cx, cy, cx + first_dx, cy - 1, parity) {
-		sand_cell_reset_fall(&sand.cells[(cy - 1) * sand.width + (cx + first_dx)])
-	} else if sand_try_move(sand, cx, cy, cx - first_dx, cy - 1, parity) {
-		sand_cell_reset_fall(&sand.cells[(cy - 1) * sand.width + (cx - first_dx)])
-	} else {
-		// Stuck
-		sand_cell_reset_fall(cell)
-		if cell.sleep_counter < 255 do cell.sleep_counter += 1
+	if rand.float32() < SAND_REPOSE_CHANCE {
+		first_dx: int = (rand.int31() & 1) == 0 ? -1 : 1
+		if sand_try_move(sand, cx, cy, cx + first_dx, cy - 1, parity) {
+			sand_cell_reset_fall(&sand.cells[(cy - 1) * sand.width + (cx + first_dx)])
+			return
+		} else if sand_try_move(sand, cx, cy, cx - first_dx, cy - 1, parity) {
+			sand_cell_reset_fall(&sand.cells[(cy - 1) * sand.width + (cx - first_dx)])
+			return
+		}
 	}
+	// Stuck
+	sand_cell_reset_fall(cell)
+	if cell.sleep_counter < 255 do cell.sleep_counter += 1
 }
 
 // Try to move a sand cell from (sx,sy) to (dx,dy). Returns true if moved.

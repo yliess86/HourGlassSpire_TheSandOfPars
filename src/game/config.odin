@@ -164,6 +164,7 @@ SAND_MOVE_PENALTY: f32                     // run speed reduction per immersion 
 SAND_JUMP_PENALTY: f32                     // jump force reduction per immersion (0=none, 1=no jump)
 SAND_FALL_ACCEL_DIVISOR: u8                // extra_steps = fall_count / divisor
 SAND_FALL_MAX_STEPS: u8                    // max cells moved per sim step
+SAND_REPOSE_CHANCE: f32                    // probability of attempting diagonal move (0-1, lower = steeper piles)
 SAND_WATER_SWAP_CHANCE: f32                // probability sand sinks through water per tick (organic mixing)
 SAND_WALL_RUN_PENALTY: f32                 // wall run speed reduction per immersion (0=none, 1=zero)
 SAND_PARTICLE_SPEED: f32                   // displacement particle outward velocity (m/s)
@@ -362,6 +363,7 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "SAND_JUMP_PENALTY"); ok do SAND_JUMP_PENALTY = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_FALL_ACCEL_DIVISOR"); ok do SAND_FALL_ACCEL_DIVISOR = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_FALL_MAX_STEPS"); ok do SAND_FALL_MAX_STEPS = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_REPOSE_CHANCE"); ok do SAND_REPOSE_CHANCE = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_WATER_SWAP_CHANCE"); ok do SAND_WATER_SWAP_CHANCE = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_WALL_RUN_PENALTY"); ok do SAND_WALL_RUN_PENALTY = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_PARTICLE_SPEED"); ok do SAND_PARTICLE_SPEED = val
