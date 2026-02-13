@@ -18,7 +18,29 @@ Sand_Cell :: struct {
 	material:      Sand_Material, // 1 byte
 	sleep_counter: u8, // frames without movement; sleeps at threshold
 	color_variant: u8, // 0-3, random brightness offset for visual variety
-	flags:         u8, // bit 0: updated-this-step parity (prevents double-move)
+	flags:         u8, // bit 0: parity, bits 1-3: fall_count (0-7)
+}
+
+// Flag bit layout
+SAND_FLAG_PARITY :: u8(0x01) // bit 0
+SAND_FLAG_FALL_MASK :: u8(0x0E) // bits 1-3
+SAND_FLAG_FALL_SHIFT :: u8(1)
+
+sand_cell_fall_count :: proc(cell: ^Sand_Cell) -> u8 {
+	return (cell.flags & SAND_FLAG_FALL_MASK) >> SAND_FLAG_FALL_SHIFT
+}
+
+sand_cell_set_fall_count :: proc(cell: ^Sand_Cell, count: u8) {
+	cell.flags = (cell.flags & ~SAND_FLAG_FALL_MASK) | (min(count, 7) << SAND_FLAG_FALL_SHIFT)
+}
+
+sand_cell_increment_fall :: proc(cell: ^Sand_Cell) {
+	count := sand_cell_fall_count(cell)
+	if count < 7 do sand_cell_set_fall_count(cell, count + 1)
+}
+
+sand_cell_reset_fall :: proc(cell: ^Sand_Cell) {
+	cell.flags &= ~SAND_FLAG_FALL_MASK
 }
 
 Sand_Emitter :: struct {

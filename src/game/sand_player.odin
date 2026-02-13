@@ -1,6 +1,9 @@
 package game
 
+import engine "../engine"
 import "core:math"
+import "core:math/rand"
+import sdl "vendor:sdl3"
 
 // Compute sand immersion ratio (0.0–1.0) from player's tile footprint
 sand_compute_immersion :: proc(sand: ^Sand_World, player: ^Player) -> f32 {
@@ -37,7 +40,6 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 	// Compute player tile footprint
 	x0, y0, x1, y1 := sand_player_footprint(sand, player)
 
-	total_cells := max((x1 - x0 + 1) * (y1 - y0 + 1), 1)
 	sand_displaced := 0
 	water_displaced := 0
 
@@ -59,28 +61,56 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 		}
 	}
 
-	// Sand drag
+	// Displacement particles: visual feedback when pushing sand/water
 	if sand_displaced > 0 {
-		drag_factor := f32(sand_displaced) * SAND_PLAYER_DRAG_PER_CELL
-		drag_factor = min(drag_factor, SAND_PLAYER_DRAG_MAX)
-		player.transform.vel *= (1.0 - drag_factor)
+		emit_pos := [2]f32{player.transform.pos.x, player.transform.pos.y + PLAYER_SIZE}
+		sand_particles_emit(
+			&game.sand_particles,
+			emit_pos,
+			player.transform.vel,
+			SAND_COLOR,
+			min(sand_displaced, 4),
+		)
+	}
+	if water_displaced > 0 {
+		emit_pos := [2]f32{player.transform.pos.x, player.transform.pos.y + PLAYER_SIZE}
+		sand_particles_emit(
+			&game.sand_particles,
+			emit_pos,
+			player.transform.vel,
+			WATER_COLOR,
+			min(water_displaced, 4),
+		)
 	}
 
-	// Water drag
+	// Sand drag — full horizontal, reduced vertical
+	if sand_displaced > 0 {
+		drag := min(f32(sand_displaced) * SAND_PLAYER_DRAG_PER_CELL, SAND_PLAYER_DRAG_MAX)
+		player.transform.vel.x *= (1.0 - drag)
+		player.transform.vel.y *= (1.0 - drag * SAND_PLAYER_DRAG_Y_FACTOR)
+	}
+
+	// Water drag — full horizontal, reduced vertical
 	if water_displaced > 0 {
-		drag_factor := f32(water_displaced) * WATER_PLAYER_DRAG_PER_CELL
-		drag_factor = min(drag_factor, WATER_PLAYER_DRAG_MAX)
-		player.transform.vel *= (1.0 - drag_factor)
+		drag := min(f32(water_displaced) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX)
+		player.transform.vel.x *= (1.0 - drag)
+		player.transform.vel.y *= (1.0 - drag * WATER_PLAYER_DRAG_Y_FACTOR)
 	}
 
 	// Pressure: count sand cells directly above player (water does not create pressure)
+	// Gap tolerance: scan past small empty gaps in the column
 	above_count := 0
 	for tx in x0 ..= x1 {
+		gap := 0
 		for ty := y1 + 1; ty < sand.height; ty += 1 {
 			cell := sand_get(sand, tx, ty)
-			if cell.material == .Sand do above_count += 1
-			else if cell.material == .Solid do break
-			else do break
+			if cell.material == .Sand {
+				above_count += 1
+				gap = 0
+			} else if cell.material == .Solid {break} else {
+				gap += 1
+				if gap > int(SAND_PRESSURE_GAP_TOLERANCE) do break
+			}
 		}
 	}
 
@@ -89,9 +119,8 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 		player.transform.vel.y -= pressure_force * dt
 	}
 
-	// Burial detection (sand only)
-	burial_ratio := f32(sand_displaced) / f32(total_cells)
-	if burial_ratio > SAND_BURIAL_THRESHOLD {
+	// Burial detection: use sensor immersion (actual overlap, not displaced count)
+	if player.sensor.sand_immersion > SAND_BURIAL_THRESHOLD {
 		player.transform.vel.y -= SAND_BURIAL_GRAVITY_MULT * GRAVITY * dt
 	}
 
@@ -149,6 +178,7 @@ sand_try_displace_to :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, depth: int 
 	src_idx := sy * sand.width + sx
 	sand.cells[dst_idx] = sand.cells[src_idx]
 	sand.cells[dst_idx].sleep_counter = 0
+	sand_cell_reset_fall(&sand.cells[dst_idx]) // Displacement is not natural fall
 	sand.cells[src_idx] = Sand_Cell{}
 
 	sand_wake_neighbors(sand, sx, sy)
@@ -166,4 +196,49 @@ sand_try_displace_to :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, depth: int 
 	}
 
 	return true
+}
+
+// Emit displacement particles with outward velocity away from player
+sand_particles_emit :: proc(
+	pool: ^engine.Particle_Pool,
+	pos, player_vel: [2]f32,
+	color: [4]u8,
+	count: int,
+) {
+	for _ in 0 ..< count {
+		angle := rand.float32() * 2 * math.PI
+		speed := SAND_PARTICLE_SPEED * (0.5 + 0.5 * rand.float32())
+		vel := [2]f32{math.cos(angle) * speed, math.sin(angle) * speed + abs(player_vel.y) * 0.2}
+		engine.particle_pool_emit(
+			pool,
+			engine.Particle {
+				pos = pos,
+				vel = vel,
+				lifetime = SAND_PARTICLE_LIFETIME * (0.7 + 0.3 * rand.float32()),
+				age = 0,
+				size = SAND_PARTICLE_SIZE,
+				color = color,
+			},
+		)
+	}
+}
+
+sand_particles_update :: proc(pool: ^engine.Particle_Pool, dt: f32) {
+	engine.particle_pool_update(pool, dt)
+	for i in 0 ..< pool.count {
+		pool.items[i].vel.y -= SAND_PARTICLE_GRAVITY * dt
+		pool.items[i].vel *= 1.0 - 3.0 * dt
+		pool.items[i].pos += pool.items[i].vel * dt
+	}
+}
+
+sand_particles_render :: proc(pool: ^engine.Particle_Pool) {
+	for i in 0 ..< pool.count {
+		p := &pool.items[i]
+		t := p.age / p.lifetime
+		alpha := u8(f32(p.color.a) * (1.0 - t))
+		sdl.SetRenderDrawColor(game.win.renderer, p.color.r, p.color.g, p.color.b, alpha)
+		rect := game_world_to_screen(p.pos - {p.size / 2, 0}, {p.size, p.size})
+		sdl.RenderFillRect(game.win.renderer, &rect)
+	}
 }
