@@ -33,6 +33,35 @@ sand_compute_water_immersion :: proc(sand: ^Sand_World, player: ^Player) -> f32 
 	return f32(water_count) / f32(total)
 }
 
+// Find topmost sand cell surface Y in a column near the player's feet
+sand_column_surface_y :: proc(sand: ^Sand_World, tx, base_ty, scan_height: int) -> (f32, bool) {
+	for ty := base_ty + scan_height; ty >= max(base_ty - 1, 0); ty -= 1 {
+		if !sand_in_bounds(sand, tx, ty) do continue
+		if sand_get(sand, tx, ty).material == .Sand do return f32(ty + 1) * TILE_SIZE, true
+	}
+	return 0, false
+}
+
+// Interpolated sand surface height under the player's center
+sand_surface_query :: proc(sand: ^Sand_World, player: ^Player) -> (f32, bool) {
+	center_x := player.transform.pos.x
+	center_tx := int(center_x / TILE_SIZE)
+	base_ty := int(player.transform.pos.y / TILE_SIZE)
+	scan := int(SAND_SURFACE_SCAN_HEIGHT)
+
+	left_y, left_ok := sand_column_surface_y(sand, center_tx, base_ty, scan)
+	if !left_ok do return 0, false
+
+	frac_x := center_x / TILE_SIZE - f32(center_tx)
+	adj_tx := center_tx + 1 if frac_x >= 0.5 else center_tx - 1
+
+	right_y, right_ok := sand_column_surface_y(sand, adj_tx, base_ty, scan)
+	if !right_ok do return left_y, true
+
+	if adj_tx > center_tx do return math.lerp(left_y, right_y, frac_x), true
+	return math.lerp(right_y, left_y, frac_x), true
+}
+
 // Bidirectional player-sand/water coupling: displacement, drag, pressure, burial, buoyancy
 sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 	if sand.width == 0 || sand.height == 0 do return

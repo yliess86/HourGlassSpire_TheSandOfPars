@@ -188,6 +188,8 @@ SAND_FOOTPRINT_MIN_SPEED: f32              // minimum horizontal speed for footp
 SAND_DASH_DRAG_FACTOR: f32                 // drag multiplier during dash (20% of normal)
 SAND_DASH_PARTICLE_MAX: u8                 // max particles per fixed step during dash
 SAND_DASH_PARTICLE_SPEED_MULT: f32         // particle speed multiplier during dash
+SAND_SURFACE_SCAN_HEIGHT: u8               // tiles to scan vertically for surface
+SAND_SURFACE_SMOOTH: u8                    // 0=staircase (current), 1=interpolated
 
 // [sand_debug]
 SAND_DEBUG_COLOR_LOW: [4]u8                // heatmap color for low pressure (blue)
@@ -411,6 +413,8 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "SAND_DASH_DRAG_FACTOR"); ok do SAND_DASH_DRAG_FACTOR = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_DASH_PARTICLE_MAX"); ok do SAND_DASH_PARTICLE_MAX = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_DASH_PARTICLE_SPEED_MULT"); ok do SAND_DASH_PARTICLE_SPEED_MULT = val
+	if val, ok := engine.config_get_u8(&config_game, "SAND_SURFACE_SCAN_HEIGHT"); ok do SAND_SURFACE_SCAN_HEIGHT = val
+	if val, ok := engine.config_get_u8(&config_game, "SAND_SURFACE_SMOOTH"); ok do SAND_SURFACE_SMOOTH = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_LOW"); ok do SAND_DEBUG_COLOR_LOW = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_MID"); ok do SAND_DEBUG_COLOR_MID = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_HIGH"); ok do SAND_DEBUG_COLOR_HIGH = val
