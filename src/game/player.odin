@@ -9,6 +9,7 @@ Player_State :: enum u8 {
 	Dashing,
 	Dropping,
 	Grounded,
+	Sand_Swim,
 	Swimming,
 	Wall_Run_Horizontal,
 	Wall_Run_Vertical,
@@ -64,6 +65,7 @@ player_init :: proc(player: ^Player) {
 	player_fsm_dashing_init(player)
 	player_fsm_dropping_init(player)
 	player_fsm_grounded_init(player)
+	player_fsm_sand_swim_init(player)
 	player_fsm_swimming_init(player)
 	player_fsm_wall_run_horizontal_init(player)
 	player_fsm_wall_run_vertical_init(player)

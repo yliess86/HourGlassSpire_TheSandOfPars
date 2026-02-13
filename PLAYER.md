@@ -8,6 +8,7 @@ stateDiagram-v2
     Grounded --> Airborne : !on_ground (fell off)
     Grounded --> Dropping : on_platform && down && jump buffered
     Grounded --> Dashing : DASH && cooldown ready
+    Grounded --> Sand_Swim : sand_immersion > enter threshold
     Grounded --> Swimming : water_immersion > enter threshold
     Grounded --> Wall_Run_Vertical : on_side_wall && WALL_RUN held
     Grounded --> Wall_Run_Horizontal : on_back_wall && WALL_RUN && horizontal input
@@ -15,6 +16,7 @@ stateDiagram-v2
 
     Airborne --> Grounded : on_ground
     Airborne --> Dashing : DASH && cooldown ready
+    Airborne --> Sand_Swim : sand_immersion > enter threshold
     Airborne --> Swimming : water_immersion > enter threshold
     Airborne --> Wall_Run_Horizontal : on_back_wall && WALL_RUN && horizontal input && !wall_run_used && cooldown ready
     Airborne --> Wall_Run_Vertical : on_back_wall && WALL_RUN && cooldown ready && !wall_run_used
@@ -46,11 +48,17 @@ stateDiagram-v2
     Wall_Run_Horizontal --> Wall_Slide : WALL_RUN released && SLIDE held
     Wall_Run_Horizontal --> Airborne : WALL_RUN released
 
+    Dashing --> Sand_Swim : timer expired && sand_immersion > enter threshold
     Dashing --> Swimming : timer expired && water_immersion > enter threshold
     Dashing --> Grounded : timer expired && on_ground
     Dashing --> Wall_Run_Vertical : timer expired && on_side_wall && WALL_RUN && cooldown ready && !wall_run_used && vel.y > 0
     Dashing --> Wall_Slide : timer expired && on_side_wall && SLIDE held
     Dashing --> Airborne : timer expired (default)
+
+    Sand_Swim --> Airborne : jump pressed near surface
+    Sand_Swim --> Dashing : DASH && cooldown ready
+    Sand_Swim --> Grounded : on_ground && sand_immersion < exit threshold
+    Sand_Swim --> Airborne : sand_immersion < exit threshold (surfaced)
 
     Dropping --> Airborne : !in_platform
 ```

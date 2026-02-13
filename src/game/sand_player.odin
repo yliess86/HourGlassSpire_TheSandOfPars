@@ -144,45 +144,64 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 		)
 	}
 
-	// Sand drag — full horizontal, reduced vertical
-	if sand_displaced > 0 {
-		drag := min(f32(sand_displaced) * SAND_PLAYER_DRAG_PER_CELL, SAND_PLAYER_DRAG_MAX)
-		player.transform.vel.x *= (1.0 - drag)
-		player.transform.vel.y *= (1.0 - drag * SAND_PLAYER_DRAG_Y_FACTOR)
-	}
+	// Sand_Swim: light displacement drag only, skip heavy forces
+	if player.fsm.current == .Sand_Swim {
+		if sand_displaced > 0 {
+			drag := SAND_SWIM_DRAG_FACTOR * SAND_PLAYER_DRAG_MAX
+			player.transform.vel.x *= (1.0 - drag)
+			player.transform.vel.y *= (1.0 - drag * SAND_PLAYER_DRAG_Y_FACTOR)
+		}
+		if water_displaced > 0 {
+			drag := min(f32(water_displaced) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX)
+			player.transform.vel.x *= (1.0 - drag)
+			player.transform.vel.y *= (1.0 - drag * WATER_PLAYER_DRAG_Y_FACTOR)
+		}
+		// Skip to water buoyancy + current (below)
+	} else {
+		// Sand drag — quadratic scaling by immersion, skip Y drag when jumping
+		if sand_displaced > 0 {
+			immersion := player.sensor.sand_immersion
+			effective_drag := immersion * immersion * SAND_PLAYER_DRAG_MAX
+			player.transform.vel.x *= (1.0 - effective_drag)
+			if player.transform.vel.y <= 0 do player.transform.vel.y *= (1.0 - effective_drag * SAND_PLAYER_DRAG_Y_FACTOR)
+		}
 
-	// Water drag — full horizontal, reduced vertical
-	if water_displaced > 0 {
-		drag := min(f32(water_displaced) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX)
-		player.transform.vel.x *= (1.0 - drag)
-		player.transform.vel.y *= (1.0 - drag * WATER_PLAYER_DRAG_Y_FACTOR)
-	}
+		// Water drag — full horizontal, reduced vertical
+		if water_displaced > 0 {
+			drag := min(f32(water_displaced) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX)
+			player.transform.vel.x *= (1.0 - drag)
+			player.transform.vel.y *= (1.0 - drag * WATER_PLAYER_DRAG_Y_FACTOR)
+		}
 
-	// Pressure: count sand cells directly above player (water does not create pressure)
-	// Gap tolerance: scan past small empty gaps in the column
-	above_count := 0
-	for tx in x0 ..= x1 {
-		gap := 0
-		for ty := y1 + 1; ty < sand.height; ty += 1 {
-			cell := sand_get(sand, tx, ty)
-			if cell.material == .Sand {
-				above_count += 1
-				gap = 0
-			} else if cell.material == .Solid {break} else {
-				gap += 1
-				if gap > int(SAND_PRESSURE_GAP_TOLERANCE) do break
+		// Pressure: count sand cells directly above player (water does not create pressure)
+		// Gap tolerance: scan past small empty gaps in the column
+		above_count := 0
+		for tx in x0 ..= x1 {
+			gap := 0
+			for ty := y1 + 1; ty < sand.height; ty += 1 {
+				cell := sand_get(sand, tx, ty)
+				if cell.material == .Sand {
+					above_count += 1
+					gap = 0
+				} else if cell.material == .Solid {break} else {
+					gap += 1
+					if gap > int(SAND_PRESSURE_GAP_TOLERANCE) do break
+				}
 			}
 		}
-	}
 
-	if above_count > 0 {
-		pressure_force := f32(above_count) * SAND_PRESSURE_FORCE
-		player.transform.vel.y -= pressure_force * dt
-	}
+		if above_count > 0 {
+			capped := math.sqrt(f32(above_count))
+			player.transform.vel.y -= capped * SAND_PRESSURE_FORCE * dt
+		}
 
-	// Burial detection: use sensor immersion (actual overlap, not displaced count)
-	if player.sensor.sand_immersion > SAND_BURIAL_THRESHOLD {
-		player.transform.vel.y -= SAND_BURIAL_GRAVITY_MULT * GRAVITY * dt
+		// Quicksand: activity-scaled sinking (horizontal movement makes you sink faster)
+		if player.sensor.sand_immersion > SAND_BURIAL_THRESHOLD && player.transform.vel.y <= 0 {
+			activity := math.clamp(math.abs(player.transform.vel.x) / PLAYER_RUN_SPEED, 0, 2)
+			base_sink := SAND_QUICKSAND_BASE_SINK * GRAVITY * dt
+			move_sink := SAND_QUICKSAND_MOVE_MULT * activity * GRAVITY * dt
+			player.transform.vel.y -= base_sink + move_sink
+		}
 	}
 
 	// Buoyancy: upward force scaled by water immersion ratio
@@ -190,6 +209,24 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 	if water_immersion > WATER_BUOYANCY_THRESHOLD {
 		buoyancy := water_immersion * WATER_BUOYANCY_FORCE
 		player.transform.vel.y += buoyancy * dt
+	}
+
+	// Water current: flowing water pushes the player horizontally
+	flow_sum: f32 = 0
+	flow_count := 0
+	for ty in y0 ..= y1 {
+		for tx in x0 ..= x1 {
+			if !sand_in_bounds(sand, tx, ty) do continue
+			cell := sand.cells[ty * sand.width + tx]
+			if cell.material != .Water do continue
+			flow_dir := cell.flags & SAND_FLAG_FLOW_MASK
+			if flow_dir ==
+			   SAND_FLAG_FLOW_LEFT {flow_sum -= 1; flow_count += 1} else if flow_dir == SAND_FLAG_FLOW_RIGHT {flow_sum += 1; flow_count += 1}
+		}
+	}
+	if flow_count > 0 {
+		current_avg := flow_sum / f32(flow_count)
+		player.transform.vel.x += current_avg * WATER_CURRENT_FORCE * dt
 	}
 }
 

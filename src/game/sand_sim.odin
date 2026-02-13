@@ -347,7 +347,8 @@ sand_try_flow_water :: proc(sand: ^Sand_World, x, y, dx: int, parity: u32) -> bo
 	src_idx := y * sand.width + x
 	dst_idx := y * sand.width + target_x
 	sand.cells[dst_idx] = sand.cells[src_idx]
-	sand.cells[dst_idx].flags = u8(parity & 1)
+	flow_bits: u8 = SAND_FLAG_FLOW_RIGHT if dx > 0 else SAND_FLAG_FLOW_LEFT
+	sand.cells[dst_idx].flags = u8(parity & 1) | flow_bits
 	sand.cells[dst_idx].sleep_counter = 0
 	sand.cells[src_idx] = Sand_Cell{}
 

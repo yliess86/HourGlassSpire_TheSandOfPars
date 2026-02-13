@@ -11,6 +11,7 @@ player_fsm_airborne_init :: proc(player: ^Player) {
 // Airborne — in the air under gravity. Supports coyote jump (stays Airborne) and wall jump (stays Airborne).
 // - Dashing: DASH pressed && cooldown ready
 // - Grounded: on_ground (landed) AND falling/stationary
+// - Sand_Swim: sand_immersion > SAND_SWIM_ENTER_THRESHOLD
 // - Wall_Run_Horizontal: on_back_wall && WALL_RUN && horizontal input && !wall_run_used && cooldown ready
 // - Wall_Run_Vertical: on_back_wall && WALL_RUN && cooldown ready && !wall_run_used (default)
 // - Wall_Slide: on_back_wall && SLIDE held
@@ -30,6 +31,7 @@ player_fsm_airborne_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 		ctx.transform.vel.y = 0
 		return .Grounded
 	}
+	if ctx.sensor.sand_immersion > SAND_SWIM_ENTER_THRESHOLD do return .Sand_Swim
 	if ctx.sensor.water_immersion > WATER_SWIM_ENTER_THRESHOLD do return .Swimming
 
 	if ctx.sensor.on_back_wall {

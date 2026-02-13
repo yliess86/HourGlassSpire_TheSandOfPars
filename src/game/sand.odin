@@ -25,6 +25,9 @@ Sand_Cell :: struct {
 SAND_FLAG_PARITY :: u8(0x01) // bit 0
 SAND_FLAG_FALL_MASK :: u8(0x0E) // bits 1-3
 SAND_FLAG_FALL_SHIFT :: u8(1)
+SAND_FLAG_FLOW_MASK :: u8(0x30) // bits 4-5 (water flow direction)
+SAND_FLAG_FLOW_LEFT :: u8(0x10) // 01 = flowed left
+SAND_FLAG_FLOW_RIGHT :: u8(0x20) // 10 = flowed right
 
 sand_cell_fall_count :: proc(cell: ^Sand_Cell) -> u8 {
 	return (cell.flags & SAND_FLAG_FALL_MASK) >> SAND_FLAG_FALL_SHIFT

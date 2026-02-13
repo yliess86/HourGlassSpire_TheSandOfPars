@@ -154,7 +154,7 @@ SAND_EMITTER_RATE: f32                     // particles spawned per second per e
 SAND_PLAYER_DRAG_PER_CELL: f32             // velocity drag added per displaced sand cell
 SAND_PLAYER_DRAG_MAX: f32                  // max total drag factor cap (0-1)
 SAND_PLAYER_DRAG_Y_FACTOR: f32             // Y drag is this fraction of X drag (preserves jump feel)
-SAND_PRESSURE_FORCE: f32                   // downward force per sand cell stacked above player
+SAND_PRESSURE_FORCE: f32                   // downward force per sqrt(sand cells) above player
 SAND_PRESSURE_GAP_TOLERANCE: u8            // empty cells to scan past in pressure column
 SAND_BURIAL_THRESHOLD: f32                 // sand/footprint overlap ratio to count as buried
 SAND_BURIAL_GRAVITY_MULT: f32              // extra gravity multiplier when buried in sand
@@ -188,8 +188,22 @@ SAND_FOOTPRINT_MIN_SPEED: f32              // minimum horizontal speed for footp
 SAND_DASH_DRAG_FACTOR: f32                 // drag multiplier during dash (20% of normal)
 SAND_DASH_PARTICLE_MAX: u8                 // max particles per fixed step during dash
 SAND_DASH_PARTICLE_SPEED_MULT: f32         // particle speed multiplier during dash
+SAND_QUICKSAND_BASE_SINK: f32              // gravity multiplier when still in sand
+SAND_QUICKSAND_MOVE_MULT: f32              // extra gravity per activity unit
 SAND_SURFACE_SCAN_HEIGHT: u8               // tiles to scan vertically for surface
 SAND_SURFACE_SMOOTH: u8                    // 0=staircase (current), 1=interpolated
+SAND_SWIM_ENTER_THRESHOLD: f32             // sand immersion to enter sand swim
+SAND_SWIM_EXIT_THRESHOLD: f32              // sand immersion to exit sand swim (hysteresis)
+SAND_SWIM_SURFACE_THRESHOLD: f32           // immersion considered near surface for jump-out
+SAND_SWIM_GRAVITY_MULT: f32                // gravity multiplier while sand swimming
+SAND_SWIM_UP_SPEED: f32                    // upward speed when pressing up (m/s)
+SAND_SWIM_DOWN_SPEED: f32                  // downward speed when pressing down (m/s)
+SAND_SWIM_SINK_SPEED: f32                  // passive sinking speed (no input) (m/s)
+SAND_SWIM_DAMPING: f32                     // velocity damping factor per second
+SAND_SWIM_JUMP_FORCE: f32                  // jump force when leaping out near surface
+SAND_SWIM_MOVE_PENALTY: f32                // horizontal speed reduction per immersion
+SAND_SWIM_LERP_SPEED: f32                  // interpolation rate for movement smoothing
+SAND_SWIM_DRAG_FACTOR: f32                 // residual displacement drag during sand swim
 
 // [sand_debug]
 SAND_DEBUG_COLOR_LOW: [4]u8                // heatmap color for low pressure (blue)
@@ -222,6 +236,7 @@ WATER_SWIM_DOWN_SPEED: f32                 // downward speed when pressing down
 WATER_SWIM_FLOAT_SPEED: f32                // passive float-up speed (no input)
 WATER_SWIM_DAMPING: f32                    // velocity damping factor per second
 WATER_SWIM_JUMP_FORCE: f32                 // jump force when leaping out at surface
+WATER_CURRENT_FORCE: f32                   // horizontal force from flowing water (m/s^2)
 WATER_SHIMMER_SPEED: f32                   // oscillation speed (radians/sec)
 WATER_SHIMMER_PHASE: f32                   // spatial frequency (radians/tile)
 WATER_SHIMMER_BRIGHTNESS: u8               // max RGB highlight on surface (0-255)
@@ -413,8 +428,22 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "SAND_DASH_DRAG_FACTOR"); ok do SAND_DASH_DRAG_FACTOR = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_DASH_PARTICLE_MAX"); ok do SAND_DASH_PARTICLE_MAX = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_DASH_PARTICLE_SPEED_MULT"); ok do SAND_DASH_PARTICLE_SPEED_MULT = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_QUICKSAND_BASE_SINK"); ok do SAND_QUICKSAND_BASE_SINK = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_QUICKSAND_MOVE_MULT"); ok do SAND_QUICKSAND_MOVE_MULT = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_SURFACE_SCAN_HEIGHT"); ok do SAND_SURFACE_SCAN_HEIGHT = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_SURFACE_SMOOTH"); ok do SAND_SURFACE_SMOOTH = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_ENTER_THRESHOLD"); ok do SAND_SWIM_ENTER_THRESHOLD = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_EXIT_THRESHOLD"); ok do SAND_SWIM_EXIT_THRESHOLD = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_SURFACE_THRESHOLD"); ok do SAND_SWIM_SURFACE_THRESHOLD = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_GRAVITY_MULT"); ok do SAND_SWIM_GRAVITY_MULT = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_UP_SPEED"); ok do SAND_SWIM_UP_SPEED = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_DOWN_SPEED"); ok do SAND_SWIM_DOWN_SPEED = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_SINK_SPEED"); ok do SAND_SWIM_SINK_SPEED = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_DAMPING"); ok do SAND_SWIM_DAMPING = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_JUMP_FORCE"); ok do SAND_SWIM_JUMP_FORCE = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_MOVE_PENALTY"); ok do SAND_SWIM_MOVE_PENALTY = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_LERP_SPEED"); ok do SAND_SWIM_LERP_SPEED = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_DRAG_FACTOR"); ok do SAND_SWIM_DRAG_FACTOR = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_LOW"); ok do SAND_DEBUG_COLOR_LOW = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_MID"); ok do SAND_DEBUG_COLOR_MID = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_HIGH"); ok do SAND_DEBUG_COLOR_HIGH = val
@@ -443,6 +472,7 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "WATER_SWIM_FLOAT_SPEED"); ok do WATER_SWIM_FLOAT_SPEED = val
 	if val, ok := engine.config_get_f32(&config_game, "WATER_SWIM_DAMPING"); ok do WATER_SWIM_DAMPING = val
 	if val, ok := engine.config_get_f32(&config_game, "WATER_SWIM_JUMP_FORCE"); ok do WATER_SWIM_JUMP_FORCE = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_CURRENT_FORCE"); ok do WATER_CURRENT_FORCE = val
 	if val, ok := engine.config_get_f32(&config_game, "WATER_SHIMMER_SPEED"); ok do WATER_SHIMMER_SPEED = val
 	if val, ok := engine.config_get_f32(&config_game, "WATER_SHIMMER_PHASE"); ok do WATER_SHIMMER_PHASE = val
 	if val, ok := engine.config_get_u8(&config_game, "WATER_SHIMMER_BRIGHTNESS"); ok do WATER_SHIMMER_BRIGHTNESS = val

@@ -54,7 +54,7 @@ Odin, SDL3 (`vendor:sdl3`). Main package `src/game/`, engine `src/engine/` (`"..
 | `src/game/player_graphics.odin` | `player_color`, 4-layer visual deformation (velocity/look/bob/impact), `player_graphics_trigger_impact` |
 | `src/game/player_sensor.odin` | `Player_Sensor` struct, per-frame environment queries (ground/slope/platform/sand/water/wall) |
 | `src/game/player_physics.odin` | Separated-axis solver: sweep, resolve X/Y, slope resolve. `player_physics_debug` |
-| `src/game/player_fsm_*.odin` | One file per state: `_grounded`, `_airborne`, `_dashing`, `_dropping`, `_swimming`, `_wall_slide`, `_wall_run_vertical`, `_wall_run_horizontal`. Each has `_init` + `_update`, optional `_enter`/`_exit` |
+| `src/game/player_fsm_*.odin` | One file per state: `_grounded`, `_airborne`, `_dashing`, `_dropping`, `_sand_swim`, `_swimming`, `_wall_slide`, `_wall_run_vertical`, `_wall_run_horizontal`. Each has `_init` + `_update`, optional `_enter`/`_exit` |
 | `src/game/debug.odin` | `Debug_State` enum, drawing helpers, `debug_camera` |
 | `src/game/level.odin` | BMP loading, tile classification by exposed face, greedy collider merging, slope merging, rendering |
 | `src/game/input.odin` | `Input_Action` enum, `INPUT_DEFAULT_BINDINGS`, `input_binding_apply` |
@@ -76,7 +76,7 @@ Global `game: Game_State`. Player nested as `game.player: Player` with sub-struc
 
 ### Player FSM
 
-States: `Grounded`, `Airborne`, `Dashing`, `Dropping`, `Swimming`, `Wall_Run_Horizontal`, `Wall_Slide`, `Wall_Run_Vertical`.
+States: `Grounded`, `Airborne`, `Dashing`, `Dropping`, `Sand_Swim`, `Swimming`, `Wall_Run_Horizontal`, `Wall_Slide`, `Wall_Run_Vertical`.
 
 `engine.FSM(Player, Player_State)` via `player.fsm`. Each `update` returns `Maybe(Player_State)` for transitions (nil = stay). `fsm_transition` prevents self-transitions. Handlers receive `ctx: ^Player`. Enter/exit wired for: `Grounded` (enter: reset wall run), `Dashing` (enter: set timers), `Swimming` (enter: reset wall run), `Wall_Run_Vertical` (enter: set used/timer; exit: set cooldown), `Wall_Run_Horizontal` (enter: set used/timer/dir).
 
@@ -91,6 +91,7 @@ Each file: `player_fsm_<state>_init` registers handlers, `_update(ctx, dt)` runs
 | **Grounded** | Dropping | on_platform && down && jump buffered |
 | | Airborne | jump buffered |
 | | Dashing | DASH && cooldown ready |
+| | Sand_Swim | sand_immersion > enter threshold |
 | | Swimming | water_immersion > enter threshold |
 | | Wall_Run_Vertical | on_side_wall && WALL_RUN |
 | | Wall_Run_Horizontal | on_back_wall && WALL_RUN && horizontal input |
@@ -98,6 +99,7 @@ Each file: `player_fsm_<state>_init` registers handlers, `_update(ctx, dt)` runs
 | | Airborne | !on_ground |
 | **Airborne** | Dashing | DASH && cooldown ready |
 | | Grounded | on_ground && vel.y <= 0 |
+| | Sand_Swim | sand_immersion > enter threshold |
 | | Swimming | water_immersion > enter threshold |
 | | Wall_Run_Horizontal | on_back_wall && WALL_RUN && h-input && !used && cooldown ready |
 | | Wall_Run_Vertical | on_back_wall && WALL_RUN && cooldown && !used (default) |
@@ -126,7 +128,12 @@ Each file: `player_fsm_<state>_init` registers handlers, `_update(ctx, dt)` runs
 | | Dashing | DASH && cooldown ready |
 | | Grounded | on_ground && immersion < exit threshold |
 | | Airborne | immersion < exit threshold |
-| **Dashing** | Swimming | timer expired && immersion > enter threshold |
+| **Sand_Swim** | Airborne | jump pressed near surface (sand_immersion < surface threshold) |
+| | Dashing | DASH && cooldown ready |
+| | Grounded | on_ground && sand_immersion < exit threshold |
+| | Airborne | sand_immersion < exit threshold |
+| **Dashing** | Sand_Swim | timer expired && sand_immersion > enter threshold |
+| | Swimming | timer expired && water_immersion > enter threshold |
 | | Grounded | timer expired && on_ground |
 | | Wall_Run_Vertical | timer expired && on_side_wall && WALL_RUN && cooldown && !used && vel.y > 0 |
 | | Wall_Slide | timer expired && on_side_wall && SLIDE |

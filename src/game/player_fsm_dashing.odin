@@ -23,6 +23,7 @@ player_fsm_dashing_enter :: proc(ctx: ^Player) {
 // Dashing — direction-locked burst. Zero gravity. On slopes: uphill follows 45° angle
 // (ramps off slope top preserving upward momentum), downhill lifts off surface and
 // dashes horizontally. Transitions on timer expiry.
+// - Sand_Swim: timer expired && sand_immersion > SAND_SWIM_ENTER_THRESHOLD
 // - Grounded: timer expired && on_ground
 // - Wall_Run_Vertical: timer expired && on_side_wall && WALL_RUN held && cooldown ready && !wall_run_used && vel.y > 0
 // - Wall_Slide: timer expired && on_side_wall && SLIDE held
@@ -30,6 +31,7 @@ player_fsm_dashing_enter :: proc(ctx: ^Player) {
 player_fsm_dashing_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) {
 	if ctx.abilities.dash_active_timer <= 0 {
 		player_physics_apply_movement(ctx, dt)
+		if ctx.sensor.sand_immersion > SAND_SWIM_ENTER_THRESHOLD do return .Sand_Swim
 		if ctx.sensor.water_immersion > WATER_SWIM_ENTER_THRESHOLD do return .Swimming
 		if ctx.sensor.on_ground do return .Grounded
 		if ctx.sensor.on_side_wall {
