@@ -14,26 +14,27 @@ game_world_to_screen_point :: proc(world_pos: [2]f32) -> [2]f32 {
 }
 
 Game_State :: struct {
-	win:     engine.Window,
-	running: bool,
-	debug:   Debug_State,
-	world_w: f32,
+	win:            engine.Window,
+	running:        bool,
+	debug:          Debug_State,
+	world_w:        f32,
 
 	// Engine
-	input:   engine.Input(Input_Action),
-	clock:   engine.Clock,
+	input:          engine.Input(Input_Action),
+	clock:          engine.Clock,
 
 	// Camera & Level
-	camera:  engine.Camera,
-	level:   Level,
+	camera:         engine.Camera,
+	level:          Level,
 
 	// Player
-	player:  Player,
-	dust:    engine.Particle_Pool,
-	steps:   engine.Particle_Pool,
+	player:         Player,
+	dust:           engine.Particle_Pool,
+	steps:          engine.Particle_Pool,
 
 	// Sand
-	sand:    Sand_World,
+	sand:           Sand_World,
+	sand_particles: engine.Particle_Pool,
 }
 
 game: Game_State
@@ -44,6 +45,7 @@ game_config_post_apply :: proc() {
 	game.camera.follow_speed_max = CAMERA_FOLLOW_SPEED_MAX
 	game.camera.dead_zone = CAMERA_DEAD_ZONE
 	game.camera.boundary_zone = CAMERA_BOUNDARY_ZONE
+	sand_graphics_init_lut()
 }
 
 game_clean :: proc() {
@@ -114,8 +116,10 @@ game_update :: proc(dt: f32) {
 game_fixed_update :: proc(dt: f32) {
 	player_fixed_update(&game.player, dt)
 	sand_player_interact(&game.sand, &game.player, dt)
+	sand_dust_tick(&game.player)
 	sand_sub_step_tick(&game.sand)
 	sand_emitter_update(&game.sand)
+	sand_particles_update(&game.sand_particles, dt)
 	player_particles_dust_update(&game.dust, dt)
 	player_particles_step_update(&game.steps, dt)
 	engine.camera_follow(
@@ -134,6 +138,7 @@ game_render :: proc() {
 	player_particles_step_render(&game.steps)
 	player_particles_dust_render(&game.dust)
 	player_graphics_render(&game.player)
+	sand_particles_render(&game.sand_particles)
 	sand_graphics_render(&game.sand)
 }
 

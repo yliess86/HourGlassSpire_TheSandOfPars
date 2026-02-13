@@ -10,6 +10,33 @@ Sand_Render_Batch :: struct {
 	indices:  [dynamic]c.int,
 }
 
+// Pre-computed color LUTs (rebuilt on init + F5 reload)
+WATER_COLOR_LUT_SIZE :: 32
+sand_color_lut: [4]sdl.FColor
+water_color_lut: [WATER_COLOR_LUT_SIZE]sdl.FColor
+
+sand_graphics_init_lut :: proc() {
+	for v in 0 ..< 4 {
+		offset := i16(v) * i16(SAND_COLOR_VARIATION) - i16(SAND_COLOR_VARIATION) * 2
+		sand_color_lut[v] = {
+			f32(math.clamp(i16(SAND_COLOR.r) + offset, 0, 255)) / 255,
+			f32(math.clamp(i16(SAND_COLOR.g) + offset, 0, 255)) / 255,
+			f32(math.clamp(i16(SAND_COLOR.b) + offset, 0, 255)) / 255,
+			f32(SAND_COLOR.a) / 255,
+		}
+	}
+	for d in 0 ..< WATER_COLOR_LUT_SIZE {
+		t := math.clamp(f32(d) / f32(WATER_COLOR_DEPTH_MAX), 0, 1)
+		offset := t * f32(WATER_COLOR_VARIATION) / 255
+		water_color_lut[d] = {
+			f32(WATER_COLOR.r) / 255 - min(offset, f32(WATER_COLOR.r) / 255),
+			f32(WATER_COLOR.g) / 255 - min(offset, f32(WATER_COLOR.g) / 255),
+			f32(WATER_COLOR.b) / 255 - min(offset, f32(WATER_COLOR.b) / 255),
+			f32(WATER_COLOR.a) / 255,
+		}
+	}
+}
+
 sand_graphics_render :: proc(sand: ^Sand_World) {
 	cam_bl := game.camera.pos - game.camera.size / 2
 	cam_tr := game.camera.pos + game.camera.size / 2
@@ -35,7 +62,7 @@ sand_graphics_render :: proc(sand: ^Sand_World) {
 			cell := sand.cells[idx]
 			if cell.material != .Sand do continue
 
-			fc := sand_graphics_sand_fcolor(cell)
+			fc := sand_color_lut[cell.color_variant]
 			slope := sand.slopes[idx]
 			if slope != .None do sand_graphics_batch_slope_tri(&sand_batch, x, y, slope, fc)
 			else do sand_graphics_batch_rect(&sand_batch, x, y, fc)
@@ -65,8 +92,18 @@ sand_graphics_render :: proc(sand: ^Sand_World) {
 			cell := sand.cells[idx]
 			slope := sand.slopes[idx]
 			if cell.material == .Water {
-				if !above_is_water do dist = 0
-				fc := sand_graphics_water_fcolor(dist)
+				is_surface := !above_is_water
+				if is_surface do dist = 0
+				fc := water_color_lut[min(dist, WATER_COLOR_LUT_SIZE - 1)]
+				if is_surface {
+					phase :=
+						f32(x) * WATER_SHIMMER_PHASE +
+						f32(sand.step_counter) * WATER_SHIMMER_SPEED * 0.016
+					shimmer := (math.sin(phase) * 0.5 + 0.5) * f32(WATER_SHIMMER_BRIGHTNESS) / 255
+					fc.r = min(fc.r + shimmer, 1)
+					fc.g = min(fc.g + shimmer, 1)
+					fc.b = min(fc.b + shimmer, 1)
+				}
 				if slope != .None do sand_graphics_batch_slope_tri(&water_batch, x, y, slope, fc)
 				else do sand_graphics_batch_rect(&water_batch, x, y, fc)
 				dist += 1
@@ -161,23 +198,6 @@ sand_graphics_sand_color :: proc(cell: Sand_Cell) -> [4]u8 {
 	}
 }
 
-@(private = "file")
-sand_graphics_sand_fcolor :: proc(cell: Sand_Cell) -> sdl.FColor {
-	sc := sand_graphics_sand_color(cell)
-	return {f32(sc.r) / 255, f32(sc.g) / 255, f32(sc.b) / 255, f32(sc.a) / 255}
-}
-
-@(private = "file")
-sand_graphics_water_fcolor :: proc(dist: int) -> sdl.FColor {
-	t := math.clamp(f32(dist) / f32(WATER_COLOR_DEPTH_MAX), 0, 1)
-	offset := t * f32(WATER_COLOR_VARIATION) / 255
-	return {
-		f32(WATER_COLOR.r) / 255 - min(offset, f32(WATER_COLOR.r) / 255),
-		f32(WATER_COLOR.g) / 255 - min(offset, f32(WATER_COLOR.g) / 255),
-		f32(WATER_COLOR.b) / 255 - min(offset, f32(WATER_COLOR.b) / 255),
-		f32(WATER_COLOR.a) / 255,
-	}
-}
 
 sand_graphics_debug :: proc(sand: ^Sand_World) {
 	if game.debug != .SAND && game.debug != .ALL do return

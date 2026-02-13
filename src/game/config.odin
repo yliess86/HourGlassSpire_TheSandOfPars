@@ -171,6 +171,13 @@ SAND_PARTICLE_SPEED: f32                   // displacement particle outward velo
 SAND_PARTICLE_LIFETIME: f32                // displacement particle lifetime (seconds)
 SAND_PARTICLE_SIZE: f32                    // displacement particle size (meters)
 SAND_PARTICLE_GRAVITY: f32                 // displacement particle gravity (m/s²)
+SAND_DUST_MIN_SPEED: f32                   // minimum horizontal speed for dust emission (m/s)
+SAND_DUST_SPEED: f32                       // horizontal dust drift speed (m/s)
+SAND_DUST_LIFT: f32                        // upward dust speed (m/s)
+SAND_DUST_LIFETIME: f32                    // dust particle lifetime (seconds)
+SAND_DUST_SIZE: f32                        // dust particle size (meters)
+SAND_DUST_LIGHTEN: u8                      // RGB offset to lighten sand color for dust
+SAND_DUST_INTERVAL: u8                     // emit every N fixed steps
 
 // [sand_debug]
 SAND_DEBUG_COLOR_LOW: [4]u8                // heatmap color for low pressure (blue)
@@ -203,6 +210,9 @@ WATER_SWIM_DOWN_SPEED: f32                 // downward speed when pressing down
 WATER_SWIM_FLOAT_SPEED: f32                // passive float-up speed (no input)
 WATER_SWIM_DAMPING: f32                    // velocity damping factor per second
 WATER_SWIM_JUMP_FORCE: f32                 // jump force when leaping out at surface
+WATER_SHIMMER_SPEED: f32                   // oscillation speed (radians/sec)
+WATER_SHIMMER_PHASE: f32                   // spatial frequency (radians/tile)
+WATER_SHIMMER_BRIGHTNESS: u8               // max RGB highlight on surface (0-255)
 
 // [debug_colors]
 DEBUG_COLOR_COLLIDER: [4]u8                // ground collider outline (green)
@@ -370,6 +380,13 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "SAND_PARTICLE_LIFETIME"); ok do SAND_PARTICLE_LIFETIME = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_PARTICLE_SIZE"); ok do SAND_PARTICLE_SIZE = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_PARTICLE_GRAVITY"); ok do SAND_PARTICLE_GRAVITY = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_DUST_MIN_SPEED"); ok do SAND_DUST_MIN_SPEED = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_DUST_SPEED"); ok do SAND_DUST_SPEED = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_DUST_LIFT"); ok do SAND_DUST_LIFT = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_DUST_LIFETIME"); ok do SAND_DUST_LIFETIME = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_DUST_SIZE"); ok do SAND_DUST_SIZE = val
+	if val, ok := engine.config_get_u8(&config_game, "SAND_DUST_LIGHTEN"); ok do SAND_DUST_LIGHTEN = val
+	if val, ok := engine.config_get_u8(&config_game, "SAND_DUST_INTERVAL"); ok do SAND_DUST_INTERVAL = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_LOW"); ok do SAND_DEBUG_COLOR_LOW = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_MID"); ok do SAND_DEBUG_COLOR_MID = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_HIGH"); ok do SAND_DEBUG_COLOR_HIGH = val
@@ -398,6 +415,9 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "WATER_SWIM_FLOAT_SPEED"); ok do WATER_SWIM_FLOAT_SPEED = val
 	if val, ok := engine.config_get_f32(&config_game, "WATER_SWIM_DAMPING"); ok do WATER_SWIM_DAMPING = val
 	if val, ok := engine.config_get_f32(&config_game, "WATER_SWIM_JUMP_FORCE"); ok do WATER_SWIM_JUMP_FORCE = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_SHIMMER_SPEED"); ok do WATER_SHIMMER_SPEED = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_SHIMMER_PHASE"); ok do WATER_SHIMMER_PHASE = val
+	if val, ok := engine.config_get_u8(&config_game, "WATER_SHIMMER_BRIGHTNESS"); ok do WATER_SHIMMER_BRIGHTNESS = val
 	if val, ok := engine.config_get_rgba(&config_game, "DEBUG_COLOR_COLLIDER"); ok do DEBUG_COLOR_COLLIDER = val
 	if val, ok := engine.config_get_rgba(&config_game, "DEBUG_COLOR_COLLIDER_BACK_WALL"); ok do DEBUG_COLOR_COLLIDER_BACK_WALL = val
 	if val, ok := engine.config_get_rgba(&config_game, "DEBUG_COLOR_COLLIDER_CEILING"); ok do DEBUG_COLOR_COLLIDER_CEILING = val

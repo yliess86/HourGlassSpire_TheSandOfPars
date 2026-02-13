@@ -223,6 +223,44 @@ sand_particles_emit :: proc(
 	}
 }
 
+// Sand dust: emits light sand-colored particles when running on sand
+@(private = "file")
+sand_dust_counter: u8
+
+sand_dust_tick :: proc(player: ^Player) {
+	sand_dust_counter += 1
+	if sand_dust_counter < SAND_DUST_INTERVAL do return
+	sand_dust_counter = 0
+
+	if !player.sensor.on_sand do return
+	if player.fsm.current != .Grounded do return
+	if math.abs(player.transform.vel.x) < SAND_DUST_MIN_SPEED do return
+
+	emit_x := player.transform.pos.x - math.sign(player.transform.vel.x) * PLAYER_SIZE / 4
+	emit_pos := [2]f32{emit_x, player.transform.pos.y}
+	vel := [2]f32 {
+		-math.sign(player.transform.vel.x) * SAND_DUST_SPEED * (0.5 + 0.5 * rand.float32()),
+		SAND_DUST_LIFT * rand.float32(),
+	}
+	dust_color := [4]u8 {
+		min(SAND_COLOR.r + SAND_DUST_LIGHTEN, 255),
+		min(SAND_COLOR.g + SAND_DUST_LIGHTEN, 255),
+		min(SAND_COLOR.b + SAND_DUST_LIGHTEN, 255),
+		SAND_COLOR.a,
+	}
+	engine.particle_pool_emit(
+		&game.dust,
+		engine.Particle {
+			pos = emit_pos,
+			vel = vel,
+			lifetime = SAND_DUST_LIFETIME * (0.7 + 0.3 * rand.float32()),
+			age = 0,
+			size = SAND_DUST_SIZE,
+			color = dust_color,
+		},
+	)
+}
+
 sand_particles_update :: proc(pool: ^engine.Particle_Pool, dt: f32) {
 	engine.particle_pool_update(pool, dt)
 	for i in 0 ..< pool.count {
