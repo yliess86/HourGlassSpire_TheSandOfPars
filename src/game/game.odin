@@ -116,6 +116,7 @@ game_update :: proc(dt: f32) {
 game_fixed_update :: proc(dt: f32) {
 	player_fixed_update(&game.player, dt)
 	sand_player_interact(&game.sand, &game.player, dt)
+	sand_footprint_update(&game.sand, &game.player)
 	sand_dust_tick(&game.player)
 	sand_sub_step_tick(&game.sand)
 	sand_emitter_update(&game.sand)

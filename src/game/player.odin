@@ -32,6 +32,8 @@ Player_Abilities :: struct {
 	wall_run_used:           bool,
 	wall_run_dir:            f32,
 	ground_sticky_timer:     f32,
+	footprint_last_x:        f32,
+	footprint_side:          bool,
 }
 
 Player_Graphics :: struct {

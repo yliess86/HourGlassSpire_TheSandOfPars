@@ -328,6 +328,44 @@ sand_dust_tick :: proc(player: ^Player) {
 	)
 }
 
+sand_footprint_update :: proc(sand: ^Sand_World, player: ^Player) {
+	if player.fsm.current != .Grounded do return
+	if !player.sensor.on_sand do return
+	if math.abs(player.transform.vel.x) < SAND_FOOTPRINT_MIN_SPEED do return
+	if math.abs(player.transform.pos.x - player.abilities.footprint_last_x) < SAND_FOOTPRINT_STRIDE do return
+
+	player.abilities.footprint_last_x = player.transform.pos.x
+	player.abilities.footprint_side = !player.abilities.footprint_side
+
+	foot_ty := int(player.transform.pos.y / TILE_SIZE) - 1
+	foot_tx := int(player.transform.pos.x / TILE_SIZE)
+
+	if !sand_in_bounds(sand, foot_tx, foot_ty) do return
+	idx := foot_ty * sand.width + foot_tx
+	if sand.cells[idx].material != .Sand do return
+
+	push_dx: int = player.transform.vel.x > 0 ? -1 : 1
+	saved := sand.cells[idx]
+	sand.cells[idx] = Sand_Cell{}
+
+	chunk := sand_chunk_at(sand, foot_tx, foot_ty)
+	if chunk != nil && chunk.active_count > 0 do chunk.active_count -= 1
+	sand_chunk_mark_dirty(sand, foot_tx, foot_ty)
+
+	// Pile removed sand beside the footprint (no wake for persistence)
+	for try_dx in ([2]int{push_dx, -push_dx}) {
+		nx := foot_tx + try_dx
+		if !sand_in_bounds(sand, nx, foot_ty) do continue
+		if sand.cells[foot_ty * sand.width + nx].material != .Empty do continue
+		sand.cells[foot_ty * sand.width + nx] = saved
+		sand.cells[foot_ty * sand.width + nx].sleep_counter = SAND_SLEEP_THRESHOLD
+		n_chunk := sand_chunk_at(sand, nx, foot_ty)
+		if n_chunk != nil do n_chunk.active_count += 1
+		sand_chunk_mark_dirty(sand, nx, foot_ty)
+		break
+	}
+}
+
 sand_particles_update :: proc(pool: ^engine.Particle_Pool, dt: f32) {
 	engine.particle_pool_update(pool, dt)
 	for i in 0 ..< pool.count {

@@ -183,6 +183,8 @@ SAND_IMPACT_MAX_SPEED: f32                 // at/above this: maximum crater (m/s
 SAND_IMPACT_RADIUS: u8                     // max extra tiles at max impact
 SAND_IMPACT_EXTRA_CHAIN: u8                // extra chain depth at max impact
 SAND_IMPACT_PARTICLE_SPEED_MULT: f32       // particle speed multiplier at max impact
+SAND_FOOTPRINT_STRIDE: f32                 // meters between footprints (~1 tile)
+SAND_FOOTPRINT_MIN_SPEED: f32              // minimum horizontal speed for footprints (m/s)
 
 // [sand_debug]
 SAND_DEBUG_COLOR_LOW: [4]u8                // heatmap color for low pressure (blue)
@@ -397,6 +399,8 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_u8(&config_game, "SAND_IMPACT_RADIUS"); ok do SAND_IMPACT_RADIUS = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_IMPACT_EXTRA_CHAIN"); ok do SAND_IMPACT_EXTRA_CHAIN = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_IMPACT_PARTICLE_SPEED_MULT"); ok do SAND_IMPACT_PARTICLE_SPEED_MULT = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_FOOTPRINT_STRIDE"); ok do SAND_FOOTPRINT_STRIDE = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_FOOTPRINT_MIN_SPEED"); ok do SAND_FOOTPRINT_MIN_SPEED = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_LOW"); ok do SAND_DEBUG_COLOR_LOW = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_MID"); ok do SAND_DEBUG_COLOR_MID = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_HIGH"); ok do SAND_DEBUG_COLOR_HIGH = val
