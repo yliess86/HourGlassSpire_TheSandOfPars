@@ -223,6 +223,10 @@ WATER_SWIM_JUMP_FORCE: f32                 // jump force when leaping out at sur
 WATER_SHIMMER_SPEED: f32                   // oscillation speed (radians/sec)
 WATER_SHIMMER_PHASE: f32                   // spatial frequency (radians/tile)
 WATER_SHIMMER_BRIGHTNESS: u8               // max RGB highlight on surface (0-255)
+WATER_PRESSURE_MIN_DEPTH: u8               // minimum water cells below before upward movement
+WATER_PRESSURE_SCAN_RANGE: u8              // horizontal scan distance for taller columns
+WATER_PRESSURE_CHANCE: f32                 // probability of rising per eligible step
+WATER_SURFACE_TENSION_DEPTH: u8            // minimum depth before surface cells flow horizontally
 
 // [debug_colors]
 DEBUG_COLOR_COLLIDER: [4]u8                // ground collider outline (green)
@@ -438,6 +442,10 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "WATER_SHIMMER_SPEED"); ok do WATER_SHIMMER_SPEED = val
 	if val, ok := engine.config_get_f32(&config_game, "WATER_SHIMMER_PHASE"); ok do WATER_SHIMMER_PHASE = val
 	if val, ok := engine.config_get_u8(&config_game, "WATER_SHIMMER_BRIGHTNESS"); ok do WATER_SHIMMER_BRIGHTNESS = val
+	if val, ok := engine.config_get_u8(&config_game, "WATER_PRESSURE_MIN_DEPTH"); ok do WATER_PRESSURE_MIN_DEPTH = val
+	if val, ok := engine.config_get_u8(&config_game, "WATER_PRESSURE_SCAN_RANGE"); ok do WATER_PRESSURE_SCAN_RANGE = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_PRESSURE_CHANCE"); ok do WATER_PRESSURE_CHANCE = val
+	if val, ok := engine.config_get_u8(&config_game, "WATER_SURFACE_TENSION_DEPTH"); ok do WATER_SURFACE_TENSION_DEPTH = val
 	if val, ok := engine.config_get_rgba(&config_game, "DEBUG_COLOR_COLLIDER"); ok do DEBUG_COLOR_COLLIDER = val
 	if val, ok := engine.config_get_rgba(&config_game, "DEBUG_COLOR_COLLIDER_BACK_WALL"); ok do DEBUG_COLOR_COLLIDER_BACK_WALL = val
 	if val, ok := engine.config_get_rgba(&config_game, "DEBUG_COLOR_COLLIDER_CEILING"); ok do DEBUG_COLOR_COLLIDER_CEILING = val

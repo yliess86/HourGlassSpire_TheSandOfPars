@@ -261,6 +261,9 @@ sand_update_cell_water :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
 		}
 	}
 
+	// Pressure equalization: try rising (non-slope only)
+	if !moved && slope == .None do moved = sand_try_rise_water(sand, x, y, parity)
+
 	// Stuck: increment sleep counter
 	if !moved do if cell.sleep_counter < 255 do cell.sleep_counter += 1
 }
@@ -298,8 +301,21 @@ sand_try_move_water :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, parity: u32)
 
 // Depth-proportional horizontal flow: surface water moves 1 cell, deeper water flows faster.
 // Scans up to min(1+depth, WATER_FLOW_DISTANCE) cells for an empty cell or drop-off edge.
+// Surface tension: surface cells (empty above) only flow if local depth >= WATER_SURFACE_TENSION_DEPTH.
 @(private = "file")
 sand_try_flow_water :: proc(sand: ^Sand_World, x, y, dx: int, parity: u32) -> bool {
+	// Surface tension: prevent thin films from spreading
+	is_surface :=
+		!sand_in_bounds(sand, x, y + 1) || sand.cells[(y + 1) * sand.width + x].material != .Water
+	if is_surface {
+		depth_below := 0
+		for scan_y := y - 1; scan_y >= 0; scan_y -= 1 {
+			if sand.cells[scan_y * sand.width + x].material != .Water do break
+			depth_below += 1
+		}
+		if depth_below < int(WATER_SURFACE_TENSION_DEPTH) do return false
+	}
+
 	// Count contiguous water cells above to determine pressure/depth
 	depth := 0
 	for scan_y := y + 1; scan_y < sand.height; scan_y += 1 {
@@ -348,6 +364,52 @@ sand_try_flow_water :: proc(sand: ^Sand_World, x, y, dx: int, parity: u32) -> bo
 	}
 
 	return true
+}
+
+// Pressure equalization: water in deep columns rises into empty cells above when a taller
+// neighbor column exists. Lowest priority — only called when all other moves fail.
+@(private = "file")
+sand_try_rise_water :: proc(sand: ^Sand_World, x, y: int, parity: u32) -> bool {
+	if !sand_in_bounds(sand, x, y + 1) do return false
+	if sand.cells[(y + 1) * sand.width + x].material != .Empty do return false
+
+	// Count contiguous water depth below (including self)
+	depth_below := 0
+	for scan_y := y - 1; scan_y >= 0; scan_y -= 1 {
+		if sand.cells[scan_y * sand.width + x].material != .Water do break
+		depth_below += 1
+	}
+	if depth_below < int(WATER_PRESSURE_MIN_DEPTH) do return false
+
+	// Scan for a taller water column nearby
+	my_height := depth_below + 1
+	found_taller := false
+	for dist in 1 ..= int(WATER_PRESSURE_SCAN_RANGE) {
+		for sign in ([2]int{-1, 1}) {
+			nx := x + dist * sign
+			if !sand_in_bounds(sand, nx, y) do continue
+			// Count water height at nx from same base level
+			neighbor_height := 0
+			for scan_y := y; scan_y >= 0; scan_y -= 1 {
+				if sand.cells[scan_y * sand.width + nx].material != .Water do break
+				neighbor_height += 1
+			}
+			for scan_y := y + 1; scan_y < sand.height; scan_y += 1 {
+				if sand.cells[scan_y * sand.width + nx].material != .Water do break
+				neighbor_height += 1
+			}
+			if neighbor_height > my_height {
+				found_taller = true
+				break
+			}
+		}
+		if found_taller do break
+	}
+	if !found_taller do return false
+
+	if rand.float32() >= WATER_PRESSURE_CHANCE do return false
+
+	return sand_try_move_water(sand, x, y, x, y + 1, parity)
 }
 
 // Erode platform cells horizontally adjacent to a sand cell
