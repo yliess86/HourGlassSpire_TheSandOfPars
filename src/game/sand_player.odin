@@ -37,6 +37,12 @@ sand_compute_water_immersion :: proc(sand: ^Sand_World, player: ^Player) -> f32 
 sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 	if sand.width == 0 || sand.height == 0 do return
 
+	// Dash tunnel: carve through sand, reduced drag, skip normal displacement
+	if player.fsm.current == .Dashing {
+		sand_dash_carve(sand, player, dt)
+		return
+	}
+
 	// Compute player tile footprint
 	x0, y0, x1, y1 := sand_player_footprint(sand, player)
 
@@ -155,6 +161,99 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 	if water_immersion > WATER_BUOYANCY_THRESHOLD {
 		buoyancy := water_immersion * WATER_BUOYANCY_FORCE
 		player.transform.vel.y += buoyancy * dt
+	}
+}
+
+// Carve tunnel through sand during dash
+@(private = "file")
+sand_dash_carve :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
+	prev_x := player.transform.pos.x - player.transform.vel.x * dt
+	curr_x := player.transform.pos.x
+
+	tx_start := max(int(math.min(prev_x, curr_x) / TILE_SIZE) - 1, 0)
+	tx_end := min(int(math.max(prev_x, curr_x) / TILE_SIZE) + 1, sand.width - 1)
+	ty_start := max(int(player.transform.pos.y / TILE_SIZE), 0)
+	ty_end := min(int((player.transform.pos.y + PLAYER_SIZE) / TILE_SIZE), sand.height - 1)
+
+	sand_carved := 0
+	water_carved := 0
+	push_dx: int = player.transform.vel.x > 0 ? 1 : -1
+
+	for tx in tx_start ..= tx_end {
+		for ty in ty_start ..= ty_end {
+			if !sand_in_bounds(sand, tx, ty) do continue
+			idx := ty * sand.width + tx
+			mat := sand.cells[idx].material
+			if mat != .Sand && mat != .Water do continue
+
+			// Eject upward or sideways, fallback destroy
+			if sand_eject_cell_up(sand, tx, ty, ty_end, push_dx) {
+				if mat == .Sand do sand_carved += 1
+				else do water_carved += 1
+			} else {
+				// Destroy cell
+				sand.cells[idx] = Sand_Cell{}
+				sand_wake_neighbors(sand, tx, ty)
+				sand_chunk_mark_dirty(sand, tx, ty)
+				chunk := sand_chunk_at(sand, tx, ty)
+				if chunk != nil && chunk.active_count > 0 do chunk.active_count -= 1
+				if mat == .Sand do sand_carved += 1
+				else do water_carved += 1
+			}
+		}
+	}
+
+	// Particles
+	total := sand_carved + water_carved
+	if total > 0 {
+		emit_pos := [2]f32{player.transform.pos.x, player.transform.pos.y + PLAYER_SIZE / 2}
+		if sand_carved > 0 {
+			sand_particles_emit_scaled(
+				&game.sand_particles,
+				emit_pos,
+				player.transform.vel,
+				SAND_COLOR,
+				min(sand_carved, int(SAND_DASH_PARTICLE_MAX)),
+				SAND_DASH_PARTICLE_SPEED_MULT,
+			)
+		}
+		if water_carved > 0 {
+			sand_particles_emit_scaled(
+				&game.sand_particles,
+				emit_pos,
+				player.transform.vel,
+				WATER_COLOR,
+				min(water_carved, int(SAND_DASH_PARTICLE_MAX)),
+				SAND_DASH_PARTICLE_SPEED_MULT,
+			)
+		}
+	}
+
+	// Reduced drag
+	x0, y0, x1, y1 := sand_player_footprint(sand, player)
+	sand_count := 0
+	water_count := 0
+	for ty in y0 ..= y1 {
+		for tx in x0 ..= x1 {
+			if !sand_in_bounds(sand, tx, ty) do continue
+			mat := sand.cells[ty * sand.width + tx].material
+			if mat == .Sand do sand_count += 1
+			else if mat == .Water do water_count += 1
+		}
+	}
+	if sand_count > 0 {
+		drag :=
+			min(f32(sand_count) * SAND_PLAYER_DRAG_PER_CELL, SAND_PLAYER_DRAG_MAX) *
+			SAND_DASH_DRAG_FACTOR
+		player.transform.vel.x *= (1.0 - drag)
+		player.transform.vel.y *= (1.0 - drag * SAND_PLAYER_DRAG_Y_FACTOR)
+	}
+	if water_count > 0 {
+		drag :=
+			min(f32(water_count) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX) *
+			SAND_DASH_DRAG_FACTOR
+		player.transform.vel.x *= (1.0 - drag)
+		player.transform.vel.y *= (1.0 - drag * WATER_PLAYER_DRAG_Y_FACTOR)
 	}
 }
 
