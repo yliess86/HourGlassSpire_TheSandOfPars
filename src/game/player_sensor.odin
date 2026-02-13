@@ -155,7 +155,8 @@ player_sensor_update :: proc(player: ^Player) {
 				if on_sand do break
 				for tx in foot_tx0 ..= foot_tx1 {
 					if !sand_in_bounds(&game.sand, tx, check_ty) do continue
-					if sand_get(&game.sand, tx, check_ty).material != .Sand do continue
+					sensor_mat := sand_get(&game.sand, tx, check_ty).material
+					if sensor_mat != .Sand && sensor_mat != .Wet_Sand do continue
 					surface_y := f32(check_ty + 1) * TILE_SIZE
 					dist := player.transform.pos.y - surface_y
 					if dist >= -PLAYER_STEP_HEIGHT && dist <= PLAYER_CHECK_GROUND_EPS {

@@ -13,7 +13,8 @@ sand_compute_immersion :: proc(sand: ^Sand_World, player: ^Player) -> f32 {
 	sand_count := 0
 	for ty in y0 ..= y1 {
 		for tx in x0 ..= x1 {
-			if sand_in_bounds(sand, tx, ty) && sand_get(sand, tx, ty).material == .Sand do sand_count += 1
+			mat := sand_get(sand, tx, ty).material
+			if sand_in_bounds(sand, tx, ty) && (mat == .Sand || mat == .Wet_Sand) do sand_count += 1
 		}
 	}
 	return f32(sand_count) / f32(total)
@@ -37,7 +38,8 @@ sand_compute_water_immersion :: proc(sand: ^Sand_World, player: ^Player) -> f32 
 sand_column_surface_y :: proc(sand: ^Sand_World, tx, base_ty, scan_height: int) -> (f32, bool) {
 	for ty := base_ty + scan_height; ty >= max(base_ty - 1, 0); ty -= 1 {
 		if !sand_in_bounds(sand, tx, ty) do continue
-		if sand_get(sand, tx, ty).material == .Sand do return f32(ty + 1) * TILE_SIZE, true
+		col_mat := sand_get(sand, tx, ty).material
+		if col_mat == .Sand || col_mat == .Wet_Sand do return f32(ty + 1) * TILE_SIZE, true
 	}
 	return 0, false
 }
@@ -91,15 +93,16 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 	cx1 := min(x1 + extra, sand.width - 1)
 
 	sand_displaced := 0
+	wet_sand_displaced := 0
 	water_displaced := 0
 	player_cx := int(player.transform.pos.x / TILE_SIZE)
 
-	// Displacement: push sand and water out of footprint (+ crater ring)
+	// Displacement: push sand, wet sand, and water out of footprint (+ crater ring)
 	for ty in cy0 ..= y1 {
 		for tx in cx0 ..= cx1 {
 			if !sand_in_bounds(sand, tx, ty) do continue
 			mat := sand.cells[ty * sand.width + tx].material
-			if mat != .Sand && mat != .Water do continue
+			if mat != .Sand && mat != .Wet_Sand && mat != .Water do continue
 
 			push_dx: int = tx >= player_cx ? 1 : -1
 			in_ring := tx < x0 || tx > x1 || ty < y0
@@ -113,6 +116,7 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 
 			if displaced {
 				if mat == .Water do water_displaced += 1
+				else if mat == .Wet_Sand do wet_sand_displaced += 1
 				else do sand_displaced += 1
 			}
 		}
@@ -133,6 +137,16 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 			speed_mult,
 		)
 	}
+	if wet_sand_displaced > 0 {
+		emit_pos := [2]f32{player.transform.pos.x, player.transform.pos.y + PLAYER_SIZE}
+		sand_particles_emit(
+			&game.sand_particles,
+			emit_pos,
+			player.transform.vel,
+			WET_SAND_COLOR,
+			min(wet_sand_displaced, 4),
+		)
+	}
 	if water_displaced > 0 {
 		emit_pos := [2]f32{player.transform.pos.x, player.transform.pos.y + PLAYER_SIZE}
 		sand_particles_emit(
@@ -151,6 +165,11 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 			player.transform.vel.x *= (1.0 - drag)
 			player.transform.vel.y *= (1.0 - drag * SAND_PLAYER_DRAG_Y_FACTOR)
 		}
+		if wet_sand_displaced > 0 {
+			drag := SAND_SWIM_DRAG_FACTOR * WET_SAND_PLAYER_DRAG_MAX
+			player.transform.vel.x *= (1.0 - drag)
+			player.transform.vel.y *= (1.0 - drag * WET_SAND_PLAYER_DRAG_Y_FACTOR)
+		}
 		if water_displaced > 0 {
 			drag := min(f32(water_displaced) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX)
 			player.transform.vel.x *= (1.0 - drag)
@@ -166,6 +185,16 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 			if player.transform.vel.y <= 0 do player.transform.vel.y *= (1.0 - effective_drag * SAND_PLAYER_DRAG_Y_FACTOR)
 		}
 
+		// Wet sand drag — higher than dry sand
+		if wet_sand_displaced > 0 {
+			drag := min(
+				f32(wet_sand_displaced) * WET_SAND_PLAYER_DRAG_PER_CELL,
+				WET_SAND_PLAYER_DRAG_MAX,
+			)
+			player.transform.vel.x *= (1.0 - drag)
+			if player.transform.vel.y <= 0 do player.transform.vel.y *= (1.0 - drag * WET_SAND_PLAYER_DRAG_Y_FACTOR)
+		}
+
 		// Water drag — full horizontal, reduced vertical
 		if water_displaced > 0 {
 			drag := min(f32(water_displaced) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX)
@@ -173,14 +202,14 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 			player.transform.vel.y *= (1.0 - drag * WATER_PLAYER_DRAG_Y_FACTOR)
 		}
 
-		// Pressure: count sand cells directly above player (water does not create pressure)
+		// Pressure: count sand/wet sand cells directly above player (water does not create pressure)
 		// Gap tolerance: scan past small empty gaps in the column
 		above_count := 0
 		for tx in x0 ..= x1 {
 			gap := 0
 			for ty := y1 + 1; ty < sand.height; ty += 1 {
 				cell := sand_get(sand, tx, ty)
-				if cell.material == .Sand {
+				if cell.material == .Sand || cell.material == .Wet_Sand {
 					above_count += 1
 					gap = 0
 				} else if cell.material == .Solid {break} else {
@@ -250,11 +279,11 @@ sand_dash_carve :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 			if !sand_in_bounds(sand, tx, ty) do continue
 			idx := ty * sand.width + tx
 			mat := sand.cells[idx].material
-			if mat != .Sand && mat != .Water do continue
+			if mat != .Sand && mat != .Wet_Sand && mat != .Water do continue
 
 			// Eject upward or sideways, fallback destroy
 			if sand_eject_cell_up(sand, tx, ty, ty_end, push_dx) {
-				if mat == .Sand do sand_carved += 1
+				if mat == .Sand || mat == .Wet_Sand do sand_carved += 1
 				else do water_carved += 1
 			} else {
 				// Destroy cell
@@ -263,7 +292,7 @@ sand_dash_carve :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 				sand_chunk_mark_dirty(sand, tx, ty)
 				chunk := sand_chunk_at(sand, tx, ty)
 				if chunk != nil && chunk.active_count > 0 do chunk.active_count -= 1
-				if mat == .Sand do sand_carved += 1
+				if mat == .Sand || mat == .Wet_Sand do sand_carved += 1
 				else do water_carved += 1
 			}
 		}
@@ -298,12 +327,14 @@ sand_dash_carve :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 	// Reduced drag
 	x0, y0, x1, y1 := sand_player_footprint(sand, player)
 	sand_count := 0
+	wet_sand_count := 0
 	water_count := 0
 	for ty in y0 ..= y1 {
 		for tx in x0 ..= x1 {
 			if !sand_in_bounds(sand, tx, ty) do continue
 			mat := sand.cells[ty * sand.width + tx].material
 			if mat == .Sand do sand_count += 1
+			else if mat == .Wet_Sand do wet_sand_count += 1
 			else if mat == .Water do water_count += 1
 		}
 	}
@@ -313,6 +344,13 @@ sand_dash_carve :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 			SAND_DASH_DRAG_FACTOR
 		player.transform.vel.x *= (1.0 - drag)
 		player.transform.vel.y *= (1.0 - drag * SAND_PLAYER_DRAG_Y_FACTOR)
+	}
+	if wet_sand_count > 0 {
+		drag :=
+			min(f32(wet_sand_count) * WET_SAND_PLAYER_DRAG_PER_CELL, WET_SAND_PLAYER_DRAG_MAX) *
+			SAND_DASH_DRAG_FACTOR
+		player.transform.vel.x *= (1.0 - drag)
+		player.transform.vel.y *= (1.0 - drag * WET_SAND_PLAYER_DRAG_Y_FACTOR)
 	}
 	if water_count > 0 {
 		drag :=
@@ -359,7 +397,8 @@ sand_try_displace_to :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, depth: int 
 	dst_mat := sand.cells[dst_idx].material
 
 	// Chain: if destination is sand or water, try to push it further in the same direction
-	if (dst_mat == .Sand || dst_mat == .Water) && depth < int(SAND_DISPLACE_CHAIN) {
+	if (dst_mat == .Sand || dst_mat == .Wet_Sand || dst_mat == .Water) &&
+	   depth < int(SAND_DISPLACE_CHAIN) {
 		chain_dx := dx + (dx - sx)
 		chain_dy := dy + (dy - sy)
 		if !sand_try_displace_to(sand, dx, dy, chain_dx, chain_dy, depth + 1) do return false
@@ -507,7 +546,8 @@ sand_footprint_update :: proc(sand: ^Sand_World, player: ^Player) {
 
 	if !sand_in_bounds(sand, foot_tx, foot_ty) do return
 	idx := foot_ty * sand.width + foot_tx
-	if sand.cells[idx].material != .Sand do return
+	foot_mat := sand.cells[idx].material
+	if foot_mat != .Sand && foot_mat != .Wet_Sand do return
 
 	push_dx: int = player.transform.vel.x > 0 ? -1 : 1
 	saved := sand.cells[idx]

@@ -6,6 +6,7 @@ Sand_Material :: enum u8 {
 	Sand, // falling sand particle
 	Water, // liquid particle: flows horizontally, buoyant
 	Platform, // one-way: blocks sand from above, sand never moves up so pass-through is implicit
+	Wet_Sand, // sand that contacted water: heavier, stickier, darker; dries without water
 }
 
 Sand_Slope_Kind :: enum u8 {
@@ -18,7 +19,7 @@ Sand_Cell :: struct {
 	material:      Sand_Material, // 1 byte
 	sleep_counter: u8, // frames without movement; sleeps at threshold
 	color_variant: u8, // 0-3, random brightness offset for visual variety
-	flags:         u8, // bit 0: parity, bits 1-3: fall_count (0-7)
+	flags:         u8, // bit 0: parity, bits 1-3: fall_count (0-7), bits 4-5: flow dir (Water) / dry counter (Wet_Sand)
 }
 
 // Flag bit layout
@@ -28,6 +29,8 @@ SAND_FLAG_FALL_SHIFT :: u8(1)
 SAND_FLAG_FLOW_MASK :: u8(0x30) // bits 4-5 (water flow direction)
 SAND_FLAG_FLOW_LEFT :: u8(0x10) // 01 = flowed left
 SAND_FLAG_FLOW_RIGHT :: u8(0x20) // 10 = flowed right
+SAND_FLAG_DRY_MASK :: u8(0x30) // bits 4-5 (Wet_Sand drying counter, same bits as flow — no conflict)
+SAND_FLAG_DRY_SHIFT :: u8(4)
 
 sand_cell_fall_count :: proc(cell: ^Sand_Cell) -> u8 {
 	return (cell.flags & SAND_FLAG_FALL_MASK) >> SAND_FLAG_FALL_SHIFT

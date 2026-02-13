@@ -175,7 +175,7 @@ Downhill: snap-based — resolve snaps player to surface if gap < snap distance.
 
 CA sand/water sim on level-aligned grid (1 cell = 1 tile). `Sand_World` stores flat `[]Sand_Cell` (y*w+x, y=0=bottom) + parallel `[]Sand_Slope_Kind` (immutable structural data from level) + chunks + emitters.
 
-**Materials:** Empty, Solid (level), Sand (falls), Water (flows horizontally, buoyant), Platform (one-way).
+**Materials:** Empty, Solid (level), Sand (falls), Water (flows horizontally, buoyant), Platform (one-way), Wet_Sand (sand that contacted water: heavier, stickier, darker; dries without water).
 
 **Sim:** Every `SAND_SIM_INTERVAL` fixed steps. Bottom-to-top, alternating L/R parity. Sand: down → diagonal; sinks through water. On slope cells, sand/water slides only in the slope's downhill diagonal direction. Water: down → diagonal → horizontal (up to `WATER_FLOW_DISTANCE` cells). Sleep after `SAND_SLEEP_THRESHOLD` idle steps; movement wakes 8 neighbors. Parity flag prevents double-moves.
 
@@ -184,13 +184,13 @@ CA sand/water sim on level-aligned grid (1 cell = 1 tile). `Sand_World` stores f
 **Emitters:** Accumulate fractional particles at `SAND_EMITTER_RATE`/`WATER_EMITTER_RATE`. Spawn one tile below when ready.
 
 **Player interaction** (`sand_player_interact` each fixed step):
-1. **Displacement** — push sand/water out of player footprint (priority: primary → perpendicular → diag → opposite → destroy)
-2. **Drag** — sand: `1 - min(count * DRAG_PER_CELL, DRAG_MAX)`. Water: separate drag constants
-3. **Pressure** — contiguous sand above → downward force. Water excluded
-4. **Burial** — sand ratio > threshold → extra gravity. Sand only
+1. **Displacement** — push sand/wet sand/water out of player footprint (priority: primary → perpendicular → diag → opposite → destroy)
+2. **Drag** — sand: quadratic by immersion. Wet sand: separate higher drag constants. Water: separate drag constants
+3. **Pressure** — contiguous sand/wet sand above → downward force. Water excluded
+4. **Burial** — sand ratio > threshold → extra gravity. Sand + wet sand
 5. **Buoyancy** — water immersion > threshold → upward force
 
-**Rendering:** Sand = opaque rects (triangles on slope cells), color variants via `SAND_COLOR_VARIATION`. Water = alpha-blended, depth-darkened gradient (triangles on slopes). Rendered after player.
+**Rendering:** Sand + wet sand = opaque rects (triangles on slope cells), color variants via `SAND_COLOR_VARIATION`/`WET_SAND_COLOR_VARIATION`. Water = alpha-blended, depth-darkened gradient (triangles on slopes). Rendered after player.
 
 ### Camera
 
@@ -204,7 +204,7 @@ INI with sections, expressions (`+`,`-`,`*`,`/`, parens, variable refs), `#RRGGB
 
 **Workflow:** edit `game.ini` → `odin run build/ -- gen` → update source → `odin run build/ -- check`.
 
-**Sections:** `[game]`, `[version]`, `[engine]`, `[physics]`, `[camera]` (`CAMERA_*`), `[level]` (`LEVEL_COLOR_*`), `[player]`/`[player_run]`/`[player_jump]`/`[player_dash]`/`[player_wall]`/`[player_slopes]`/`[player_graphics]`/`[player_particles]`/`[player_particle_colors]`, `[sand]` (`SAND_*`), `[sand_debug]` (`SAND_DEBUG_*`), `[water]` (`WATER_*`), `[input]` (`INPUT_KB_*`/`INPUT_GP_*`), `[debug_colors]` (`DEBUG_COLOR_*`), `[debug]` (`DEBUG_*`).
+**Sections:** `[game]`, `[version]`, `[engine]`, `[physics]`, `[camera]` (`CAMERA_*`), `[level]` (`LEVEL_COLOR_*`), `[player]`/`[player_run]`/`[player_jump]`/`[player_dash]`/`[player_wall]`/`[player_slopes]`/`[player_graphics]`/`[player_particles]`/`[player_particle_colors]`, `[sand]` (`SAND_*`), `[sand_debug]` (`SAND_DEBUG_*`), `[water]` (`WATER_*`), `[wet_sand]` (`WET_SAND_*`), `[input]` (`INPUT_KB_*`/`INPUT_GP_*`), `[debug_colors]` (`DEBUG_COLOR_*`), `[debug]` (`DEBUG_*`).
 
 ## Units & Coordinates
 

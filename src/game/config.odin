@@ -245,6 +245,16 @@ WATER_PRESSURE_SCAN_RANGE: u8              // horizontal scan distance for talle
 WATER_PRESSURE_CHANCE: f32                 // probability of rising per eligible step
 WATER_SURFACE_TENSION_DEPTH: u8            // minimum depth before surface cells flow horizontally
 
+// [wet_sand]
+WET_SAND_DRY_STEPS: u8                     // sim steps without adjacent water before drying back to sand
+WET_SAND_REPOSE_CHANCE: f32                // diagonal move probability (lower = steeper piles than dry sand)
+WET_SAND_WATER_SWAP_CHANCE: f32            // probability of sinking through water (higher = denser than dry)
+WET_SAND_COLOR: [4]u8                      // darker, browner sand color
+WET_SAND_COLOR_VARIATION: u8               // less visual variation than dry sand
+WET_SAND_PLAYER_DRAG_PER_CELL: f32         // much higher drag per cell than dry sand
+WET_SAND_PLAYER_DRAG_MAX: f32              // higher drag cap
+WET_SAND_PLAYER_DRAG_Y_FACTOR: f32         // slightly more vertical drag
+
 // [debug_colors]
 DEBUG_COLOR_COLLIDER: [4]u8                // ground collider outline (green)
 DEBUG_COLOR_COLLIDER_BACK_WALL: [4]u8      // back wall collider outline (dark cyan)
@@ -480,6 +490,14 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_u8(&config_game, "WATER_PRESSURE_SCAN_RANGE"); ok do WATER_PRESSURE_SCAN_RANGE = val
 	if val, ok := engine.config_get_f32(&config_game, "WATER_PRESSURE_CHANCE"); ok do WATER_PRESSURE_CHANCE = val
 	if val, ok := engine.config_get_u8(&config_game, "WATER_SURFACE_TENSION_DEPTH"); ok do WATER_SURFACE_TENSION_DEPTH = val
+	if val, ok := engine.config_get_u8(&config_game, "WET_SAND_DRY_STEPS"); ok do WET_SAND_DRY_STEPS = val
+	if val, ok := engine.config_get_f32(&config_game, "WET_SAND_REPOSE_CHANCE"); ok do WET_SAND_REPOSE_CHANCE = val
+	if val, ok := engine.config_get_f32(&config_game, "WET_SAND_WATER_SWAP_CHANCE"); ok do WET_SAND_WATER_SWAP_CHANCE = val
+	if val, ok := engine.config_get_rgba(&config_game, "WET_SAND_COLOR"); ok do WET_SAND_COLOR = val
+	if val, ok := engine.config_get_u8(&config_game, "WET_SAND_COLOR_VARIATION"); ok do WET_SAND_COLOR_VARIATION = val
+	if val, ok := engine.config_get_f32(&config_game, "WET_SAND_PLAYER_DRAG_PER_CELL"); ok do WET_SAND_PLAYER_DRAG_PER_CELL = val
+	if val, ok := engine.config_get_f32(&config_game, "WET_SAND_PLAYER_DRAG_MAX"); ok do WET_SAND_PLAYER_DRAG_MAX = val
+	if val, ok := engine.config_get_f32(&config_game, "WET_SAND_PLAYER_DRAG_Y_FACTOR"); ok do WET_SAND_PLAYER_DRAG_Y_FACTOR = val
 	if val, ok := engine.config_get_rgba(&config_game, "DEBUG_COLOR_COLLIDER"); ok do DEBUG_COLOR_COLLIDER = val
 	if val, ok := engine.config_get_rgba(&config_game, "DEBUG_COLOR_COLLIDER_BACK_WALL"); ok do DEBUG_COLOR_COLLIDER_BACK_WALL = val
 	if val, ok := engine.config_get_rgba(&config_game, "DEBUG_COLOR_COLLIDER_CEILING"); ok do DEBUG_COLOR_COLLIDER_CEILING = val

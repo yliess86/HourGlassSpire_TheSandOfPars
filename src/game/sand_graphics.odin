@@ -13,6 +13,7 @@ Sand_Render_Batch :: struct {
 // Pre-computed color LUTs (rebuilt on init + F5 reload)
 WATER_COLOR_LUT_SIZE :: 32
 sand_color_lut: [4]sdl.FColor
+wet_sand_color_lut: [4]sdl.FColor
 water_color_lut: [WATER_COLOR_LUT_SIZE]sdl.FColor
 
 sand_graphics_init_lut :: proc() {
@@ -23,6 +24,15 @@ sand_graphics_init_lut :: proc() {
 			f32(math.clamp(i16(SAND_COLOR.g) + offset, 0, 255)) / 255,
 			f32(math.clamp(i16(SAND_COLOR.b) + offset, 0, 255)) / 255,
 			f32(SAND_COLOR.a) / 255,
+		}
+	}
+	for v in 0 ..< 4 {
+		offset := i16(v) * i16(WET_SAND_COLOR_VARIATION) - i16(WET_SAND_COLOR_VARIATION) * 2
+		wet_sand_color_lut[v] = {
+			f32(math.clamp(i16(WET_SAND_COLOR.r) + offset, 0, 255)) / 255,
+			f32(math.clamp(i16(WET_SAND_COLOR.g) + offset, 0, 255)) / 255,
+			f32(math.clamp(i16(WET_SAND_COLOR.b) + offset, 0, 255)) / 255,
+			f32(WET_SAND_COLOR.a) / 255,
 		}
 	}
 	for d in 0 ..< WATER_COLOR_LUT_SIZE {
@@ -55,14 +65,16 @@ sand_graphics_render :: proc(sand: ^Sand_World) {
 		indices  = make([dynamic]c.int, 0, 10000, context.temp_allocator),
 	}
 
-	// Batch sand cells (opaque)
+	// Batch sand + wet sand cells (opaque)
 	for y in y0 ..< y1 {
 		for x in x0 ..< x1 {
 			idx := y * sand.width + x
 			cell := sand.cells[idx]
-			if cell.material != .Sand do continue
+			fc: sdl.FColor
+			if cell.material == .Sand do fc = sand_color_lut[cell.color_variant]
+			else if cell.material == .Wet_Sand do fc = wet_sand_color_lut[cell.color_variant]
+			else do continue
 
-			fc := sand_color_lut[cell.color_variant]
 			slope := sand.slopes[idx]
 			if slope != .None do sand_graphics_batch_slope_tri(&sand_batch, x, y, slope, fc)
 			else do sand_graphics_batch_rect(&sand_batch, x, y, fc)
@@ -216,11 +228,12 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 		pressure: f32 = 0
 		for y := min(y1, sand.height) - 1; y >= y0; y -= 1 {
 			cell := sand.cells[y * sand.width + x]
-			if cell.material == .Sand || cell.material == .Water do pressure += 1.0
+			if cell.material == .Sand || cell.material == .Wet_Sand || cell.material == .Water do pressure += 1.0
 			else if cell.material == .Solid || cell.material == .Platform do pressure = 0
 			else do pressure = max(pressure - 0.5, 0)
 
-			if pressure > 0 && (cell.material == .Sand || cell.material == .Water) {
+			if pressure > 0 &&
+			   (cell.material == .Sand || cell.material == .Wet_Sand || cell.material == .Water) {
 				color: [4]u8
 				t := math.clamp(pressure / SAND_DEBUG_PRESSURE_MAX, 0, 1)
 				if t < 0.33 do color = SAND_DEBUG_COLOR_LOW
@@ -240,7 +253,7 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 	for y in y0 ..< y1 {
 		for x in x0 ..< x1 {
 			cell := sand.cells[y * sand.width + x]
-			if cell.material != .Sand && cell.material != .Water do continue
+			if cell.material != .Sand && cell.material != .Wet_Sand && cell.material != .Water do continue
 
 			is_sleeping := cell.sleep_counter >= SAND_SLEEP_THRESHOLD
 			if !is_sleeping {
@@ -310,8 +323,10 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 
 	// Stats text
 	sand_count := 0
+	wet_sand_count := 0
 	water_count := 0
 	sand_sleeping := 0
+	wet_sand_sleeping := 0
 	water_sleeping := 0
 	for y in 0 ..< sand.height {
 		for x in 0 ..< sand.width {
@@ -324,6 +339,9 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 			if cell.material == .Sand {
 				sand_count += 1
 				if is_sleeping do sand_sleeping += 1
+			} else if cell.material == .Wet_Sand {
+				wet_sand_count += 1
+				if is_sleeping do wet_sand_sleeping += 1
 			} else if cell.material == .Water {
 				water_count += 1
 				if is_sleeping do water_sleeping += 1
@@ -340,30 +358,42 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,
 		stats_y + DEBUG_TEXT_LINE_H,
+		"Wet Sand:",
+		fmt.ctprintf("%d", wet_sand_count),
+	)
+	debug_value_with_label(
+		DEBUG_TEXT_MARGIN_X,
+		stats_y + 2 * DEBUG_TEXT_LINE_H,
 		"Water:",
 		fmt.ctprintf("%d", water_count),
 	)
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,
-		stats_y + 2 * DEBUG_TEXT_LINE_H,
+		stats_y + 3 * DEBUG_TEXT_LINE_H,
 		"Chunks:",
 		fmt.ctprintf("%d/%d", active_chunks, len(sand.chunks)),
 	)
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,
-		stats_y + 3 * DEBUG_TEXT_LINE_H,
+		stats_y + 4 * DEBUG_TEXT_LINE_H,
 		"Sand Sleep:",
 		fmt.ctprintf("%d/%d", sand_sleeping, sand_count),
 	)
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,
-		stats_y + 4 * DEBUG_TEXT_LINE_H,
+		stats_y + 5 * DEBUG_TEXT_LINE_H,
+		"Wet Sleep:",
+		fmt.ctprintf("%d/%d", wet_sand_sleeping, wet_sand_count),
+	)
+	debug_value_with_label(
+		DEBUG_TEXT_MARGIN_X,
+		stats_y + 6 * DEBUG_TEXT_LINE_H,
 		"Water Sleep:",
 		fmt.ctprintf("%d/%d", water_sleeping, water_count),
 	)
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,
-		stats_y + 5 * DEBUG_TEXT_LINE_H,
+		stats_y + 7 * DEBUG_TEXT_LINE_H,
 		"Chunk Sleep:",
 		fmt.ctprintf("%d/%d", sleeping_chunks, len(sand.chunks)),
 	)
