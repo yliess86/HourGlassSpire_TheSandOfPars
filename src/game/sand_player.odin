@@ -40,36 +40,62 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 	// Compute player tile footprint
 	x0, y0, x1, y1 := sand_player_footprint(sand, player)
 
+	// Impact crater: compute factor from landing speed
+	impact_factor: f32 = 0
+	if player.transform.impact_pending > 0 {
+		speed := player.transform.impact_pending
+		player.transform.impact_pending = 0
+		range := SAND_IMPACT_MAX_SPEED - SAND_IMPACT_MIN_SPEED
+		if range > 0 do impact_factor = math.clamp((speed - SAND_IMPACT_MIN_SPEED) / range, 0, 1)
+	}
+
+	// Expand footprint for crater
+	extra := int(impact_factor * f32(SAND_IMPACT_RADIUS))
+	cx0 := max(x0 - extra, 0)
+	cy0 := max(y0 - extra, 0)
+	cx1 := min(x1 + extra, sand.width - 1)
+
 	sand_displaced := 0
 	water_displaced := 0
+	player_cx := int(player.transform.pos.x / TILE_SIZE)
 
-	// Displacement: push sand and water out of the player footprint
-	for ty in y0 ..= y1 {
-		for tx in x0 ..= x1 {
+	// Displacement: push sand and water out of footprint (+ crater ring)
+	for ty in cy0 ..= y1 {
+		for tx in cx0 ..= cx1 {
 			if !sand_in_bounds(sand, tx, ty) do continue
 			mat := sand.cells[ty * sand.width + tx].material
 			if mat != .Sand && mat != .Water do continue
 
-			// Push direction: away from player center horizontally
-			player_cx := int(player.transform.pos.x / TILE_SIZE)
 			push_dx: int = tx >= player_cx ? 1 : -1
+			in_ring := tx < x0 || tx > x1 || ty < y0
 
-			if sand_displace_cell(sand, tx, ty, push_dx) {
+			displaced := false
+			if in_ring && impact_factor > 0 {
+				displaced = sand_eject_cell_up(sand, tx, ty, y1, push_dx)
+			} else {
+				displaced = sand_displace_cell(sand, tx, ty, push_dx)
+			}
+
+			if displaced {
 				if mat == .Water do water_displaced += 1
 				else do sand_displaced += 1
 			}
 		}
 	}
 
-	// Displacement particles: visual feedback when pushing sand/water
+	// Displacement particles (scaled by impact)
 	if sand_displaced > 0 {
 		emit_pos := [2]f32{player.transform.pos.x, player.transform.pos.y + PLAYER_SIZE}
-		sand_particles_emit(
+		count :=
+			impact_factor > 0 ? int(math.lerp(f32(4), f32(16), impact_factor)) : min(sand_displaced, 4)
+		speed_mult := math.lerp(f32(1), SAND_IMPACT_PARTICLE_SPEED_MULT, impact_factor)
+		sand_particles_emit_scaled(
 			&game.sand_particles,
 			emit_pos,
 			player.transform.vel,
 			SAND_COLOR,
-			min(sand_displaced, 4),
+			count,
+			speed_mult,
 		)
 	}
 	if water_displaced > 0 {
@@ -198,6 +224,36 @@ sand_try_displace_to :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, depth: int 
 	return true
 }
 
+// Eject a sand/water cell upward (for crater rim splash), fallback to sideways
+@(private = "file")
+sand_eject_cell_up :: proc(sand: ^Sand_World, tx, ty, ceil_ty, push_dx: int) -> bool {
+	for eject_y := ceil_ty + 1; eject_y < min(ceil_ty + 4, sand.height); eject_y += 1 {
+		if !sand_in_bounds(sand, tx, eject_y) do continue
+		if sand.cells[eject_y * sand.width + tx].material != .Empty do continue
+
+		src_idx := ty * sand.width + tx
+		dst_idx := eject_y * sand.width + tx
+		sand.cells[dst_idx] = sand.cells[src_idx]
+		sand.cells[dst_idx].sleep_counter = 0
+		sand_cell_reset_fall(&sand.cells[dst_idx])
+		sand.cells[src_idx] = Sand_Cell{}
+
+		sand_wake_neighbors(sand, tx, ty)
+		sand_wake_neighbors(sand, tx, eject_y)
+		sand_chunk_mark_dirty(sand, tx, ty)
+		sand_chunk_mark_dirty(sand, tx, eject_y)
+
+		if ty / int(SAND_CHUNK_SIZE) != eject_y / int(SAND_CHUNK_SIZE) {
+			src_chunk := sand_chunk_at(sand, tx, ty)
+			dst_chunk := sand_chunk_at(sand, tx, eject_y)
+			if src_chunk != nil && src_chunk.active_count > 0 do src_chunk.active_count -= 1
+			if dst_chunk != nil do dst_chunk.active_count += 1
+		}
+		return true
+	}
+	return sand_displace_cell(sand, tx, ty, push_dx)
+}
+
 // Emit displacement particles with outward velocity away from player
 sand_particles_emit :: proc(
 	pool: ^engine.Particle_Pool,
@@ -205,9 +261,20 @@ sand_particles_emit :: proc(
 	color: [4]u8,
 	count: int,
 ) {
+	sand_particles_emit_scaled(pool, pos, player_vel, color, count, 1.0)
+}
+
+@(private = "file")
+sand_particles_emit_scaled :: proc(
+	pool: ^engine.Particle_Pool,
+	pos, player_vel: [2]f32,
+	color: [4]u8,
+	count: int,
+	speed_mult: f32,
+) {
 	for _ in 0 ..< count {
 		angle := rand.float32() * 2 * math.PI
-		speed := SAND_PARTICLE_SPEED * (0.5 + 0.5 * rand.float32())
+		speed := SAND_PARTICLE_SPEED * (0.5 + 0.5 * rand.float32()) * speed_mult
 		vel := [2]f32{math.cos(angle) * speed, math.sin(angle) * speed + abs(player_vel.y) * 0.2}
 		engine.particle_pool_emit(
 			pool,

@@ -178,6 +178,11 @@ SAND_DUST_LIFETIME: f32                    // dust particle lifetime (seconds)
 SAND_DUST_SIZE: f32                        // dust particle size (meters)
 SAND_DUST_LIGHTEN: u8                      // RGB offset to lighten sand color for dust
 SAND_DUST_INTERVAL: u8                     // emit every N fixed steps
+SAND_IMPACT_MIN_SPEED: f32                 // below this: no extra displacement (m/s)
+SAND_IMPACT_MAX_SPEED: f32                 // at/above this: maximum crater (m/s)
+SAND_IMPACT_RADIUS: u8                     // max extra tiles at max impact
+SAND_IMPACT_EXTRA_CHAIN: u8                // extra chain depth at max impact
+SAND_IMPACT_PARTICLE_SPEED_MULT: f32       // particle speed multiplier at max impact
 
 // [sand_debug]
 SAND_DEBUG_COLOR_LOW: [4]u8                // heatmap color for low pressure (blue)
@@ -387,6 +392,11 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "SAND_DUST_SIZE"); ok do SAND_DUST_SIZE = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_DUST_LIGHTEN"); ok do SAND_DUST_LIGHTEN = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_DUST_INTERVAL"); ok do SAND_DUST_INTERVAL = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_IMPACT_MIN_SPEED"); ok do SAND_IMPACT_MIN_SPEED = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_IMPACT_MAX_SPEED"); ok do SAND_IMPACT_MAX_SPEED = val
+	if val, ok := engine.config_get_u8(&config_game, "SAND_IMPACT_RADIUS"); ok do SAND_IMPACT_RADIUS = val
+	if val, ok := engine.config_get_u8(&config_game, "SAND_IMPACT_EXTRA_CHAIN"); ok do SAND_IMPACT_EXTRA_CHAIN = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_IMPACT_PARTICLE_SPEED_MULT"); ok do SAND_IMPACT_PARTICLE_SPEED_MULT = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_LOW"); ok do SAND_DEBUG_COLOR_LOW = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_MID"); ok do SAND_DEBUG_COLOR_MID = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_HIGH"); ok do SAND_DEBUG_COLOR_HIGH = val

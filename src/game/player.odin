@@ -16,8 +16,9 @@ Player_State :: enum u8 {
 }
 
 Player_Transform :: struct {
-	pos: [2]f32,
-	vel: [2]f32,
+	pos:            [2]f32,
+	vel:            [2]f32,
+	impact_pending: f32, // landing speed, consumed by sand_player_interact
 }
 
 Player_Abilities :: struct {

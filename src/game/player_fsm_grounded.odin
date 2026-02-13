@@ -10,6 +10,7 @@ player_fsm_grounded_init :: proc(player: ^Player) {
 }
 
 player_fsm_grounded_enter :: proc(ctx: ^Player) {
+	ctx.transform.impact_pending = math.abs(ctx.transform.vel.y)
 	ctx.abilities.wall_run_cooldown_timer = 0
 	ctx.abilities.wall_run_used = false
 	if ctx.sensor.on_ground {
