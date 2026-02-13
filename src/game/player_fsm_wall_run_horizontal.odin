@@ -32,8 +32,11 @@ player_fsm_wall_run_horizontal_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Pl
 		PLAYER_WALL_RUN_HORIZONTAL_LIFT * combined -
 		GRAVITY * PLAYER_WALL_RUN_HORIZONTAL_GRAV_MULT * ctx.abilities.wall_run_timer
 
+	if ctx.sensor.on_sand_wall do sand_wall_erode(&game.sand, ctx)
+
 	if ctx.abilities.jump_buffer_timer > 0 {
 		ctx.transform.vel.y = PLAYER_JUMP_FORCE
+		if ctx.sensor.on_sand_wall do ctx.transform.vel.y *= SAND_WALL_JUMP_MULT
 		ctx.abilities.jump_buffer_timer = 0
 		player_particles_step_emit(&game.steps, ctx.transform.pos)
 		return .Airborne

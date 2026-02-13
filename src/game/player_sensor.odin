@@ -16,6 +16,7 @@ Player_Sensor :: struct {
 	on_side_wall:         bool,
 	on_side_wall_dir:     f32, // +1 right, -1 left, 0 no side wall
 	on_side_wall_snap_x:  f32, // inner edge X of detected left wall + PLAYER_SIZE/2 or right wall - PLAYER_SIZE/2
+	on_sand_wall:         bool, // side wall is a sand/wet sand column (not solid)
 	on_slope:             bool,
 	on_slope_dir:         f32, // +1 uphill, -1 downhill, 0 flat
 
@@ -37,6 +38,7 @@ player_sensor_update :: proc(player: ^Player) {
 	on_side_wall: bool
 	on_side_wall_dir: f32
 	on_side_wall_snap_x: f32
+	on_sand_wall: bool
 	on_slope: bool
 	on_slope_dir: f32
 
@@ -90,6 +92,17 @@ player_sensor_update :: proc(player: ^Player) {
 			on_side_wall_dir = 1
 			on_side_wall_snap_x = hit_r.point.x - PLAYER_SIZE / 2
 			debug_wall_right_hit = hit_r
+		}
+	}
+
+	// Sand wall detection (only if no solid side wall)
+	if !on_side_wall {
+		found, dir, snap_x := sand_detect_wall(&game.sand, player)
+		if found {
+			on_side_wall = true
+			on_side_wall_dir = dir
+			on_side_wall_snap_x = snap_x
+			on_sand_wall = true
 		}
 	}
 
@@ -182,6 +195,7 @@ player_sensor_update :: proc(player: ^Player) {
 	player.sensor.on_side_wall = on_side_wall
 	player.sensor.on_side_wall_dir = on_side_wall_dir
 	player.sensor.on_side_wall_snap_x = on_side_wall_snap_x
+	player.sensor.on_sand_wall = on_sand_wall
 	player.sensor.on_slope = on_slope
 	player.sensor.on_slope_dir = on_slope_dir
 	player.sensor.debug_ground_hit = debug_ground_hit
@@ -252,6 +266,7 @@ player_sensor_debug :: proc(player: ^Player, screen_pos: [2]f32) {
 		{"on_side_wall:", fmt.ctprintf("%v", player.sensor.on_side_wall)},
 		{"on_side_wall_dir:", fmt.ctprintf("%.0f", player.sensor.on_side_wall_dir)},
 		{"on_side_wall_snap_x:", fmt.ctprintf("%.2f", player.sensor.on_side_wall_snap_x)},
+		{"on_sand_wall:", fmt.ctprintf("%v", player.sensor.on_sand_wall)},
 		{"on_slope:", fmt.ctprintf("%v", player.sensor.on_slope)},
 		{"on_slope_dir:", fmt.ctprintf("%.0f", player.sensor.on_slope_dir)},
 	}

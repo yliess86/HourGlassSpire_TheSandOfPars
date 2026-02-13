@@ -47,11 +47,17 @@ player_fsm_wall_run_vertical_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Play
 		ctx.transform.pos.x = ctx.sensor.on_side_wall_snap_x
 	}
 
+	if ctx.sensor.on_sand_wall do sand_wall_erode(&game.sand, ctx)
+
 	if ctx.abilities.jump_buffer_timer > 0 {
 		if ctx.sensor.on_side_wall {
 			ctx.transform.pos.x -= ctx.sensor.on_side_wall_dir * EPS
 			ctx.transform.vel.y = PLAYER_WALL_JUMP_VERTICAL_MULT * PLAYER_JUMP_FORCE
 			ctx.transform.vel.x = -ctx.sensor.on_side_wall_dir * PLAYER_WALL_JUMP_FORCE
+			if ctx.sensor.on_sand_wall {
+				ctx.transform.vel.y *= SAND_WALL_JUMP_MULT
+				ctx.transform.vel.x *= SAND_WALL_JUMP_MULT
+			}
 			wall_pos := [2]f32 {
 				ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2,
 				ctx.transform.pos.y + PLAYER_SIZE / 2,
@@ -65,6 +71,7 @@ player_fsm_wall_run_vertical_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Play
 			player_particles_step_emit(&game.steps, wall_pos)
 		} else {
 			ctx.transform.vel.y = PLAYER_JUMP_FORCE
+			if ctx.sensor.on_sand_wall do ctx.transform.vel.y *= SAND_WALL_JUMP_MULT
 			player_particles_dust_emit(
 				&game.dust,
 				ctx.transform.pos,

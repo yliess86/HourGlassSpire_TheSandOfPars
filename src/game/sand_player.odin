@@ -64,6 +64,74 @@ sand_surface_query :: proc(sand: ^Sand_World, player: ^Player) -> (f32, bool) {
 	return math.lerp(right_y, left_y, frac_x), true
 }
 
+// Count contiguous sand/wet sand cells in a column from ty_start to ty_end (inclusive)
+sand_count_wall_column :: proc(sand: ^Sand_World, tx, ty_start, ty_end: int) -> int {
+	count := 0
+	for ty in ty_start ..= ty_end {
+		if !sand_in_bounds(sand, tx, ty) do break
+		mat := sand_get(sand, tx, ty).material
+		if mat != .Sand && mat != .Wet_Sand do break
+		count += 1
+	}
+	return count
+}
+
+// Detect a sand wall adjacent to the player (left or right column)
+// Returns: found, wall direction (+1 right, -1 left), snap X position
+sand_detect_wall :: proc(sand: ^Sand_World, player: ^Player) -> (bool, f32, f32) {
+	if sand.width == 0 || sand.height == 0 do return false, 0, 0
+
+	center_y := player.transform.pos.y + PLAYER_SIZE / 2
+	ty_start := int(player.transform.pos.y / TILE_SIZE)
+	ty_end := int((player.transform.pos.y + PLAYER_SIZE) / TILE_SIZE)
+
+	// Check left
+	left_x := player.transform.pos.x - PLAYER_SIZE / 2 - PLAYER_CHECK_SIDE_WALL_EPS
+	left_tx := int(left_x / TILE_SIZE)
+	if sand_in_bounds(sand, left_tx, ty_start) {
+		count := sand_count_wall_column(sand, left_tx, ty_start, ty_end)
+		if count >= int(SAND_WALL_MIN_HEIGHT) {
+			snap_x := f32(left_tx + 1) * TILE_SIZE + PLAYER_SIZE / 2
+			return true, -1, snap_x
+		}
+	}
+
+	// Check right
+	right_x := player.transform.pos.x + PLAYER_SIZE / 2 + PLAYER_CHECK_SIDE_WALL_EPS
+	right_tx := int(right_x / TILE_SIZE)
+	if sand_in_bounds(sand, right_tx, ty_start) {
+		count := sand_count_wall_column(sand, right_tx, ty_start, ty_end)
+		if count >= int(SAND_WALL_MIN_HEIGHT) {
+			snap_x := f32(right_tx) * TILE_SIZE - PLAYER_SIZE / 2
+			return true, 1, snap_x
+		}
+	}
+
+	return false, 0, 0
+}
+
+// Erode sand wall: remove cells from the wall column near the player center
+sand_wall_erode :: proc(sand: ^Sand_World, player: ^Player) {
+	if sand.width == 0 || sand.height == 0 do return
+
+	dir := player.sensor.on_side_wall_dir
+	wall_x := player.transform.pos.x + dir * (PLAYER_SIZE / 2 + PLAYER_CHECK_SIDE_WALL_EPS)
+	wall_tx := int(wall_x / TILE_SIZE)
+	center_ty := int((player.transform.pos.y + PLAYER_SIZE / 2) / TILE_SIZE)
+	push_dx: int = dir > 0 ? 1 : -1
+
+	for _ in 0 ..< int(SAND_WALL_ERODE_RATE) {
+		// Priority: center → above → below
+		for try_ty in ([3]int{center_ty, center_ty + 1, center_ty - 1}) {
+			if !sand_in_bounds(sand, wall_tx, try_ty) do continue
+			mat := sand_get(sand, wall_tx, try_ty).material
+			if mat != .Sand && mat != .Wet_Sand do continue
+			sand_displace_cell(sand, wall_tx, try_ty, push_dx)
+			break
+		}
+	}
+}
+
 // Bidirectional player-sand/water coupling: displacement, drag, pressure, burial, buoyancy
 sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 	if sand.width == 0 || sand.height == 0 do return
