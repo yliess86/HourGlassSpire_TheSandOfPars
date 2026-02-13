@@ -153,14 +153,21 @@ SAND_COLOR_VARIATION: u8                   // per-particle brightness offset for
 SAND_EMITTER_RATE: f32                     // particles spawned per second per emitter
 SAND_PLAYER_DRAG_PER_CELL: f32             // velocity drag added per displaced sand cell
 SAND_PLAYER_DRAG_MAX: f32                  // max total drag factor cap (0-1)
+SAND_PLAYER_DRAG_Y_FACTOR: f32             // Y drag is this fraction of X drag (preserves jump feel)
 SAND_PRESSURE_FORCE: f32                   // downward force per sand cell stacked above player
+SAND_PRESSURE_GAP_TOLERANCE: u8            // empty cells to scan past in pressure column
 SAND_BURIAL_THRESHOLD: f32                 // sand/footprint overlap ratio to count as buried
 SAND_BURIAL_GRAVITY_MULT: f32              // extra gravity multiplier when buried in sand
 SAND_DISPLACE_CHAIN: u8                    // max recursive push depth when displacing sand
 SAND_SINK_SPEED: f32                       // sinking rate (m/s) when standing on sand
 SAND_MOVE_PENALTY: f32                     // run speed reduction per immersion (0=none, 1=zero at full)
 SAND_JUMP_PENALTY: f32                     // jump force reduction per immersion (0=none, 1=no jump)
+SAND_WATER_SWAP_CHANCE: f32                // probability sand sinks through water per tick (organic mixing)
 SAND_WALL_RUN_PENALTY: f32                 // wall run speed reduction per immersion (0=none, 1=zero)
+SAND_PARTICLE_SPEED: f32                   // displacement particle outward velocity (m/s)
+SAND_PARTICLE_LIFETIME: f32                // displacement particle lifetime (seconds)
+SAND_PARTICLE_SIZE: f32                    // displacement particle size (meters)
+SAND_PARTICLE_GRAVITY: f32                 // displacement particle gravity (m/s²)
 
 // [sand_debug]
 SAND_DEBUG_COLOR_LOW: [4]u8                // heatmap color for low pressure (blue)
@@ -179,6 +186,7 @@ WATER_FLOW_DISTANCE: u8                    // max horizontal flow per step (dept
 WATER_EMITTER_RATE: f32                    // particles spawned per second per water emitter
 WATER_PLAYER_DRAG_PER_CELL: f32            // velocity drag added per displaced water cell
 WATER_PLAYER_DRAG_MAX: f32                 // max total drag factor cap (0-1)
+WATER_PLAYER_DRAG_Y_FACTOR: f32            // Y drag is this fraction of X drag (water is denser)
 WATER_BUOYANCY_FORCE: f32                  // upward force per immersion ratio (0-1)
 WATER_BUOYANCY_THRESHOLD: f32              // water immersion ratio to trigger buoyancy
 WATER_MOVE_PENALTY: f32                    // run speed reduction per water immersion
@@ -341,14 +349,21 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "SAND_EMITTER_RATE"); ok do SAND_EMITTER_RATE = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_PLAYER_DRAG_PER_CELL"); ok do SAND_PLAYER_DRAG_PER_CELL = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_PLAYER_DRAG_MAX"); ok do SAND_PLAYER_DRAG_MAX = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_PLAYER_DRAG_Y_FACTOR"); ok do SAND_PLAYER_DRAG_Y_FACTOR = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_PRESSURE_FORCE"); ok do SAND_PRESSURE_FORCE = val
+	if val, ok := engine.config_get_u8(&config_game, "SAND_PRESSURE_GAP_TOLERANCE"); ok do SAND_PRESSURE_GAP_TOLERANCE = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_BURIAL_THRESHOLD"); ok do SAND_BURIAL_THRESHOLD = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_BURIAL_GRAVITY_MULT"); ok do SAND_BURIAL_GRAVITY_MULT = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_DISPLACE_CHAIN"); ok do SAND_DISPLACE_CHAIN = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_SINK_SPEED"); ok do SAND_SINK_SPEED = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_MOVE_PENALTY"); ok do SAND_MOVE_PENALTY = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_JUMP_PENALTY"); ok do SAND_JUMP_PENALTY = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_WATER_SWAP_CHANCE"); ok do SAND_WATER_SWAP_CHANCE = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_WALL_RUN_PENALTY"); ok do SAND_WALL_RUN_PENALTY = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_PARTICLE_SPEED"); ok do SAND_PARTICLE_SPEED = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_PARTICLE_LIFETIME"); ok do SAND_PARTICLE_LIFETIME = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_PARTICLE_SIZE"); ok do SAND_PARTICLE_SIZE = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_PARTICLE_GRAVITY"); ok do SAND_PARTICLE_GRAVITY = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_LOW"); ok do SAND_DEBUG_COLOR_LOW = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_MID"); ok do SAND_DEBUG_COLOR_MID = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_HIGH"); ok do SAND_DEBUG_COLOR_HIGH = val
@@ -363,6 +378,7 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "WATER_EMITTER_RATE"); ok do WATER_EMITTER_RATE = val
 	if val, ok := engine.config_get_f32(&config_game, "WATER_PLAYER_DRAG_PER_CELL"); ok do WATER_PLAYER_DRAG_PER_CELL = val
 	if val, ok := engine.config_get_f32(&config_game, "WATER_PLAYER_DRAG_MAX"); ok do WATER_PLAYER_DRAG_MAX = val
+	if val, ok := engine.config_get_f32(&config_game, "WATER_PLAYER_DRAG_Y_FACTOR"); ok do WATER_PLAYER_DRAG_Y_FACTOR = val
 	if val, ok := engine.config_get_f32(&config_game, "WATER_BUOYANCY_FORCE"); ok do WATER_BUOYANCY_FORCE = val
 	if val, ok := engine.config_get_f32(&config_game, "WATER_BUOYANCY_THRESHOLD"); ok do WATER_BUOYANCY_THRESHOLD = val
 	if val, ok := engine.config_get_f32(&config_game, "WATER_MOVE_PENALTY"); ok do WATER_MOVE_PENALTY = val
