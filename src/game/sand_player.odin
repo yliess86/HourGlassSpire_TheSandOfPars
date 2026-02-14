@@ -136,14 +136,19 @@ sand_wall_erode :: proc(sand: ^Sand_World, player: ^Player) {
 sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 	if sand.width == 0 || sand.height == 0 do return
 
+	// Cache player footprint for sim blocking (before dash early-return)
+	x0, y0, x1, y1 := sand_player_footprint(sand, player)
+	sand.player_x0 = x0
+	sand.player_y0 = y0
+	sand.player_x1 = x1
+	sand.player_y1 = y1
+	sand.player_blocking = true
+
 	// Dash tunnel: carve through sand, reduced drag, skip normal displacement
 	if player.fsm.current == .Dashing {
 		sand_dash_carve(sand, player, dt)
 		return
 	}
-
-	// Compute player tile footprint
-	x0, y0, x1, y1 := sand_player_footprint(sand, player)
 
 	// Impact crater: compute factor from landing speed
 	impact_factor: f32 = 0
@@ -435,14 +440,51 @@ sand_player_footprint :: proc(sand: ^Sand_World, player: ^Player) -> (x0, y0, x1
 
 // Try to displace a sand/water cell at (tx,ty) in push_dx direction.
 // Returns true if successfully displaced, false if no space found even with chaining.
-// Priority order: sideways and down only (never displaces upward)
+// Slope-aware: aligns push directions with slope surface geometry.
 @(private = "file")
 sand_displace_cell :: proc(sand: ^Sand_World, tx, ty, push_dx: int) -> bool {
+	slope := sand_get_slope(sand, tx, ty)
+
+	if slope == .Right {
+		// / slope: downhill = (-1,-1), uphill = (+1,+1)
+		if push_dx < 0 {
+			if sand_try_displace_to(sand, tx, ty, tx - 1, ty - 1) do return true
+			if sand_try_displace_to(sand, tx, ty, tx - 1, ty) do return true
+		} else {
+			if sand_try_displace_to(sand, tx, ty, tx + 1, ty + 1) do return true
+			if sand_try_displace_to(sand, tx, ty, tx + 1, ty) do return true
+		}
+		// Pile above slope surface
+		if sand_try_displace_to(sand, tx, ty, tx, ty + 1) do return true
+	} else if slope == .Left {
+		// \ slope: downhill = (+1,-1), uphill = (-1,+1)
+		if push_dx > 0 {
+			if sand_try_displace_to(sand, tx, ty, tx + 1, ty - 1) do return true
+			if sand_try_displace_to(sand, tx, ty, tx + 1, ty) do return true
+		} else {
+			if sand_try_displace_to(sand, tx, ty, tx - 1, ty + 1) do return true
+			if sand_try_displace_to(sand, tx, ty, tx - 1, ty) do return true
+		}
+		// Pile above slope surface
+		if sand_try_displace_to(sand, tx, ty, tx, ty + 1) do return true
+	}
+
+	// Flat fallback (also reached when slope-specific attempts fail)
 	if sand_try_displace_to(sand, tx, ty, tx + push_dx, ty) do return true
-	if sand_try_displace_to(sand, tx, ty, tx, ty - 1) do return true
-	if sand_try_displace_to(sand, tx, ty, tx + push_dx, ty - 1) do return true
+	// Straight down: blocked on slopes (goes through surface)
+	if slope == .None {
+		if sand_try_displace_to(sand, tx, ty, tx, ty - 1) do return true
+	}
+	// Diagonal down in push direction: allowed if it follows the slope's downhill
+	// .Right (/): downhill dx = -1, .Left (\): downhill dx = +1
+	if slope == .None || (slope == .Right && push_dx < 0) || (slope == .Left && push_dx > 0) {
+		if sand_try_displace_to(sand, tx, ty, tx + push_dx, ty - 1) do return true
+	}
 	if sand_try_displace_to(sand, tx, ty, tx - push_dx, ty) do return true
-	if sand_try_displace_to(sand, tx, ty, tx - push_dx, ty - 1) do return true
+	// Diagonal down in opposite direction: allowed if it follows the slope's downhill
+	if slope == .None || (slope == .Right && push_dx > 0) || (slope == .Left && push_dx < 0) {
+		if sand_try_displace_to(sand, tx, ty, tx - push_dx, ty - 1) do return true
+	}
 	return false
 }
 
@@ -451,12 +493,15 @@ sand_displace_cell :: proc(sand: ^Sand_World, tx, ty, push_dx: int) -> bool {
 @(private = "file")
 sand_try_displace_to :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, depth: int = 0) -> bool {
 	if !sand_in_bounds(sand, dx, dy) do return false
+	if sand_is_player_cell(sand, dx, dy) do return false
 	dst_idx := dy * sand.width + dx
 	dst_mat := sand.cells[dst_idx].material
 
 	// Chain: if destination is sand or water, try to push it further in the same direction
 	if (dst_mat == .Sand || dst_mat == .Wet_Sand || dst_mat == .Water) &&
 	   depth < int(SAND_DISPLACE_CHAIN) {
+		// Don't chain through occupied slope cells — forces piling above the slope
+		if sand_get_slope(sand, dx, dy) != .None do return false
 		chain_dx := dx + (dx - sx)
 		chain_dy := dy + (dy - sy)
 		if !sand_try_displace_to(sand, dx, dy, chain_dx, chain_dy, depth + 1) do return false

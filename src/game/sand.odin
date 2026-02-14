@@ -56,23 +56,27 @@ Sand_Emitter :: struct {
 }
 
 Sand_World :: struct {
-	width, height:      int, // grid dimensions (= level dimensions * SAND_CELLS_PER_TILE)
-	cells:              []Sand_Cell, // flat [y * width + x], y=0 = bottom
-	slopes:             []Sand_Slope_Kind, // parallel to cells; immutable structural data from level
+	width, height:                              int, // grid dimensions (= level dimensions * SAND_CELLS_PER_TILE)
+	cells:                                      []Sand_Cell, // flat [y * width + x], y=0 = bottom
+	slopes:                                     []Sand_Slope_Kind, // parallel to cells; immutable structural data from level
 
 	// Chunks
-	chunks_w, chunks_h: int,
-	chunks:             []Sand_Chunk,
+	chunks_w, chunks_h:                         int,
+	chunks:                                     []Sand_Chunk,
 
 	// Emitters
-	emitters:           [dynamic]Sand_Emitter,
+	emitters:                                   [dynamic]Sand_Emitter,
 
 	// Eroded platforms (tracked for restoration when sand moves away)
-	eroded_platforms:   [dynamic][2]int,
+	eroded_platforms:                           [dynamic][2]int,
 
 	// Simulation state
-	step_counter:       u32, // total sim steps (bit 0 = parity for updated flag)
-	sub_step_acc:       u8, // counts fixed steps; fires sim when == SAND_SIM_INTERVAL
+	step_counter:                               u32, // total sim steps (bit 0 = parity for updated flag)
+	sub_step_acc:                               u8, // counts fixed steps; fires sim when == SAND_SIM_INTERVAL
+
+	// Player footprint cache (set each fixed step, used by sim to block movement into player)
+	player_x0, player_y0, player_x1, player_y1: int,
+	player_blocking:                            bool,
 }
 
 // Grid accessors
@@ -98,6 +102,11 @@ sand_in_bounds :: proc(sand: ^Sand_World, x, y: int) -> bool {
 sand_get_slope :: proc(sand: ^Sand_World, x, y: int) -> Sand_Slope_Kind {
 	if x < 0 || x >= sand.width || y < 0 || y >= sand.height do return .None
 	return sand.slopes[y * sand.width + x]
+}
+
+sand_is_player_cell :: proc(sand: ^Sand_World, x, y: int) -> bool {
+	if !sand.player_blocking do return false
+	return x >= sand.player_x0 && x <= sand.player_x1 && y >= sand.player_y0 && y <= sand.player_y1
 }
 
 // Wang hash - produces pseudo-random spatial distribution for color variants

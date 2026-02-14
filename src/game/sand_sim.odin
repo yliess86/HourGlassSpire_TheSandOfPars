@@ -80,6 +80,7 @@ sand_update_cell_flat :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
 
 	for step in 0 ..< max_steps {
 		if !sand_in_bounds(sand, cx, cy - 1) do break
+		if sand_is_player_cell(sand, cx, cy - 1) do break
 		dst_idx := (cy - 1) * sand.width + cx
 		dst_mat := sand.cells[dst_idx].material
 
@@ -200,6 +201,7 @@ sand_update_cell_wet_sand_flat :: proc(sand: ^Sand_World, x, y: int, parity: u32
 
 	for step in 0 ..< max_steps {
 		if !sand_in_bounds(sand, cx, cy - 1) do break
+		if sand_is_player_cell(sand, cx, cy - 1) do break
 		dst_idx := (cy - 1) * sand.width + cx
 		dst_mat := sand.cells[dst_idx].material
 
@@ -309,6 +311,7 @@ sand_try_move :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, parity: u32) -> bo
 	dst_idx := dy * sand.width + dx
 	dst_mat := sand.cells[dst_idx].material
 	if dst_mat != .Empty && dst_mat != .Water do return false
+	if sand_is_player_cell(sand, dx, dy) do return false
 
 	src_idx := sy * sand.width + sx
 
@@ -434,6 +437,7 @@ sand_try_move_water :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, parity: u32)
 
 	dst_idx := dy * sand.width + dx
 	if sand.cells[dst_idx].material != .Empty do return false
+	if sand_is_player_cell(sand, dx, dy) do return false
 
 	src_idx := sy * sand.width + sx
 	sand.cells[dst_idx] = sand.cells[src_idx]
@@ -495,6 +499,7 @@ sand_try_flow_water :: proc(sand: ^Sand_World, x, y, dx: int, parity: u32) -> bo
 	for i in 1 ..= max_flow {
 		nx := x + i * dx
 		if !sand_in_bounds(sand, nx, y) do break
+		if sand_is_player_cell(sand, nx, y) do break
 		if sand.cells[y * sand.width + nx].material != .Empty do break
 
 		// Drop-off: empty cell below — move here immediately (water falls next step)
@@ -538,6 +543,7 @@ sand_try_flow_water :: proc(sand: ^Sand_World, x, y, dx: int, parity: u32) -> bo
 @(private = "file")
 sand_try_rise_water :: proc(sand: ^Sand_World, x, y: int, parity: u32) -> bool {
 	if !sand_in_bounds(sand, x, y + 1) do return false
+	if sand_is_player_cell(sand, x, y + 1) do return false
 	if sand.cells[(y + 1) * sand.width + x].material != .Empty do return false
 
 	// Count contiguous water depth below (including self)

@@ -173,18 +173,18 @@ Downhill: snap-based — resolve snaps player to surface if gap < snap distance.
 
 ### Sand System
 
-CA sand/water sim on level-aligned grid (`SAND_CELLS_PER_TILE` cells per tile, configurable resolution). `Sand_World` stores flat `[]Sand_Cell` (y*w+x, y=0=bottom) + parallel `[]Sand_Slope_Kind` (immutable structural data from level) + chunks + emitters. Grid dimensions = level dimensions × `SAND_CELLS_PER_TILE`. Cell size = `TILE_SIZE / SAND_CELLS_PER_TILE`. Distance/accumulation constants in `game.ini` auto-scale with CPT via expressions.
+CA sand/water sim on level-aligned grid (`SAND_CELLS_PER_TILE` cells per tile, configurable resolution). `Sand_World` stores flat `[]Sand_Cell` (y*w+x, y=0=bottom) + parallel `[]Sand_Slope_Kind` (immutable structural data from level) + chunks + emitters + player footprint cache. Grid dimensions = level dimensions × `SAND_CELLS_PER_TILE`. Cell size = `TILE_SIZE / SAND_CELLS_PER_TILE`. Distance/accumulation constants in `game.ini` auto-scale with CPT via expressions.
 
 **Materials:** Empty, Solid (level), Sand (falls), Water (flows horizontally, buoyant), Platform (one-way), Wet_Sand (sand that contacted water: heavier, stickier, darker; dries without water).
 
-**Sim:** Every `SAND_SIM_INTERVAL` fixed steps. Bottom-to-top, alternating L/R parity. Sand: down → diagonal; sinks through water. On slope cells, sand/water slides only in the slope's downhill diagonal direction. Water: down → diagonal → horizontal (up to `WATER_FLOW_DISTANCE` cells). Sleep after `SAND_SLEEP_THRESHOLD` idle steps; movement wakes 8 neighbors. Parity flag prevents double-moves.
+**Sim:** Every `SAND_SIM_INTERVAL` fixed steps. Bottom-to-top, alternating L/R parity. Sand: down → diagonal; sinks through water. On slope cells, sand/water slides only in the slope's downhill diagonal direction. Water: down → diagonal → horizontal (up to `WATER_FLOW_DISTANCE` cells). Sleep after `SAND_SLEEP_THRESHOLD` idle steps; movement wakes 8 neighbors. Parity flag prevents double-moves. Player footprint blocking: sim and displacement respect cached player bounds (`sand_is_player_cell`), preventing sand/water from moving into the player.
 
 **Chunks:** 32x32 partitions. Track active_count, dirty/needs_sim. Dirty propagates to 8-neighbors. Skip chunks with needs_sim=false.
 
 **Emitters:** Accumulate fractional particles at `SAND_EMITTER_RATE`/`WATER_EMITTER_RATE`. Spawn one tile below when ready.
 
 **Player interaction** (`sand_player_interact` each fixed step):
-1. **Displacement** — push sand/wet sand/water out of player footprint (priority: primary → perpendicular → diag → opposite → destroy)
+1. **Displacement** — push sand/wet sand/water out of player footprint. Slope-aware: on slopes, pushes align with surface geometry (downhill diagonals allowed, through-surface blocked). Chaining blocked through slope cells. Flat fallbacks: primary → down → diag → opposite → opposite diag
 2. **Drag** — sand: quadratic by immersion. Wet sand: separate higher drag constants. Water: separate drag constants
 3. **Pressure** — contiguous sand/wet sand above → downward force. Water excluded
 4. **Burial** — sand ratio > threshold → extra gravity. Sand + wet sand
