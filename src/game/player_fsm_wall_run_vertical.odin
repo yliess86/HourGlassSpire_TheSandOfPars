@@ -66,7 +66,7 @@ player_fsm_wall_run_vertical_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Play
 				&game.dust,
 				wall_pos,
 				{-ctx.sensor.on_side_wall_dir * PLAYER_PARTICLE_DUST_SPEED_MAX, 0},
-				4,
+				int(PLAYER_PARTICLE_DUST_WALL_JUMP_COUNT),
 			)
 			player_particles_step_emit(&game.steps, wall_pos)
 		} else {
@@ -76,7 +76,7 @@ player_fsm_wall_run_vertical_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Play
 				&game.dust,
 				ctx.transform.pos,
 				{0, -PLAYER_PARTICLE_DUST_SPEED_MAX},
-				4,
+				int(PLAYER_PARTICLE_DUST_WALL_JUMP_COUNT),
 			)
 			player_particles_step_emit(&game.steps, ctx.transform.pos)
 		}
@@ -114,7 +114,7 @@ player_fsm_wall_run_vertical_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Play
 				&game.dust,
 				wall_pos,
 				{0, -PLAYER_PARTICLE_DUST_SPEED_MIN},
-				2,
+				int(PLAYER_PARTICLE_DUST_WALL_RUN_COUNT),
 			)
 			player_particles_step_emit(&game.steps, wall_pos)
 		} else {
@@ -122,7 +122,7 @@ player_fsm_wall_run_vertical_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Play
 				&game.dust,
 				ctx.transform.pos,
 				{0, -PLAYER_PARTICLE_DUST_SPEED_MIN},
-				2,
+				int(PLAYER_PARTICLE_DUST_WALL_RUN_COUNT),
 			)
 			player_particles_step_emit(&game.steps, ctx.transform.pos)
 		}

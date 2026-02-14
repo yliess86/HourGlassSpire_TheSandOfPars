@@ -56,7 +56,7 @@ player_fsm_airborne_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 					&game.dust,
 					wall_pos,
 					{-ctx.sensor.on_side_wall_dir * PLAYER_PARTICLE_DUST_SPEED_MAX, 0},
-					4,
+					int(PLAYER_PARTICLE_DUST_WALL_JUMP_COUNT),
 				)
 			}
 			ctx.abilities.jump_buffer_timer = 0

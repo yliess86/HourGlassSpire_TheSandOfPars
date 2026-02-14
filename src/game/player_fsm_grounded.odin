@@ -17,7 +17,12 @@ player_fsm_grounded_enter :: proc(ctx: ^Player) {
 		ctx.transform.pos.y = ctx.sensor.on_ground_snap_y
 		player_sync_collider(ctx)
 	}
-	player_particles_dust_emit(&game.dust, ctx.transform.pos, {0, 0}, 6)
+	player_particles_dust_emit(
+		&game.dust,
+		ctx.transform.pos,
+		{0, 0},
+		int(PLAYER_PARTICLE_DUST_LAND_COUNT),
+	)
 }
 
 // Grounded — on solid ground or platform. Zeroes Y velocity, resets cooldowns.
@@ -34,7 +39,12 @@ player_fsm_grounded_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 	if math.abs(game.input.axis.x) > PLAYER_INPUT_AXIS_THRESHOLD {
 		ctx.graphics.run_anim_timer += PLAYER_RUN_BOB_SPEED * dt
 		if math.floor(prev / math.PI) != math.floor(ctx.graphics.run_anim_timer / math.PI) {
-			player_particles_dust_emit(&game.dust, ctx.transform.pos, {0, 0}, 2)
+			player_particles_dust_emit(
+				&game.dust,
+				ctx.transform.pos,
+				{0, 0},
+				int(PLAYER_PARTICLE_DUST_STEP_COUNT),
+			)
 		}
 	} else do ctx.graphics.run_anim_timer = 0
 
@@ -78,7 +88,7 @@ player_fsm_grounded_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 				&game.dust,
 				ctx.transform.pos,
 				{0, -PLAYER_PARTICLE_DUST_SPEED_MAX},
-				4,
+				int(PLAYER_PARTICLE_DUST_JUMP_COUNT),
 			)
 			return .Airborne
 		}

@@ -5,123 +5,131 @@ import engine "../engine"
 import "core:fmt"
 
 // [game]
-GAME_TITLE: string                         // main title shown in window and UI
-GAME_SUBTITLE: string                      // subtitle appended to title
+GAME_TITLE: string                           // main title shown in window and UI
+GAME_SUBTITLE: string                        // subtitle appended to title
 
 // [version]
-VERSION_NAME: string                       // build label (e.g. "Game Jam", "Alpha")
+VERSION_NAME: string                         // build label (e.g. "Game Jam", "Alpha")
 VERSION_DATE: string
 VERSION_TIME: string
 VERSION_HASH: string
 
 // [engine]
-WINDOW_TITLE: string                       // SDL window title bar text
-WINDOW_SCALE: u8                           // integer multiplier on logical resolution
-LOGICAL_H: f32                             // logical viewport height in pixels (width from aspect ratio)
-FPS: u8                                    // target frame rate
-FIXED_STEPS: u8                            // physics sub-steps per frame (fixed_dt = 1/(FPS*FIXED_STEPS))
+WINDOW_TITLE: string                         // SDL window title bar text
+WINDOW_SCALE: u8                             // integer multiplier on logical resolution
+LOGICAL_H: f32                               // logical viewport height in pixels (width from aspect ratio)
+FPS: u8                                      // target frame rate
+FIXED_STEPS: u8                              // physics sub-steps per frame (fixed_dt = 1/(FPS*FIXED_STEPS))
 
 // [physics]
-PPM: f32                                   // pixels per meter — world-to-pixel conversion factor
-GRAVITY: f32                               // downward acceleration (m/s²)
-EPS: f32                                   // collision epsilon — smallest meaningful distance
-TILE_SIZE: f32                             // side length of one tile in meters (1 BMP pixel = 1 tile)
+PPM: f32                                     // pixels per meter — world-to-pixel conversion factor
+GRAVITY: f32                                 // downward acceleration (m/s²)
+EPS: f32                                     // collision epsilon — smallest meaningful distance
+TILE_SIZE: f32                               // side length of one tile in meters (1 BMP pixel = 1 tile)
 
 // [camera]
-CAMERA_FOLLOW_SPEED_MIN: f32               // follow speed inside dead zone (slow drift)
-CAMERA_FOLLOW_SPEED_MAX: f32               // follow speed at viewport edge (fast catch-up)
-CAMERA_DEAD_ZONE: f32                      // normalized half-viewport radius where camera doesn't move
-CAMERA_BOUNDARY_ZONE: f32                  // meters from level edge where camera decelerates
+CAMERA_FOLLOW_SPEED_MIN: f32                 // follow speed inside dead zone (slow drift)
+CAMERA_FOLLOW_SPEED_MAX: f32                 // follow speed at viewport edge (fast catch-up)
+CAMERA_DEAD_ZONE: f32                        // normalized half-viewport radius where camera doesn't move
+CAMERA_BOUNDARY_ZONE: f32                    // meters from level edge where camera decelerates
 
 // [level]
-LEVEL_NAME: string                         // BMP filename in assets/ (without extension)
-LEVEL_COLOR_BG: [4]u8                      // background clear color
-LEVEL_COLOR_TILE_SOLID: [4]u8              // solid tile fill color
-LEVEL_COLOR_TILE_BACK_WALL: [4]u8          // back wall / slope background fill color
-LEVEL_PALETTE_EMPTY: [4]u8                 // BMP palette: empty / air
-LEVEL_PALETTE_SOLID: [4]u8                 // BMP palette: solid wall
-LEVEL_PALETTE_PLATFORM: [4]u8              // BMP palette: one-way platform
-LEVEL_PALETTE_BACK_WALL: [4]u8             // BMP palette: background wall
-LEVEL_PALETTE_SPAWN: [4]u8                 // BMP palette: player spawn point
-LEVEL_PALETTE_SLOPE_RIGHT: [4]u8           // BMP palette: floor slope /
-LEVEL_PALETTE_SLOPE_LEFT: [4]u8            // BMP palette: floor slope \
-LEVEL_PALETTE_SLOPE_CEIL_RIGHT: [4]u8      // BMP palette: ceiling slope \
-LEVEL_PALETTE_SLOPE_CEIL_LEFT: [4]u8       // BMP palette: ceiling slope /
-LEVEL_PALETTE_SAND_PILE: [4]u8             // BMP palette: pre-placed sand
-LEVEL_PALETTE_SAND_EMITTER: [4]u8          // BMP palette: sand emitter
-LEVEL_PALETTE_WATER_PILE: [4]u8            // BMP palette: pre-placed water
-LEVEL_PALETTE_WATER_EMITTER: [4]u8         // BMP palette: water emitter
+LEVEL_NAME: string                           // BMP filename in assets/ (without extension)
+LEVEL_COLOR_BG: [4]u8                        // background clear color
+LEVEL_COLOR_TILE_SOLID: [4]u8                // solid tile fill color
+LEVEL_COLOR_TILE_BACK_WALL: [4]u8            // back wall / slope background fill color
+LEVEL_PALETTE_EMPTY: [4]u8                   // BMP palette: empty / air
+LEVEL_PALETTE_SOLID: [4]u8                   // BMP palette: solid wall
+LEVEL_PALETTE_PLATFORM: [4]u8                // BMP palette: one-way platform
+LEVEL_PALETTE_BACK_WALL: [4]u8               // BMP palette: background wall
+LEVEL_PALETTE_SPAWN: [4]u8                   // BMP palette: player spawn point
+LEVEL_PALETTE_SLOPE_RIGHT: [4]u8             // BMP palette: floor slope /
+LEVEL_PALETTE_SLOPE_LEFT: [4]u8              // BMP palette: floor slope \
+LEVEL_PALETTE_SLOPE_CEIL_RIGHT: [4]u8        // BMP palette: ceiling slope \
+LEVEL_PALETTE_SLOPE_CEIL_LEFT: [4]u8         // BMP palette: ceiling slope /
+LEVEL_PALETTE_SAND_PILE: [4]u8               // BMP palette: pre-placed sand
+LEVEL_PALETTE_SAND_EMITTER: [4]u8            // BMP palette: sand emitter
+LEVEL_PALETTE_WATER_PILE: [4]u8              // BMP palette: pre-placed water
+LEVEL_PALETTE_WATER_EMITTER: [4]u8           // BMP palette: water emitter
 
 // [player]
-PLAYER_COLOR: [4]u8                        // player square color (RGBA)
-PLAYER_SIZE: f32                           // player hitbox side length (square)
-PLAYER_CHECK_GROUND_EPS: f32               // raycast distance below feet for ground detection
-PLAYER_CHECK_SIDE_WALL_EPS: f32            // raycast distance sideways for wall detection
-PLAYER_COYOTE_TIME_DURATION: f32           // seconds after leaving ground where jump still allowed
-PLAYER_DROP_NUDGE: f32                     // downward nudge when dropping through a platform
-PLAYER_FAST_FALL_MULT: f32                 // gravity multiplier when ascending with jump released (short hop)
-PLAYER_INPUT_AXIS_THRESHOLD: f32           // stick/axis magnitude to register directional input
-PLAYER_MOVE_LERP_SPEED: f32                // interpolation rate for horizontal movement smoothing
+PLAYER_COLOR: [4]u8                          // player square color (RGBA)
+PLAYER_SIZE: f32                             // player hitbox side length (square)
+PLAYER_CHECK_GROUND_EPS: f32                 // raycast distance below feet for ground detection
+PLAYER_CHECK_SIDE_WALL_EPS: f32              // raycast distance sideways for wall detection
+PLAYER_COYOTE_TIME_DURATION: f32             // seconds after leaving ground where jump still allowed
+PLAYER_DROP_NUDGE: f32                       // downward nudge when dropping through a platform
+PLAYER_FAST_FALL_MULT: f32                   // gravity multiplier when ascending with jump released (short hop)
+PLAYER_INPUT_AXIS_THRESHOLD: f32             // stick/axis magnitude to register directional input
+PLAYER_MOVE_LERP_SPEED: f32                  // interpolation rate for horizontal movement smoothing
 
 // [player_run]
-PLAYER_RUN_SPEED: f32                      // max horizontal run speed (m/s)
-PLAYER_RUN_SPEED_THRESHOLD: f32            // below this speed, considered standing still
-PLAYER_RUN_BOB_AMPLITUDE: f32              // vertical bob amplitude while running (meters)
-PLAYER_RUN_BOB_SPEED: f32                  // bob oscillation frequency (rad/s)
+PLAYER_RUN_SPEED: f32                        // max horizontal run speed (m/s)
+PLAYER_RUN_SPEED_THRESHOLD: f32              // below this speed, considered standing still
+PLAYER_RUN_BOB_AMPLITUDE: f32                // vertical bob amplitude while running (meters)
+PLAYER_RUN_BOB_SPEED: f32                    // bob oscillation frequency (rad/s)
 
 // [player_jump]
-PLAYER_JUMP_FORCE: f32                     // upward impulse on jump (m/s)
-PLAYER_JUMP_BUFFER_DURATION: f32           // seconds jump input is buffered before landing
+PLAYER_JUMP_FORCE: f32                       // upward impulse on jump (m/s)
+PLAYER_JUMP_BUFFER_DURATION: f32             // seconds jump input is buffered before landing
 
 // [player_dash]
-PLAYER_DASH_SPEED: f32                     // dash velocity (4x run speed)
-PLAYER_DASH_DURATION: f32                  // dash active time in seconds
-PLAYER_DASH_COOLDOWN: f32                  // seconds between dashes
+PLAYER_DASH_SPEED: f32                       // dash velocity (4x run speed)
+PLAYER_DASH_DURATION: f32                    // dash active time in seconds
+PLAYER_DASH_COOLDOWN: f32                    // seconds between dashes
 
 // [player_wall]
-PLAYER_WALL_JUMP_EPS: f32                  // max wall distance to allow wall jump
-PLAYER_WALL_JUMP_FORCE: f32                // wall jump impulse (1.5x normal jump)
-PLAYER_WALL_JUMP_VERTICAL_MULT: f32        // vertical component scale of wall jump (less upward)
-PLAYER_WALL_SLIDE_SPEED: f32               // max downward speed while wall sliding
-PLAYER_WALL_RUN_COOLDOWN: f32              // seconds before wall run can be used again
-PLAYER_WALL_RUN_VERTICAL_SPEED: f32        // initial upward speed for vertical wall run
-PLAYER_WALL_RUN_VERTICAL_DECAY: f32        // exponential decay rate of vertical wall run speed
-PLAYER_WALL_RUN_HORIZONTAL_SPEED: f32      // horizontal speed along back wall during wall run
-PLAYER_WALL_RUN_HORIZONTAL_LIFT: f32       // initial upward boost entering horizontal wall run
-PLAYER_WALL_RUN_HORIZONTAL_GRAV_MULT: f32  // gravity reduction during horizontal wall run (parabolic arc)
+PLAYER_WALL_JUMP_EPS: f32                    // max wall distance to allow wall jump
+PLAYER_WALL_JUMP_FORCE: f32                  // wall jump impulse (1.5x normal jump)
+PLAYER_WALL_JUMP_VERTICAL_MULT: f32          // vertical component scale of wall jump (less upward)
+PLAYER_WALL_SLIDE_SPEED: f32                 // max downward speed while wall sliding
+PLAYER_WALL_RUN_COOLDOWN: f32                // seconds before wall run can be used again
+PLAYER_WALL_RUN_VERTICAL_SPEED: f32          // initial upward speed for vertical wall run
+PLAYER_WALL_RUN_VERTICAL_DECAY: f32          // exponential decay rate of vertical wall run speed
+PLAYER_WALL_RUN_HORIZONTAL_SPEED: f32        // horizontal speed along back wall during wall run
+PLAYER_WALL_RUN_HORIZONTAL_LIFT: f32         // initial upward boost entering horizontal wall run
+PLAYER_WALL_RUN_HORIZONTAL_GRAV_MULT: f32    // gravity reduction during horizontal wall run (parabolic arc)
 
 // [player_slopes]
-PLAYER_SLOPE_SNAP: f32                     // max snap distance to stick to slope surface (airborne)
-PLAYER_SLOPE_UPHILL_FACTOR: f32            // speed multiplier going uphill (slower)
-PLAYER_SLOPE_DOWNHILL_FACTOR: f32          // speed multiplier going downhill (faster)
-PLAYER_STEP_HEIGHT: f32                    // max obstacle height player can step over seamlessly
-PLAYER_SWEEP_SKIN: f32                     // swept AABB skin width to prevent tunneling
+PLAYER_SLOPE_SNAP: f32                       // max snap distance to stick to slope surface (airborne)
+PLAYER_SLOPE_UPHILL_FACTOR: f32              // speed multiplier going uphill (slower)
+PLAYER_SLOPE_DOWNHILL_FACTOR: f32            // speed multiplier going downhill (faster)
+PLAYER_STEP_HEIGHT: f32                      // max obstacle height player can step over seamlessly
+PLAYER_SWEEP_SKIN: f32                       // swept AABB skin width to prevent tunneling
 
 // [player_graphics]
-PLAYER_LOOK_DEFORM: f32                    // velocity-based squash/stretch deformation amount
-PLAYER_LOOK_SMOOTH: f32                    // interpolation speed for look direction smoothing
-PLAYER_IMPACT_DECAY: f32                   // damping rate of impact bounce spring
-PLAYER_IMPACT_FREQ: f32                    // oscillation frequency of impact bounce (rad/s)
-PLAYER_IMPACT_SCALE: f32                   // max squash/stretch scale from impact bounce
-PLAYER_IMPACT_THRESHOLD: f32               // min landing velocity to trigger impact bounce
+PLAYER_LOOK_DEFORM: f32                      // velocity-based squash/stretch deformation amount
+PLAYER_LOOK_SMOOTH: f32                      // interpolation speed for look direction smoothing
+PLAYER_IMPACT_DECAY: f32                     // damping rate of impact bounce spring
+PLAYER_IMPACT_FREQ: f32                      // oscillation frequency of impact bounce (rad/s)
+PLAYER_IMPACT_SCALE: f32                     // max squash/stretch scale from impact bounce
+PLAYER_IMPACT_THRESHOLD: f32                 // min landing velocity to trigger impact bounce
 
 // [player_particles]
-PLAYER_PARTICLE_DUST_SIZE: f32             // dust particle radius
-PLAYER_PARTICLE_DUST_GRAVITY: f32          // gravity on dust particles (m/s²)
-PLAYER_PARTICLE_DUST_LIFETIME_MIN: f32     // min dust particle lifetime (seconds)
-PLAYER_PARTICLE_DUST_LIFETIME_MAX: f32     // max dust particle lifetime (seconds)
-PLAYER_PARTICLE_DUST_SPEED_MIN: f32        // min dust emit speed (m/s)
-PLAYER_PARTICLE_DUST_SPEED_MAX: f32        // max dust emit speed (m/s)
-PLAYER_PARTICLE_DUST_FRICTION: f32         // air friction on dust particles
-PLAYER_PARTICLE_STEP_SIZE: f32             // footstep mark size
-PLAYER_PARTICLE_STEP_LIFETIME: f32         // footstep mark duration (seconds)
+PLAYER_PARTICLE_DUST_SIZE: f32               // dust particle radius
+PLAYER_PARTICLE_DUST_GRAVITY: f32            // gravity on dust particles (m/s²)
+PLAYER_PARTICLE_DUST_LIFETIME_MIN: f32       // min dust particle lifetime (seconds)
+PLAYER_PARTICLE_DUST_LIFETIME_MAX: f32       // max dust particle lifetime (seconds)
+PLAYER_PARTICLE_DUST_SPEED_MIN: f32          // min dust emit speed (m/s)
+PLAYER_PARTICLE_DUST_SPEED_MAX: f32          // max dust emit speed (m/s)
+PLAYER_PARTICLE_DUST_FRICTION: f32           // air friction on dust particles
+PLAYER_PARTICLE_STEP_SIZE: f32               // footstep mark size
+PLAYER_PARTICLE_STEP_LIFETIME: f32           // footstep mark duration (seconds)
+PLAYER_PARTICLE_DUST_LAND_COUNT: u8          // dust particles emitted on landing
+PLAYER_PARTICLE_DUST_STEP_COUNT: u8          // dust particles per footstep
+PLAYER_PARTICLE_DUST_JUMP_COUNT: u8          // dust particles on jump
+PLAYER_PARTICLE_DUST_DASH_COUNT: u8          // dust particles on dash start
+PLAYER_PARTICLE_DUST_WALL_JUMP_COUNT: u8     // dust particles on wall jump
+PLAYER_PARTICLE_DUST_WALL_RUN_COUNT: u8      // dust particles per wall run step
+PLAYER_PARTICLE_DUST_WALL_SLIDE_COUNT: u8    // dust particles per wall slide tick
+PLAYER_PARTICLE_DUST_WALL_SLIDE_CHANCE: f32  // probability of emitting dust per wall slide tick
 
 // [player_particle_colors]
-PLAYER_PARTICLE_DUST_COLOR: [4]u8          // dust particle color (sandy beige)
-PLAYER_PARTICLE_STEP_COLOR: [4]u8          // footstep mark color (dark brown)
+PLAYER_PARTICLE_DUST_COLOR: [4]u8            // dust particle color (sandy beige)
+PLAYER_PARTICLE_STEP_COLOR: [4]u8            // footstep mark color (dark brown)
 
 // [input]
-INPUT_AXIS_DEADZONE: f32                   // gamepad stick deadzone (0-1)
+INPUT_AXIS_DEADZONE: f32                     // gamepad stick deadzone (0-1)
 INPUT_KB_MOVE_UP: string
 INPUT_KB_MOVE_DOWN: string
 INPUT_KB_MOVE_LEFT: string
@@ -145,151 +153,157 @@ INPUT_GP_DEBUG: string
 INPUT_GP_QUIT: string
 
 // [sand]
-SAND_CHUNK_SIZE: u8                        // spatial chunk side length in tiles
-SAND_CELLS_PER_TILE: u8                    // sand grid cells per level tile (power of 2: 1, 2, 4, 8)
-SAND_CELL_SIZE: f32                        // derived cell size in meters
-SAND_SIM_INTERVAL: u8                      // sim every Nth fixed step (4 = 60Hz at 240Hz fixed)
-SAND_SLEEP_THRESHOLD: u8                   // idle steps before cell sleeps (skipped in sim)
-SAND_COLOR: [4]u8                          // base sand particle color
-SAND_COLOR_VARIATION: u8                   // per-particle brightness offset for visual variety
-SAND_EMITTER_RATE: f32                     // particles spawned per second per emitter
-SAND_PLAYER_DRAG_PER_CELL: f32             // velocity drag added per displaced sand cell
-SAND_PLAYER_DRAG_MAX: f32                  // max total drag factor cap (0-1)
-SAND_PLAYER_DRAG_Y_FACTOR: f32             // Y drag is this fraction of X drag (preserves jump feel)
-SAND_PRESSURE_FORCE: f32                   // downward force per sqrt(sand cells) above player
-SAND_PRESSURE_GAP_TOLERANCE: u8            // empty cells to scan past in pressure column
-SAND_BURIAL_THRESHOLD: f32                 // sand/footprint overlap ratio to count as buried
-SAND_BURIAL_GRAVITY_MULT: f32              // extra gravity multiplier when buried in sand
-SAND_DISPLACE_CHAIN: u8                    // max recursive push depth when displacing sand
-SAND_SINK_SPEED: f32                       // sinking rate (m/s) when standing on sand
-SAND_MOVE_PENALTY: f32                     // run speed reduction per immersion (0=none, 1=zero at full)
-SAND_JUMP_PENALTY: f32                     // jump force reduction per immersion (0=none, 1=no jump)
-SAND_FALL_ACCEL_DIVISOR: u8                // extra_steps = fall_count / divisor
-SAND_FALL_MAX_STEPS: u8                    // max cells moved per sim step
-SAND_REPOSE_CHANCE: f32                    // probability of attempting diagonal move (0-1, lower = steeper piles)
-SAND_WATER_SWAP_CHANCE: f32                // probability sand sinks through water per tick (organic mixing)
-SAND_WALL_RUN_PENALTY: f32                 // wall run speed reduction per immersion (0=none, 1=zero)
-SAND_PARTICLE_SPEED: f32                   // displacement particle outward velocity (m/s)
-SAND_PARTICLE_LIFETIME: f32                // displacement particle lifetime (seconds)
-SAND_PARTICLE_SIZE: f32                    // displacement particle size (meters)
-SAND_PARTICLE_GRAVITY: f32                 // displacement particle gravity (m/s²)
-SAND_DUST_MIN_SPEED: f32                   // minimum horizontal speed for dust emission (m/s)
-SAND_DUST_SPEED: f32                       // horizontal dust drift speed (m/s)
-SAND_DUST_LIFT: f32                        // upward dust speed (m/s)
-SAND_DUST_LIFETIME: f32                    // dust particle lifetime (seconds)
-SAND_DUST_SIZE: f32                        // dust particle size (meters)
-SAND_DUST_LIGHTEN: u8                      // RGB offset to lighten sand color for dust
-SAND_DUST_INTERVAL: u8                     // emit every N fixed steps
-SAND_IMPACT_MIN_SPEED: f32                 // below this: no extra displacement (m/s)
-SAND_IMPACT_MAX_SPEED: f32                 // at/above this: maximum crater (m/s)
-SAND_IMPACT_RADIUS: u8                     // max extra cells at max impact
-SAND_IMPACT_EXTRA_CHAIN: u8                // extra chain depth at max impact
-SAND_IMPACT_PARTICLE_SPEED_MULT: f32       // particle speed multiplier at max impact
-SAND_FOOTPRINT_STRIDE: f32                 // meters between footprints (~1 tile)
-SAND_FOOTPRINT_MIN_SPEED: f32              // minimum horizontal speed for footprints (m/s)
-SAND_DASH_DRAG_FACTOR: f32                 // drag multiplier during dash (20% of normal)
-SAND_DASH_PARTICLE_MAX: u8                 // max particles per fixed step during dash
-SAND_DASH_PARTICLE_SPEED_MULT: f32         // particle speed multiplier during dash
-SAND_QUICKSAND_BASE_SINK: f32              // gravity multiplier when still in sand
-SAND_QUICKSAND_MOVE_MULT: f32              // extra gravity per activity unit
-SAND_SURFACE_SCAN_HEIGHT: u8               // cells to scan vertically for surface
-SAND_SURFACE_SMOOTH: u8                    // 0=staircase (current), 1=interpolated
-SAND_SWIM_ENTER_THRESHOLD: f32             // sand immersion to enter sand swim
-SAND_SWIM_EXIT_THRESHOLD: f32              // sand immersion to exit sand swim (hysteresis)
-SAND_SWIM_SURFACE_THRESHOLD: f32           // immersion considered near surface for jump-out
-SAND_SWIM_GRAVITY_MULT: f32                // gravity multiplier while sand swimming
-SAND_SWIM_UP_SPEED: f32                    // upward speed when pressing up (m/s)
-SAND_SWIM_DOWN_SPEED: f32                  // downward speed when pressing down (m/s)
-SAND_SWIM_SINK_SPEED: f32                  // passive sinking speed (no input) (m/s)
-SAND_SWIM_DAMPING: f32                     // velocity damping factor per second
-SAND_SWIM_JUMP_FORCE: f32                  // jump force when leaping out near surface
-SAND_SWIM_MOVE_PENALTY: f32                // horizontal speed reduction per immersion
-SAND_SWIM_LERP_SPEED: f32                  // interpolation rate for movement smoothing
-SAND_SWIM_DRAG_FACTOR: f32                 // residual displacement drag during sand swim
-SAND_WALL_MIN_HEIGHT: u8                   // min contiguous cells for wall detection
-SAND_WALL_ERODE_RATE: u8                   // cells displaced per fixed step during wall-run
-SAND_WALL_JUMP_MULT: f32                   // wall jump force multiplier from sand wall
+SAND_CHUNK_SIZE: u8                          // spatial chunk side length in tiles
+SAND_CELLS_PER_TILE: u8                      // sand grid cells per level tile (power of 2: 1, 2, 4, 8)
+SAND_CELL_SIZE: f32                          // derived cell size in meters
+SAND_SIM_INTERVAL: u8                        // sim every Nth fixed step (4 = 60Hz at 240Hz fixed)
+SAND_SLEEP_THRESHOLD: u8                     // idle steps before cell sleeps (skipped in sim)
+SAND_COLOR: [4]u8                            // base sand particle color
+SAND_COLOR_VARIATION: u8                     // per-particle brightness offset for visual variety
+SAND_EMITTER_RATE: f32                       // particles spawned per second per emitter
+SAND_PLAYER_DRAG_PER_CELL: f32               // velocity drag added per displaced sand cell
+SAND_PLAYER_DRAG_MAX: f32                    // max total drag factor cap (0-1)
+SAND_PLAYER_DRAG_Y_FACTOR: f32               // Y drag is this fraction of X drag (preserves jump feel)
+SAND_PRESSURE_FORCE: f32                     // downward force per sqrt(sand cells) above player
+SAND_PRESSURE_GAP_TOLERANCE: u8              // empty cells to scan past in pressure column
+SAND_BURIAL_THRESHOLD: f32                   // sand/footprint overlap ratio to count as buried
+SAND_BURIAL_GRAVITY_MULT: f32                // extra gravity multiplier when buried in sand
+SAND_DISPLACE_CHAIN: u8                      // max recursive push depth when displacing sand
+SAND_DISPLACE_PARTICLE_MAX: u8               // max displacement particles per material type
+SAND_SINK_SPEED: f32                         // sinking rate (m/s) when standing on sand
+SAND_MOVE_PENALTY: f32                       // run speed reduction per immersion (0=none, 1=zero at full)
+SAND_JUMP_PENALTY: f32                       // jump force reduction per immersion (0=none, 1=no jump)
+SAND_FALL_ACCEL_DIVISOR: u8                  // extra_steps = fall_count / divisor
+SAND_FALL_MAX_STEPS: u8                      // max cells moved per sim step
+SAND_REPOSE_CHANCE: f32                      // probability of attempting diagonal move (0-1, lower = steeper piles)
+SAND_WATER_SWAP_CHANCE: f32                  // probability sand sinks through water per tick (organic mixing)
+SAND_WALL_RUN_PENALTY: f32                   // wall run speed reduction per immersion (0=none, 1=zero)
+SAND_PARTICLE_SPEED: f32                     // displacement particle outward velocity (m/s)
+SAND_PARTICLE_LIFETIME: f32                  // displacement particle lifetime (seconds)
+SAND_PARTICLE_SIZE: f32                      // displacement particle size (meters)
+SAND_PARTICLE_GRAVITY: f32                   // displacement particle gravity (m/s²)
+SAND_PARTICLE_FRICTION: f32                  // air friction on displacement particles
+SAND_DUST_MIN_SPEED: f32                     // minimum horizontal speed for dust emission (m/s)
+SAND_DUST_SPEED: f32                         // horizontal dust drift speed (m/s)
+SAND_DUST_LIFT: f32                          // upward dust speed (m/s)
+SAND_DUST_LIFETIME: f32                      // dust particle lifetime (seconds)
+SAND_DUST_SIZE: f32                          // dust particle size (meters)
+SAND_DUST_LIGHTEN: u8                        // RGB offset to lighten sand color for dust
+SAND_DUST_INTERVAL: u8                       // emit every N fixed steps
+SAND_IMPACT_MIN_SPEED: f32                   // below this: no extra displacement (m/s)
+SAND_IMPACT_MAX_SPEED: f32                   // at/above this: maximum crater (m/s)
+SAND_IMPACT_RADIUS: u8                       // max extra cells at max impact
+SAND_IMPACT_EXTRA_CHAIN: u8                  // extra chain depth at max impact
+SAND_IMPACT_PARTICLE_SPEED_MULT: f32         // particle speed multiplier at max impact
+SAND_IMPACT_PARTICLE_MIN: u8                 // displacement particles at zero impact
+SAND_IMPACT_PARTICLE_MAX: u8                 // displacement particles at max impact
+SAND_EJECT_MAX_HEIGHT: u8                    // max cells above footprint for crater rim ejection
+SAND_FOOTPRINT_STRIDE: f32                   // meters between footprints (~1 tile)
+SAND_FOOTPRINT_MIN_SPEED: f32                // minimum horizontal speed for footprints (m/s)
+SAND_DASH_DRAG_FACTOR: f32                   // drag multiplier during dash (20% of normal)
+SAND_DASH_PARTICLE_MAX: u8                   // max particles per fixed step during dash
+SAND_DASH_PARTICLE_SPEED_MULT: f32           // particle speed multiplier during dash
+SAND_QUICKSAND_BASE_SINK: f32                // gravity multiplier when still in sand
+SAND_QUICKSAND_MOVE_MULT: f32                // extra gravity per activity unit
+SAND_SURFACE_SCAN_HEIGHT: u8                 // cells to scan vertically for surface
+SAND_SURFACE_SMOOTH: u8                      // 0=staircase (current), 1=interpolated
+SAND_SWIM_ENTER_THRESHOLD: f32               // sand immersion to enter sand swim
+SAND_SWIM_EXIT_THRESHOLD: f32                // sand immersion to exit sand swim (hysteresis)
+SAND_SWIM_SURFACE_THRESHOLD: f32             // immersion considered near surface for jump-out
+SAND_SWIM_GRAVITY_MULT: f32                  // gravity multiplier while sand swimming
+SAND_SWIM_UP_SPEED: f32                      // upward speed when pressing up (m/s)
+SAND_SWIM_DOWN_SPEED: f32                    // downward speed when pressing down (m/s)
+SAND_SWIM_SINK_SPEED: f32                    // passive sinking speed (no input) (m/s)
+SAND_SWIM_DAMPING: f32                       // velocity damping factor per second
+SAND_SWIM_JUMP_FORCE: f32                    // jump force when leaping out near surface
+SAND_SWIM_MOVE_PENALTY: f32                  // horizontal speed reduction per immersion
+SAND_SWIM_LERP_SPEED: f32                    // interpolation rate for movement smoothing
+SAND_SWIM_DRAG_FACTOR: f32                   // residual displacement drag during sand swim
+SAND_SWIM_JUMP_PARTICLE_COUNT: u8            // sand particles on sand swim jump-out
+SAND_WALL_MIN_HEIGHT: u8                     // min contiguous cells for wall detection
+SAND_WALL_ERODE_RATE: u8                     // cells displaced per fixed step during wall-run
+SAND_WALL_JUMP_MULT: f32                     // wall jump force multiplier from sand wall
 
 // [sand_debug]
-SAND_DEBUG_COLOR_LOW: [4]u8                // heatmap color for low pressure (blue)
-SAND_DEBUG_COLOR_MID: [4]u8                // heatmap color for mid pressure (yellow)
-SAND_DEBUG_COLOR_HIGH: [4]u8               // heatmap color for high pressure (red)
-SAND_DEBUG_COLOR_CHUNK: [4]u8              // active chunk highlight color
-SAND_DEBUG_COLOR_EMITTER: [4]u8            // emitter marker outline color (cyan)
-SAND_DEBUG_SLEEP_DIM: u8                   // overlay alpha for sleeping particles
-SAND_DEBUG_PRESSURE_MAX: f32               // heatmap pressure cap (above this = max color)
+SAND_DEBUG_COLOR_LOW: [4]u8                  // heatmap color for low pressure (blue)
+SAND_DEBUG_COLOR_MID: [4]u8                  // heatmap color for mid pressure (yellow)
+SAND_DEBUG_COLOR_HIGH: [4]u8                 // heatmap color for high pressure (red)
+SAND_DEBUG_COLOR_CHUNK: [4]u8                // active chunk highlight color
+SAND_DEBUG_COLOR_EMITTER: [4]u8              // emitter marker outline color (cyan)
+SAND_DEBUG_SLEEP_DIM: u8                     // overlay alpha for sleeping particles
+SAND_DEBUG_PRESSURE_MAX: f32                 // heatmap pressure cap (above this = max color)
 
 // [water]
-WATER_COLOR: [4]u8                         // base water particle color (translucent cyan)
-WATER_COLOR_VARIATION: u8                  // max RGB darkening at depth
-WATER_COLOR_DEPTH_MAX: u8                  // cell distance from surface where darkening reaches maximum
-WATER_FLOW_DISTANCE: u8                    // max horizontal flow per step (depth-proportional: surface=1, +1 per depth cell)
-WATER_EMITTER_RATE: f32                    // particles spawned per second per water emitter
-WATER_PLAYER_DRAG_PER_CELL: f32            // velocity drag added per displaced water cell
-WATER_PLAYER_DRAG_MAX: f32                 // max total drag factor cap (0-1)
-WATER_PLAYER_DRAG_Y_FACTOR: f32            // Y drag is this fraction of X drag (water is denser)
-WATER_BUOYANCY_FORCE: f32                  // upward force per immersion ratio (0-1)
-WATER_BUOYANCY_THRESHOLD: f32              // water immersion ratio to trigger buoyancy
-WATER_MOVE_PENALTY: f32                    // run speed reduction per water immersion
-WATER_JUMP_PENALTY: f32                    // jump force reduction per water immersion
-WATER_SWIM_ENTER_THRESHOLD: f32            // immersion ratio to enter swimming
-WATER_SWIM_EXIT_THRESHOLD: f32             // immersion ratio to exit swimming (hysteresis)
-WATER_SWIM_SURFACE_THRESHOLD: f32          // immersion ratio considered "at surface" for jump-out
-WATER_SWIM_GRAVITY_MULT: f32               // gravity multiplier while swimming
-WATER_SWIM_UP_SPEED: f32                   // upward speed when pressing up
-WATER_SWIM_DOWN_SPEED: f32                 // downward speed when pressing down
-WATER_SWIM_FLOAT_SPEED: f32                // passive float-up speed (no input)
-WATER_SWIM_DAMPING: f32                    // velocity damping factor per second
-WATER_SWIM_JUMP_FORCE: f32                 // jump force when leaping out at surface
-WATER_CURRENT_FORCE: f32                   // horizontal force from flowing water (m/s^2)
-WATER_SHIMMER_SPEED: f32                   // oscillation speed (radians/sec)
-WATER_SHIMMER_PHASE: f32                   // spatial frequency (radians/cell)
-WATER_SHIMMER_BRIGHTNESS: u8               // max RGB highlight on surface (0-255)
-WATER_PRESSURE_MIN_DEPTH: u8               // minimum water cells below before upward movement
-WATER_PRESSURE_SCAN_RANGE: u8              // horizontal scan distance for taller columns
-WATER_PRESSURE_CHANCE: f32                 // probability of rising per eligible step
-WATER_SURFACE_TENSION_DEPTH: u8            // minimum depth before surface cells flow horizontally
+WATER_COLOR: [4]u8                           // base water particle color (translucent cyan)
+WATER_COLOR_VARIATION: u8                    // max RGB darkening at depth
+WATER_COLOR_DEPTH_MAX: u8                    // cell distance from surface where darkening reaches maximum
+WATER_FLOW_DISTANCE: u8                      // max horizontal flow per step (depth-proportional: surface=1, +1 per depth cell)
+WATER_EMITTER_RATE: f32                      // particles spawned per second per water emitter
+WATER_PLAYER_DRAG_PER_CELL: f32              // velocity drag added per displaced water cell
+WATER_PLAYER_DRAG_MAX: f32                   // max total drag factor cap (0-1)
+WATER_PLAYER_DRAG_Y_FACTOR: f32              // Y drag is this fraction of X drag (water is denser)
+WATER_BUOYANCY_FORCE: f32                    // upward force per immersion ratio (0-1)
+WATER_BUOYANCY_THRESHOLD: f32                // water immersion ratio to trigger buoyancy
+WATER_MOVE_PENALTY: f32                      // run speed reduction per water immersion
+WATER_JUMP_PENALTY: f32                      // jump force reduction per water immersion
+WATER_SWIM_ENTER_THRESHOLD: f32              // immersion ratio to enter swimming
+WATER_SWIM_EXIT_THRESHOLD: f32               // immersion ratio to exit swimming (hysteresis)
+WATER_SWIM_SURFACE_THRESHOLD: f32            // immersion ratio considered "at surface" for jump-out
+WATER_SWIM_GRAVITY_MULT: f32                 // gravity multiplier while swimming
+WATER_SWIM_UP_SPEED: f32                     // upward speed when pressing up
+WATER_SWIM_DOWN_SPEED: f32                   // downward speed when pressing down
+WATER_SWIM_FLOAT_SPEED: f32                  // passive float-up speed (no input)
+WATER_SWIM_DAMPING: f32                      // velocity damping factor per second
+WATER_SWIM_JUMP_FORCE: f32                   // jump force when leaping out at surface
+WATER_CURRENT_FORCE: f32                     // horizontal force from flowing water (m/s^2)
+WATER_SHIMMER_SPEED: f32                     // oscillation speed (radians/sec)
+WATER_SHIMMER_PHASE: f32                     // spatial frequency (radians/cell)
+WATER_SHIMMER_BRIGHTNESS: u8                 // max RGB highlight on surface (0-255)
+WATER_PRESSURE_MIN_DEPTH: u8                 // minimum water cells below before upward movement
+WATER_PRESSURE_SCAN_RANGE: u8                // horizontal scan distance for taller columns
+WATER_PRESSURE_CHANCE: f32                   // probability of rising per eligible step
+WATER_SURFACE_TENSION_DEPTH: u8              // minimum depth before surface cells flow horizontally
 
 // [wet_sand]
-WET_SAND_DRY_STEPS: u8                     // sim steps without adjacent water before drying back to sand
-WET_SAND_REPOSE_CHANCE: f32                // diagonal move probability (lower = steeper piles than dry sand)
-WET_SAND_WATER_SWAP_CHANCE: f32            // probability of sinking through water (higher = denser than dry)
-WET_SAND_COLOR: [4]u8                      // darker, browner sand color
-WET_SAND_COLOR_VARIATION: u8               // less visual variation than dry sand
-WET_SAND_PLAYER_DRAG_PER_CELL: f32         // much higher drag per cell than dry sand
-WET_SAND_PLAYER_DRAG_MAX: f32              // higher drag cap
-WET_SAND_PLAYER_DRAG_Y_FACTOR: f32         // slightly more vertical drag
+WET_SAND_DRY_STEPS: u8                       // sim steps without adjacent water before drying back to sand
+WET_SAND_REPOSE_CHANCE: f32                  // diagonal move probability (lower = steeper piles than dry sand)
+WET_SAND_WATER_SWAP_CHANCE: f32              // probability of sinking through water (higher = denser than dry)
+WET_SAND_COLOR: [4]u8                        // darker, browner sand color
+WET_SAND_COLOR_VARIATION: u8                 // less visual variation than dry sand
+WET_SAND_PLAYER_DRAG_PER_CELL: f32           // much higher drag per cell than dry sand
+WET_SAND_PLAYER_DRAG_MAX: f32                // higher drag cap
+WET_SAND_PLAYER_DRAG_Y_FACTOR: f32           // slightly more vertical drag
 
 // [debug_colors]
-DEBUG_COLOR_COLLIDER: [4]u8                // ground collider outline (green)
-DEBUG_COLOR_COLLIDER_BACK_WALL: [4]u8      // back wall collider outline (dark cyan)
-DEBUG_COLOR_COLLIDER_CEILING: [4]u8        // ceiling collider outline (dark red)
-DEBUG_COLOR_COLLIDER_SIDE_WALL: [4]u8      // side wall collider outline (orange)
-DEBUG_COLOR_COLLIDER_PLATFORM: [4]u8       // platform collider outline (blue)
-DEBUG_COLOR_FACING_DIR: [4]u8              // player facing direction arrow (cyan)
-DEBUG_COLOR_PLAYER: [4]u8                  // player position cross (magenta)
-DEBUG_COLOR_STATE: [4]u8                   // current FSM state text (white)
-DEBUG_COLOR_STATE_MUTED: [4]u8             // previous FSM state text (muted white)
-DEBUG_COLOR_RAY_GROUND: [4]u8              // ground raycast hit (green)
-DEBUG_COLOR_RAY_SLOPE: [4]u8               // slope raycast hit (light green)
-DEBUG_COLOR_RAY_PLATFORM: [4]u8            // platform raycast hit (blue)
-DEBUG_COLOR_RAY_WALL: [4]u8                // wall raycast hit (orange)
-DEBUG_COLOR_RAY_HIT_POINT: [4]u8           // raycast hit point marker (red)
-DEBUG_COLOR_RAY_MISS: [4]u8                // raycast miss (gray)
-DEBUG_COLOR_VELOCITY: [4]u8                // velocity vector arrow (yellow-green)
-DEBUG_COLOR_GRID: [4]u8                    // tile grid lines (white, alpha controlled separately)
-DEBUG_COLOR_CAMERA_ZONE: [4]u8             // camera dead zone rectangle (translucent white)
+DEBUG_COLOR_COLLIDER: [4]u8                  // ground collider outline (green)
+DEBUG_COLOR_COLLIDER_BACK_WALL: [4]u8        // back wall collider outline (dark cyan)
+DEBUG_COLOR_COLLIDER_CEILING: [4]u8          // ceiling collider outline (dark red)
+DEBUG_COLOR_COLLIDER_SIDE_WALL: [4]u8        // side wall collider outline (orange)
+DEBUG_COLOR_COLLIDER_PLATFORM: [4]u8         // platform collider outline (blue)
+DEBUG_COLOR_FACING_DIR: [4]u8                // player facing direction arrow (cyan)
+DEBUG_COLOR_PLAYER: [4]u8                    // player position cross (magenta)
+DEBUG_COLOR_STATE: [4]u8                     // current FSM state text (white)
+DEBUG_COLOR_STATE_MUTED: [4]u8               // previous FSM state text (muted white)
+DEBUG_COLOR_RAY_GROUND: [4]u8                // ground raycast hit (green)
+DEBUG_COLOR_RAY_SLOPE: [4]u8                 // slope raycast hit (light green)
+DEBUG_COLOR_RAY_PLATFORM: [4]u8              // platform raycast hit (blue)
+DEBUG_COLOR_RAY_WALL: [4]u8                  // wall raycast hit (orange)
+DEBUG_COLOR_RAY_HIT_POINT: [4]u8             // raycast hit point marker (red)
+DEBUG_COLOR_RAY_MISS: [4]u8                  // raycast miss (gray)
+DEBUG_COLOR_VELOCITY: [4]u8                  // velocity vector arrow (yellow-green)
+DEBUG_COLOR_GRID: [4]u8                      // tile grid lines (white, alpha controlled separately)
+DEBUG_COLOR_CAMERA_ZONE: [4]u8               // camera dead zone rectangle (translucent white)
 
 // [debug]
-DEBUG_GRID_ALPHA: u8                       // tile grid line opacity (0-255)
-DEBUG_CROSS_HALF: f32                      // half-size of debug cross markers in pixels
-DEBUG_FACING_LENGTH: f32                   // facing direction arrow length in meters
-DEBUG_TEXT_CHAR_W: f32                     // debug text character width in pixels
-DEBUG_TEXT_LINE_H: f32                     // debug text line height in pixels
-DEBUG_TEXT_MARGIN_X: f32                   // debug HUD left margin in pixels
-DEBUG_TEXT_MARGIN_Y: f32                   // debug HUD top margin in pixels
-DEBUG_TEXT_STATE_GAP: f32                  // vertical gap between FSM state labels in pixels
-DEBUG_VEL_SCALE: f32                       // velocity vector display scale (world units per m/s)
+DEBUG_GRID_ALPHA: u8                         // tile grid line opacity (0-255)
+DEBUG_CROSS_HALF: f32                        // half-size of debug cross markers in pixels
+DEBUG_FACING_LENGTH: f32                     // facing direction arrow length in meters
+DEBUG_TEXT_CHAR_W: f32                       // debug text character width in pixels
+DEBUG_TEXT_LINE_H: f32                       // debug text line height in pixels
+DEBUG_TEXT_MARGIN_X: f32                     // debug HUD left margin in pixels
+DEBUG_TEXT_MARGIN_Y: f32                     // debug HUD top margin in pixels
+DEBUG_TEXT_STATE_GAP: f32                    // vertical gap between FSM state labels in pixels
+DEBUG_VEL_SCALE: f32                         // velocity vector display scale (world units per m/s)
 
 config_apply :: proc() {
 	if val, ok := engine.config_get_string(&config_game, "GAME_TITLE"); ok do GAME_TITLE = val
@@ -376,6 +390,14 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "PLAYER_PARTICLE_DUST_FRICTION"); ok do PLAYER_PARTICLE_DUST_FRICTION = val
 	if val, ok := engine.config_get_f32(&config_game, "PLAYER_PARTICLE_STEP_SIZE"); ok do PLAYER_PARTICLE_STEP_SIZE = val
 	if val, ok := engine.config_get_f32(&config_game, "PLAYER_PARTICLE_STEP_LIFETIME"); ok do PLAYER_PARTICLE_STEP_LIFETIME = val
+	if val, ok := engine.config_get_u8(&config_game, "PLAYER_PARTICLE_DUST_LAND_COUNT"); ok do PLAYER_PARTICLE_DUST_LAND_COUNT = val
+	if val, ok := engine.config_get_u8(&config_game, "PLAYER_PARTICLE_DUST_STEP_COUNT"); ok do PLAYER_PARTICLE_DUST_STEP_COUNT = val
+	if val, ok := engine.config_get_u8(&config_game, "PLAYER_PARTICLE_DUST_JUMP_COUNT"); ok do PLAYER_PARTICLE_DUST_JUMP_COUNT = val
+	if val, ok := engine.config_get_u8(&config_game, "PLAYER_PARTICLE_DUST_DASH_COUNT"); ok do PLAYER_PARTICLE_DUST_DASH_COUNT = val
+	if val, ok := engine.config_get_u8(&config_game, "PLAYER_PARTICLE_DUST_WALL_JUMP_COUNT"); ok do PLAYER_PARTICLE_DUST_WALL_JUMP_COUNT = val
+	if val, ok := engine.config_get_u8(&config_game, "PLAYER_PARTICLE_DUST_WALL_RUN_COUNT"); ok do PLAYER_PARTICLE_DUST_WALL_RUN_COUNT = val
+	if val, ok := engine.config_get_u8(&config_game, "PLAYER_PARTICLE_DUST_WALL_SLIDE_COUNT"); ok do PLAYER_PARTICLE_DUST_WALL_SLIDE_COUNT = val
+	if val, ok := engine.config_get_f32(&config_game, "PLAYER_PARTICLE_DUST_WALL_SLIDE_CHANCE"); ok do PLAYER_PARTICLE_DUST_WALL_SLIDE_CHANCE = val
 	if val, ok := engine.config_get_rgba(&config_game, "PLAYER_PARTICLE_DUST_COLOR"); ok do PLAYER_PARTICLE_DUST_COLOR = val
 	if val, ok := engine.config_get_rgba(&config_game, "PLAYER_PARTICLE_STEP_COLOR"); ok do PLAYER_PARTICLE_STEP_COLOR = val
 	if val, ok := engine.config_get_f32(&config_game, "INPUT_AXIS_DEADZONE"); ok do INPUT_AXIS_DEADZONE = val
@@ -416,6 +438,7 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "SAND_BURIAL_THRESHOLD"); ok do SAND_BURIAL_THRESHOLD = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_BURIAL_GRAVITY_MULT"); ok do SAND_BURIAL_GRAVITY_MULT = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_DISPLACE_CHAIN"); ok do SAND_DISPLACE_CHAIN = val
+	if val, ok := engine.config_get_u8(&config_game, "SAND_DISPLACE_PARTICLE_MAX"); ok do SAND_DISPLACE_PARTICLE_MAX = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_SINK_SPEED"); ok do SAND_SINK_SPEED = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_MOVE_PENALTY"); ok do SAND_MOVE_PENALTY = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_JUMP_PENALTY"); ok do SAND_JUMP_PENALTY = val
@@ -428,6 +451,7 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "SAND_PARTICLE_LIFETIME"); ok do SAND_PARTICLE_LIFETIME = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_PARTICLE_SIZE"); ok do SAND_PARTICLE_SIZE = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_PARTICLE_GRAVITY"); ok do SAND_PARTICLE_GRAVITY = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_PARTICLE_FRICTION"); ok do SAND_PARTICLE_FRICTION = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_DUST_MIN_SPEED"); ok do SAND_DUST_MIN_SPEED = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_DUST_SPEED"); ok do SAND_DUST_SPEED = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_DUST_LIFT"); ok do SAND_DUST_LIFT = val
@@ -440,6 +464,9 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_u8(&config_game, "SAND_IMPACT_RADIUS"); ok do SAND_IMPACT_RADIUS = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_IMPACT_EXTRA_CHAIN"); ok do SAND_IMPACT_EXTRA_CHAIN = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_IMPACT_PARTICLE_SPEED_MULT"); ok do SAND_IMPACT_PARTICLE_SPEED_MULT = val
+	if val, ok := engine.config_get_u8(&config_game, "SAND_IMPACT_PARTICLE_MIN"); ok do SAND_IMPACT_PARTICLE_MIN = val
+	if val, ok := engine.config_get_u8(&config_game, "SAND_IMPACT_PARTICLE_MAX"); ok do SAND_IMPACT_PARTICLE_MAX = val
+	if val, ok := engine.config_get_u8(&config_game, "SAND_EJECT_MAX_HEIGHT"); ok do SAND_EJECT_MAX_HEIGHT = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_FOOTPRINT_STRIDE"); ok do SAND_FOOTPRINT_STRIDE = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_FOOTPRINT_MIN_SPEED"); ok do SAND_FOOTPRINT_MIN_SPEED = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_DASH_DRAG_FACTOR"); ok do SAND_DASH_DRAG_FACTOR = val
@@ -461,6 +488,7 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_MOVE_PENALTY"); ok do SAND_SWIM_MOVE_PENALTY = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_LERP_SPEED"); ok do SAND_SWIM_LERP_SPEED = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_DRAG_FACTOR"); ok do SAND_SWIM_DRAG_FACTOR = val
+	if val, ok := engine.config_get_u8(&config_game, "SAND_SWIM_JUMP_PARTICLE_COUNT"); ok do SAND_SWIM_JUMP_PARTICLE_COUNT = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_WALL_MIN_HEIGHT"); ok do SAND_WALL_MIN_HEIGHT = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_WALL_ERODE_RATE"); ok do SAND_WALL_ERODE_RATE = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_WALL_JUMP_MULT"); ok do SAND_WALL_JUMP_MULT = val

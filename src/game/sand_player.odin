@@ -194,7 +194,7 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 	if sand_displaced > 0 {
 		emit_pos := [2]f32{player.transform.pos.x, player.transform.pos.y + PLAYER_SIZE}
 		count :=
-			impact_factor > 0 ? int(math.lerp(f32(4), f32(16), impact_factor)) : min(sand_displaced, 4)
+			impact_factor > 0 ? int(math.lerp(f32(SAND_IMPACT_PARTICLE_MIN), f32(SAND_IMPACT_PARTICLE_MAX), impact_factor)) : min(sand_displaced, int(SAND_DISPLACE_PARTICLE_MAX))
 		speed_mult := math.lerp(f32(1), SAND_IMPACT_PARTICLE_SPEED_MULT, impact_factor)
 		sand_particles_emit_scaled(
 			&game.sand_particles,
@@ -212,7 +212,7 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 			emit_pos,
 			player.transform.vel,
 			WET_SAND_COLOR,
-			min(wet_sand_displaced, 4),
+			min(wet_sand_displaced, int(SAND_DISPLACE_PARTICLE_MAX)),
 		)
 	}
 	if water_displaced > 0 {
@@ -222,7 +222,7 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 			emit_pos,
 			player.transform.vel,
 			WATER_COLOR,
-			min(water_displaced, 4),
+			min(water_displaced, int(SAND_DISPLACE_PARTICLE_MAX)),
 		)
 	}
 
@@ -489,7 +489,9 @@ sand_try_displace_to :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, depth: int 
 // Eject a sand/water cell upward (for crater rim splash), fallback to sideways
 @(private = "file")
 sand_eject_cell_up :: proc(sand: ^Sand_World, tx, ty, ceil_ty, push_dx: int) -> bool {
-	for eject_y := ceil_ty + 1; eject_y < min(ceil_ty + 4, sand.height); eject_y += 1 {
+	for eject_y := ceil_ty + 1;
+	    eject_y < min(ceil_ty + int(SAND_EJECT_MAX_HEIGHT), sand.height);
+	    eject_y += 1 {
 		if !sand_in_bounds(sand, tx, eject_y) do continue
 		if sand.cells[eject_y * sand.width + tx].material != .Empty do continue
 
@@ -641,7 +643,7 @@ sand_particles_update :: proc(pool: ^engine.Particle_Pool, dt: f32) {
 	engine.particle_pool_update(pool, dt)
 	for i in 0 ..< pool.count {
 		pool.items[i].vel.y -= SAND_PARTICLE_GRAVITY * dt
-		pool.items[i].vel *= 1.0 - 3.0 * dt
+		pool.items[i].vel *= 1.0 - SAND_PARTICLE_FRICTION * dt
 		pool.items[i].pos += pool.items[i].vel * dt
 	}
 }

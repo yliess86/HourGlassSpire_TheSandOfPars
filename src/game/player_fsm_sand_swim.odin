@@ -66,7 +66,7 @@ player_fsm_sand_swim_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State
 			ctx.transform.pos + {0, PLAYER_SIZE},
 			ctx.transform.vel,
 			SAND_COLOR,
-			6,
+			int(SAND_SWIM_JUMP_PARTICLE_COUNT),
 		)
 		return .Airborne
 	}

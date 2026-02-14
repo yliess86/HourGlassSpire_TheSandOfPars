@@ -47,7 +47,7 @@ player_fsm_wall_slide_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_Stat
 			&game.dust,
 			wall_pos,
 			{-ctx.sensor.on_side_wall_dir * PLAYER_PARTICLE_DUST_SPEED_MAX, 0},
-			4,
+			int(PLAYER_PARTICLE_DUST_WALL_JUMP_COUNT),
 		)
 		player_particles_step_emit(&game.steps, wall_pos)
 		return .Airborne
@@ -59,7 +59,7 @@ player_fsm_wall_slide_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_Stat
 	if ctx.sensor.on_back_wall && !ctx.sensor.on_side_wall && !game.input.is_down[.SLIDE] do return .Airborne
 
 	// Sparse dust from hand position while sliding
-	if rand.float32() < 0.25 {
+	if rand.float32() < PLAYER_PARTICLE_DUST_WALL_SLIDE_CHANCE {
 		if ctx.sensor.on_side_wall {
 			hand_pos := [2]f32 {
 				ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2,
@@ -69,7 +69,7 @@ player_fsm_wall_slide_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_Stat
 				&game.dust,
 				hand_pos,
 				{0, PLAYER_PARTICLE_DUST_SPEED_MIN},
-				1,
+				int(PLAYER_PARTICLE_DUST_WALL_SLIDE_COUNT),
 			)
 		} else if ctx.sensor.on_back_wall {
 			hand_pos := [2]f32 {
@@ -80,7 +80,7 @@ player_fsm_wall_slide_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_Stat
 				&game.dust,
 				hand_pos,
 				{0, PLAYER_PARTICLE_DUST_SPEED_MIN},
-				1,
+				int(PLAYER_PARTICLE_DUST_WALL_SLIDE_COUNT),
 			)
 		}
 	}

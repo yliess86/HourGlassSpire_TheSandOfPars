@@ -16,7 +16,7 @@ player_fsm_dashing_enter :: proc(ctx: ^Player) {
 		&game.dust,
 		ctx.transform.pos + {0, PLAYER_SIZE / 2},
 		{-ctx.abilities.dash_dir * PLAYER_PARTICLE_DUST_SPEED_MAX, 0},
-		5,
+		int(PLAYER_PARTICLE_DUST_DASH_COUNT),
 	)
 }
 

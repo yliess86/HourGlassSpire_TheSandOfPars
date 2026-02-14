@@ -64,7 +64,7 @@ player_fsm_wall_run_horizontal_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Pl
 			&game.dust,
 			ctx.transform.pos,
 			{-ctx.abilities.wall_run_dir * PLAYER_PARTICLE_DUST_SPEED_MIN, 0},
-			2,
+			int(PLAYER_PARTICLE_DUST_WALL_RUN_COUNT),
 		)
 		player_particles_step_emit(&game.steps, ctx.transform.pos)
 	}
