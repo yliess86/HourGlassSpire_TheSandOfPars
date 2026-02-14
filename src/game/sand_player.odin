@@ -349,20 +349,10 @@ sand_dash_carve :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 			mat := sand.cells[idx].material
 			if mat != .Sand && mat != .Wet_Sand && mat != .Water do continue
 
-			// Eject upward or sideways, fallback destroy
-			if sand_eject_cell_up(sand, gx, gy, gy_end, push_dx) {
-				if mat == .Sand || mat == .Wet_Sand do sand_carved += 1
-				else do water_carved += 1
-			} else {
-				// Destroy cell
-				sand.cells[idx] = Sand_Cell{}
-				sand_wake_neighbors(sand, gx, gy)
-				sand_chunk_mark_dirty(sand, gx, gy)
-				chunk := sand_chunk_at(sand, gx, gy)
-				if chunk != nil && chunk.active_count > 0 do chunk.active_count -= 1
-				if mat == .Sand || mat == .Wet_Sand do sand_carved += 1
-				else do water_carved += 1
-			}
+			// Eject upward or sideways, skip if no room (mass conservation)
+			if !sand_eject_cell_up(sand, gx, gy, gy_end, push_dx) do continue
+			if mat == .Sand || mat == .Wet_Sand do sand_carved += 1
+			else do water_carved += 1
 		}
 	}
 
@@ -626,6 +616,7 @@ sand_footprint_update :: proc(sand: ^Sand_World, player: ^Player) {
 	sand_chunk_mark_dirty(sand, foot_gx, foot_gy)
 
 	// Pile removed sand beside the footprint (no wake for persistence)
+	placed := false
 	for try_dx in ([2]int{push_dx, -push_dx}) {
 		nx := foot_gx + try_dx
 		if !sand_in_bounds(sand, nx, foot_gy) do continue
@@ -635,7 +626,14 @@ sand_footprint_update :: proc(sand: ^Sand_World, player: ^Player) {
 		n_chunk := sand_chunk_at(sand, nx, foot_gy)
 		if n_chunk != nil do n_chunk.active_count += 1
 		sand_chunk_mark_dirty(sand, nx, foot_gy)
+		placed = true
 		break
+	}
+
+	// Restore cell if no neighbor had room (mass conservation)
+	if !placed {
+		sand.cells[idx] = saved
+		if chunk != nil do chunk.active_count += 1
 	}
 }
 
