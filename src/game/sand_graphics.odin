@@ -356,7 +356,7 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 	sleeping_chunks := len(sand.chunks) - active_chunks
 
 	// Render stats below existing debug text (account for 2 extra sensor lines)
-	stats_y := DEBUG_TEXT_MARGIN_Y + 16 * DEBUG_TEXT_LINE_H
+	stats_y := DEBUG_TEXT_MARGIN_Y + 17 * DEBUG_TEXT_LINE_H
 	debug_value_with_label(DEBUG_TEXT_MARGIN_X, stats_y, "Sand:", fmt.ctprintf("%d", sand_count))
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,

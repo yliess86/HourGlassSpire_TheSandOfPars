@@ -9,6 +9,7 @@ Debug_State :: enum u8 {
 	BACKGROUND,
 	SAND,
 	ALL,
+	CONTROLS,
 }
 
 debug_set_color :: proc(color: [4]u8) {

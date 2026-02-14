@@ -57,6 +57,7 @@ game_clean :: proc() {
 
 game_init :: proc() {
 	game.running = true
+	game.debug = .CONTROLS
 
 	// Load config first (before window_init so WINDOW_TITLE/LOGICAL_H/WINDOW_SCALE are available)
 	config_load_and_apply()
@@ -145,6 +146,34 @@ game_render :: proc() {
 
 game_render_debug :: proc() {
 	sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
+
+	center_x := f32(game.win.logical_w) / 2
+	next := Debug_State((int(game.debug) + 1) % len(Debug_State))
+	debug_text_center(
+		center_x,
+		DEBUG_TEXT_MARGIN_Y,
+		fmt.ctprintf("%v", game.debug),
+		DEBUG_COLOR_STATE,
+	)
+	family := debug_controls_family()
+	hint: cstring
+	if family == .Keyboard {
+		hint = sdl.GetScancodeName(game.input.bindings[.DEBUG].keyboard)
+	} else {
+		names := DEBUG_CONTROLS_NAMES
+		hint = names[family].back
+	}
+	debug_text_center(
+		center_x,
+		DEBUG_TEXT_MARGIN_Y + DEBUG_TEXT_LINE_H,
+		fmt.ctprintf("%s > %v", hint, next),
+		DEBUG_COLOR_STATE_MUTED,
+	)
+
+	if game.debug == .CONTROLS {
+		debug_controls_render()
+		return
+	}
 
 	level_debug(&game.level)
 	sand_graphics_debug(&game.sand)
