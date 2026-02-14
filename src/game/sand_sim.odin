@@ -624,12 +624,13 @@ sand_restore_platforms :: proc(sand: ^Sand_World) {
 			continue
 		}
 
-		// Check if any horizontal neighbor is sand or water
+		// Check if any horizontal or above neighbor is sand or water
 		has_adjacent_sand := false
-		for dx in ([2]int{-1, 1}) {
-			nx := px + dx
-			if !sand_in_bounds(sand, nx, py) do continue
-			mat := sand.cells[py * sand.width + nx].material
+		for offset in ([3][2]int{{-1, 0}, {1, 0}, {0, 1}}) {
+			nx := px + offset.x
+			ny := py + offset.y
+			if !sand_in_bounds(sand, nx, ny) do continue
+			mat := sand.cells[ny * sand.width + nx].material
 			if mat == .Sand || mat == .Wet_Sand || mat == .Water {
 				has_adjacent_sand = true
 				break
