@@ -56,6 +56,21 @@ player_fsm_sand_swim_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State
 	damping := math.exp(-SAND_SWIM_DAMPING * dt)
 	ctx.transform.vel *= damping
 
+	// Sand hop — spam jump when deep to boil upward
+	if game.input.is_pressed[.JUMP] &&
+	   ctx.sensor.sand_immersion >= SAND_SWIM_SURFACE_THRESHOLD &&
+	   ctx.abilities.sand_hop_cooldown_timer <= 0 {
+		ctx.transform.vel.y = SAND_SWIM_HOP_FORCE
+		ctx.abilities.sand_hop_cooldown_timer = SAND_SWIM_HOP_COOLDOWN
+		sand_particles_emit(
+			&game.sand_particles,
+			ctx.transform.pos + {0, PLAYER_SIZE},
+			ctx.transform.vel,
+			SAND_COLOR,
+			int(SAND_SWIM_HOP_PARTICLE_COUNT),
+		)
+	}
+
 	// Jump out near surface
 	if ctx.abilities.jump_buffer_timer > 0 &&
 	   ctx.sensor.sand_immersion < SAND_SWIM_SURFACE_THRESHOLD {

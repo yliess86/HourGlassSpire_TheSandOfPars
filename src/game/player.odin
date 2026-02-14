@@ -33,6 +33,7 @@ Player_Abilities :: struct {
 	wall_run_used:           bool,
 	wall_run_dir:            f32,
 	ground_sticky_timer:     f32,
+	sand_hop_cooldown_timer: f32,
 	footprint_last_x:        f32,
 	footprint_side:          bool,
 }
@@ -84,6 +85,10 @@ player_fixed_update :: proc(player: ^Player, dt: f32) {
 	player.abilities.wall_run_cooldown_timer = math.max(
 		0,
 		player.abilities.wall_run_cooldown_timer - dt,
+	)
+	player.abilities.sand_hop_cooldown_timer = math.max(
+		0,
+		player.abilities.sand_hop_cooldown_timer - dt,
 	)
 	player.abilities.dash_dir =
 		game.input.axis.x != 0 ? math.sign(game.input.axis.x) : player.abilities.dash_dir

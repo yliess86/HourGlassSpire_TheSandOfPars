@@ -220,6 +220,9 @@ SAND_SWIM_MOVE_PENALTY: f32                  // horizontal speed reduction per i
 SAND_SWIM_LERP_SPEED: f32                    // interpolation rate for movement smoothing
 SAND_SWIM_DRAG_FACTOR: f32                   // residual displacement drag during sand swim
 SAND_SWIM_JUMP_PARTICLE_COUNT: u8            // sand particles on sand swim jump-out
+SAND_SWIM_HOP_FORCE: f32                     // upward impulse per sand hop
+SAND_SWIM_HOP_COOLDOWN: f32                  // min seconds between hops
+SAND_SWIM_HOP_PARTICLE_COUNT: u8             // particles per hop
 SAND_WALL_MIN_HEIGHT: u8                     // min contiguous cells for wall detection
 SAND_WALL_ERODE_RATE: u8                     // cells displaced per fixed step during wall-run
 SAND_WALL_JUMP_MULT: f32                     // wall jump force multiplier from sand wall
@@ -491,6 +494,9 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_LERP_SPEED"); ok do SAND_SWIM_LERP_SPEED = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_DRAG_FACTOR"); ok do SAND_SWIM_DRAG_FACTOR = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_SWIM_JUMP_PARTICLE_COUNT"); ok do SAND_SWIM_JUMP_PARTICLE_COUNT = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_HOP_FORCE"); ok do SAND_SWIM_HOP_FORCE = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_SWIM_HOP_COOLDOWN"); ok do SAND_SWIM_HOP_COOLDOWN = val
+	if val, ok := engine.config_get_u8(&config_game, "SAND_SWIM_HOP_PARTICLE_COUNT"); ok do SAND_SWIM_HOP_PARTICLE_COUNT = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_WALL_MIN_HEIGHT"); ok do SAND_WALL_MIN_HEIGHT = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_WALL_ERODE_RATE"); ok do SAND_WALL_ERODE_RATE = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_WALL_JUMP_MULT"); ok do SAND_WALL_JUMP_MULT = val
