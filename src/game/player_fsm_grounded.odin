@@ -97,7 +97,7 @@ player_fsm_grounded_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 
 	if game.input.is_pressed[.DASH] && ctx.abilities.dash_cooldown_timer <= 0 do return .Dashing
 	if ctx.sensor.on_side_wall && game.input.is_down[.WALL_RUN] do return .Wall_Run_Vertical
-	if ctx.sensor.on_back_wall && game.input.is_down[.WALL_RUN] && math.abs(game.input.axis.x) > PLAYER_INPUT_AXIS_THRESHOLD do return .Wall_Run_Horizontal
+	if ctx.sensor.on_back_wall && game.input.is_down[.WALL_RUN] && math.abs(game.input.axis.x) > PLAYER_INPUT_AXIS_THRESHOLD && !(ctx.sensor.on_slope && math.sign(game.input.axis.x) == ctx.sensor.on_slope_dir) do return .Wall_Run_Horizontal
 	if ctx.sensor.on_back_wall && game.input.is_down[.WALL_RUN] do return .Wall_Run_Vertical
 	if !ctx.sensor.on_ground do return .Airborne
 
