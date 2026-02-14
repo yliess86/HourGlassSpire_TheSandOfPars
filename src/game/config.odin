@@ -146,6 +146,8 @@ INPUT_GP_QUIT: string
 
 // [sand]
 SAND_CHUNK_SIZE: u8                        // spatial chunk side length in tiles
+SAND_CELLS_PER_TILE: u8                    // sand grid cells per level tile (power of 2: 1, 2, 4, 8)
+SAND_CELL_SIZE: f32                        // derived cell size in meters
 SAND_SIM_INTERVAL: u8                      // sim every Nth fixed step (4 = 60Hz at 240Hz fixed)
 SAND_SLEEP_THRESHOLD: u8                   // idle steps before cell sleeps (skipped in sim)
 SAND_COLOR: [4]u8                          // base sand particle color
@@ -180,7 +182,7 @@ SAND_DUST_LIGHTEN: u8                      // RGB offset to lighten sand color f
 SAND_DUST_INTERVAL: u8                     // emit every N fixed steps
 SAND_IMPACT_MIN_SPEED: f32                 // below this: no extra displacement (m/s)
 SAND_IMPACT_MAX_SPEED: f32                 // at/above this: maximum crater (m/s)
-SAND_IMPACT_RADIUS: u8                     // max extra tiles at max impact
+SAND_IMPACT_RADIUS: u8                     // max extra cells at max impact
 SAND_IMPACT_EXTRA_CHAIN: u8                // extra chain depth at max impact
 SAND_IMPACT_PARTICLE_SPEED_MULT: f32       // particle speed multiplier at max impact
 SAND_FOOTPRINT_STRIDE: f32                 // meters between footprints (~1 tile)
@@ -190,7 +192,7 @@ SAND_DASH_PARTICLE_MAX: u8                 // max particles per fixed step durin
 SAND_DASH_PARTICLE_SPEED_MULT: f32         // particle speed multiplier during dash
 SAND_QUICKSAND_BASE_SINK: f32              // gravity multiplier when still in sand
 SAND_QUICKSAND_MOVE_MULT: f32              // extra gravity per activity unit
-SAND_SURFACE_SCAN_HEIGHT: u8               // tiles to scan vertically for surface
+SAND_SURFACE_SCAN_HEIGHT: u8               // cells to scan vertically for surface
 SAND_SURFACE_SMOOTH: u8                    // 0=staircase (current), 1=interpolated
 SAND_SWIM_ENTER_THRESHOLD: f32             // sand immersion to enter sand swim
 SAND_SWIM_EXIT_THRESHOLD: f32              // sand immersion to exit sand swim (hysteresis)
@@ -241,7 +243,7 @@ WATER_SWIM_DAMPING: f32                    // velocity damping factor per second
 WATER_SWIM_JUMP_FORCE: f32                 // jump force when leaping out at surface
 WATER_CURRENT_FORCE: f32                   // horizontal force from flowing water (m/s^2)
 WATER_SHIMMER_SPEED: f32                   // oscillation speed (radians/sec)
-WATER_SHIMMER_PHASE: f32                   // spatial frequency (radians/tile)
+WATER_SHIMMER_PHASE: f32                   // spatial frequency (radians/cell)
 WATER_SHIMMER_BRIGHTNESS: u8               // max RGB highlight on surface (0-255)
 WATER_PRESSURE_MIN_DEPTH: u8               // minimum water cells below before upward movement
 WATER_PRESSURE_SCAN_RANGE: u8              // horizontal scan distance for taller columns
@@ -399,6 +401,8 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_string(&config_game, "INPUT_GP_DEBUG"); ok do INPUT_GP_DEBUG = val
 	if val, ok := engine.config_get_string(&config_game, "INPUT_GP_QUIT"); ok do INPUT_GP_QUIT = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_CHUNK_SIZE"); ok do SAND_CHUNK_SIZE = val
+	if val, ok := engine.config_get_u8(&config_game, "SAND_CELLS_PER_TILE"); ok do SAND_CELLS_PER_TILE = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_CELL_SIZE"); ok do SAND_CELL_SIZE = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_SIM_INTERVAL"); ok do SAND_SIM_INTERVAL = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_SLEEP_THRESHOLD"); ok do SAND_SLEEP_THRESHOLD = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_COLOR"); ok do SAND_COLOR = val

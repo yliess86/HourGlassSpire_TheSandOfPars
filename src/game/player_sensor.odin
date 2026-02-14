@@ -161,16 +161,16 @@ player_sensor_update :: proc(player: ^Player) {
 				}
 			}
 		} else {
-			foot_tx0 := int((player.transform.pos.x - PLAYER_SIZE / 2) / TILE_SIZE)
-			foot_tx1 := int((player.transform.pos.x + PLAYER_SIZE / 2) / TILE_SIZE)
-			foot_ty := int(player.transform.pos.y / TILE_SIZE)
-			for check_ty in ([2]int{foot_ty, foot_ty - 1}) {
+			foot_gx0 := int((player.transform.pos.x - PLAYER_SIZE / 2) / SAND_CELL_SIZE)
+			foot_gx1 := int((player.transform.pos.x + PLAYER_SIZE / 2) / SAND_CELL_SIZE)
+			foot_gy := int(player.transform.pos.y / SAND_CELL_SIZE)
+			for check_gy in ([2]int{foot_gy, foot_gy - 1}) {
 				if on_sand do break
-				for tx in foot_tx0 ..= foot_tx1 {
-					if !sand_in_bounds(&game.sand, tx, check_ty) do continue
-					sensor_mat := sand_get(&game.sand, tx, check_ty).material
+				for gx in foot_gx0 ..= foot_gx1 {
+					if !sand_in_bounds(&game.sand, gx, check_gy) do continue
+					sensor_mat := sand_get(&game.sand, gx, check_gy).material
 					if sensor_mat != .Sand && sensor_mat != .Wet_Sand do continue
-					surface_y := f32(check_ty + 1) * TILE_SIZE
+					surface_y := f32(check_gy + 1) * SAND_CELL_SIZE
 					dist := player.transform.pos.y - surface_y
 					if dist >= -PLAYER_STEP_HEIGHT && dist <= PLAYER_CHECK_GROUND_EPS {
 						on_ground = true

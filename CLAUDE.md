@@ -173,7 +173,7 @@ Downhill: snap-based — resolve snaps player to surface if gap < snap distance.
 
 ### Sand System
 
-CA sand/water sim on level-aligned grid (1 cell = 1 tile). `Sand_World` stores flat `[]Sand_Cell` (y*w+x, y=0=bottom) + parallel `[]Sand_Slope_Kind` (immutable structural data from level) + chunks + emitters.
+CA sand/water sim on level-aligned grid (`SAND_CELLS_PER_TILE` cells per tile, configurable resolution). `Sand_World` stores flat `[]Sand_Cell` (y*w+x, y=0=bottom) + parallel `[]Sand_Slope_Kind` (immutable structural data from level) + chunks + emitters. Grid dimensions = level dimensions × `SAND_CELLS_PER_TILE`. Cell size = `TILE_SIZE / SAND_CELLS_PER_TILE`. Distance/accumulation constants in `game.ini` auto-scale with CPT via expressions.
 
 **Materials:** Empty, Solid (level), Sand (falls), Water (flows horizontally, buoyant), Platform (one-way), Wet_Sand (sand that contacted water: heavier, stickier, darker; dries without water).
 

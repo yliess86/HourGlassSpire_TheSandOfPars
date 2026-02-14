@@ -51,10 +51,10 @@ sand_graphics_render :: proc(sand: ^Sand_World) {
 	cam_bl := game.camera.pos - game.camera.size / 2
 	cam_tr := game.camera.pos + game.camera.size / 2
 
-	x0 := max(int(cam_bl.x / TILE_SIZE), 0)
-	y0 := max(int(cam_bl.y / TILE_SIZE), 0)
-	x1 := min(int(cam_tr.x / TILE_SIZE) + 1, sand.width)
-	y1 := min(int(cam_tr.y / TILE_SIZE) + 1, sand.height)
+	x0 := max(int(cam_bl.x / SAND_CELL_SIZE), 0)
+	y0 := max(int(cam_bl.y / SAND_CELL_SIZE), 0)
+	x1 := min(int(cam_tr.x / SAND_CELL_SIZE) + 1, sand.width)
+	y1 := min(int(cam_tr.y / SAND_CELL_SIZE) + 1, sand.height)
 
 	sand_batch := Sand_Render_Batch {
 		vertices = make([dynamic]sdl.Vertex, 0, 7000, context.temp_allocator),
@@ -156,7 +156,10 @@ sand_graphics_render :: proc(sand: ^Sand_World) {
 
 @(private = "file")
 sand_graphics_batch_rect :: proc(batch: ^Sand_Render_Batch, x, y: int, fc: sdl.FColor) {
-	rect := game_world_to_screen({f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}, {TILE_SIZE, TILE_SIZE})
+	rect := game_world_to_screen(
+		{f32(x) * SAND_CELL_SIZE, f32(y) * SAND_CELL_SIZE},
+		{SAND_CELL_SIZE, SAND_CELL_SIZE},
+	)
 	base := c.int(len(batch.vertices))
 	append(
 		&batch.vertices,
@@ -175,17 +178,17 @@ sand_graphics_batch_slope_tri :: proc(
 	slope: Sand_Slope_Kind,
 	fc: sdl.FColor,
 ) {
-	wx := f32(x) * TILE_SIZE
-	wy := f32(y) * TILE_SIZE
+	wx := f32(x) * SAND_CELL_SIZE
+	wy := f32(y) * SAND_CELL_SIZE
 	v0, v1, v2: [2]f32
 	if slope == .Right {
 		v0 = {wx, wy}
-		v1 = {wx, wy + TILE_SIZE}
-		v2 = {wx + TILE_SIZE, wy + TILE_SIZE}
+		v1 = {wx, wy + SAND_CELL_SIZE}
+		v2 = {wx + SAND_CELL_SIZE, wy + SAND_CELL_SIZE}
 	} else {
-		v0 = {wx, wy + TILE_SIZE}
-		v1 = {wx + TILE_SIZE, wy + TILE_SIZE}
-		v2 = {wx + TILE_SIZE, wy}
+		v0 = {wx + SAND_CELL_SIZE, wy}
+		v1 = {wx, wy + SAND_CELL_SIZE}
+		v2 = {wx + SAND_CELL_SIZE, wy + SAND_CELL_SIZE}
 	}
 	sp0 := game_world_to_screen_point(v0)
 	sp1 := game_world_to_screen_point(v1)
@@ -217,10 +220,10 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 	cam_bl := game.camera.pos - game.camera.size / 2
 	cam_tr := game.camera.pos + game.camera.size / 2
 
-	x0 := max(int(cam_bl.x / TILE_SIZE), 0)
-	y0 := max(int(cam_bl.y / TILE_SIZE), 0)
-	x1 := min(int(cam_tr.x / TILE_SIZE) + 1, sand.width)
-	y1 := min(int(cam_tr.y / TILE_SIZE) + 1, sand.height)
+	x0 := max(int(cam_bl.x / SAND_CELL_SIZE), 0)
+	y0 := max(int(cam_bl.y / SAND_CELL_SIZE), 0)
+	x1 := min(int(cam_tr.x / SAND_CELL_SIZE) + 1, sand.width)
+	y1 := min(int(cam_tr.y / SAND_CELL_SIZE) + 1, sand.height)
 
 	// Stress heatmap: compute pressure per visible column (top-down)
 	sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
@@ -240,8 +243,8 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 				else if t < 0.66 do color = SAND_DEBUG_COLOR_MID
 				else do color = SAND_DEBUG_COLOR_HIGH
 
-				world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
-				world_size := [2]f32{TILE_SIZE, TILE_SIZE}
+				world_pos := [2]f32{f32(x) * SAND_CELL_SIZE, f32(y) * SAND_CELL_SIZE}
+				world_size := [2]f32{SAND_CELL_SIZE, SAND_CELL_SIZE}
 				rect := game_world_to_screen(world_pos, world_size)
 				sdl.SetRenderDrawColor(game.win.renderer, color.r, color.g, color.b, color.a)
 				sdl.RenderFillRect(game.win.renderer, &rect)
@@ -262,8 +265,8 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 				continue
 			}
 
-			world_pos := [2]f32{f32(x) * TILE_SIZE, f32(y) * TILE_SIZE}
-			world_size := [2]f32{TILE_SIZE, TILE_SIZE}
+			world_pos := [2]f32{f32(x) * SAND_CELL_SIZE, f32(y) * SAND_CELL_SIZE}
+			world_size := [2]f32{SAND_CELL_SIZE, SAND_CELL_SIZE}
 			rect := game_world_to_screen(world_pos, world_size)
 			sdl.SetRenderDrawColor(game.win.renderer, 0, 0, 0, SAND_DEBUG_SLEEP_DIM)
 			sdl.RenderFillRect(game.win.renderer, &rect)
@@ -274,10 +277,10 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 	for cy in 0 ..< sand.chunks_h {
 		for cx in 0 ..< sand.chunks_w {
 			cs := int(SAND_CHUNK_SIZE)
-			chunk_x0 := f32(cx * cs) * TILE_SIZE
-			chunk_y0 := f32(cy * cs) * TILE_SIZE
-			chunk_w := f32(min((cx + 1) * cs, sand.width) - cx * cs) * TILE_SIZE
-			chunk_h := f32(min((cy + 1) * cs, sand.height) - cy * cs) * TILE_SIZE
+			chunk_x0 := f32(cx * cs) * SAND_CELL_SIZE
+			chunk_y0 := f32(cy * cs) * SAND_CELL_SIZE
+			chunk_w := f32(min((cx + 1) * cs, sand.width) - cx * cs) * SAND_CELL_SIZE
+			chunk_h := f32(min((cy + 1) * cs, sand.height) - cy * cs) * SAND_CELL_SIZE
 
 			world_pos := [2]f32{chunk_x0, chunk_y0}
 			world_size := [2]f32{chunk_w, chunk_h}

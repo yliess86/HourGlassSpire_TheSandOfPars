@@ -56,7 +56,7 @@ Sand_Emitter :: struct {
 }
 
 Sand_World :: struct {
-	width, height:      int, // grid dimensions (= level.width, level.height)
+	width, height:      int, // grid dimensions (= level dimensions * SAND_CELLS_PER_TILE)
 	cells:              []Sand_Cell, // flat [y * width + x], y=0 = bottom
 	slopes:             []Sand_Slope_Kind, // parallel to cells; immutable structural data from level
 
@@ -100,9 +100,19 @@ sand_get_slope :: proc(sand: ^Sand_World, x, y: int) -> Sand_Slope_Kind {
 	return sand.slopes[y * sand.width + x]
 }
 
+// Wang hash - produces pseudo-random spatial distribution for color variants
+@(private = "file")
+wang_hash :: proc(x, y: int) -> u8 {
+	h := u32(x * 374761393 + y * 668265263)
+	h = (h ~ (h >> 15)) * 2246822519
+	h = (h ~ (h >> 13)) * 3266489917
+	h = (h ~ (h >> 16))
+	return u8(h & 3)
+}
+
 sand_init :: proc(sand: ^Sand_World, level: ^Level) {
-	sand.width = level.width
-	sand.height = level.height
+	sand.width = level.width * int(SAND_CELLS_PER_TILE)
+	sand.height = level.height * int(SAND_CELLS_PER_TILE)
 	n := sand.width * sand.height
 	sand.cells = make([]Sand_Cell, n)
 	sand.slopes = make([]Sand_Slope_Kind, n)
@@ -114,35 +124,77 @@ sand_init :: proc(sand: ^Sand_World, level: ^Level) {
 
 	// Populate grid from level tiles. Surface floor slopes (post-reclassification)
 	// become slope cells with Empty material; everything else solid/slope → Solid.
-	for y in 0 ..< sand.height {
-		for x in 0 ..< sand.width {
-			idx := y * sand.width + x
-			tile := level.tiles[idx]
-			orig := level.original_tiles[idx]
+	// Each level tile maps to SAND_CELLS_PER_TILE × SAND_CELLS_PER_TILE sand cells.
+	for tile_y in 0 ..< level.height {
+		for tile_x in 0 ..< level.width {
+			tile_idx := tile_y * level.width + tile_x
+			tile := level.tiles[tile_idx]
+			orig := level.original_tiles[tile_idx]
 
-			if tile == .Slope_Right do sand.slopes[idx] = .Right
-			else if tile == .Slope_Left do sand.slopes[idx] = .Left
-			else if orig == .Solid || orig == .Slope_Right || orig == .Slope_Left || orig == .Slope_Ceil_Right || orig == .Slope_Ceil_Left {
-				sand.cells[idx].material = .Solid
-			} else if orig == .Platform do sand.cells[idx].material = .Platform
+			// Fill all sand cells within this tile's footprint
+			for cell_dy in 0 ..< int(SAND_CELLS_PER_TILE) {
+				for cell_dx in 0 ..< int(SAND_CELLS_PER_TILE) {
+					sand_x := tile_x * int(SAND_CELLS_PER_TILE) + cell_dx
+					sand_y := tile_y * int(SAND_CELLS_PER_TILE) + cell_dy
+					sand_idx := sand_y * sand.width + sand_x
+
+					if tile == .Slope_Right {
+						// / diagonal: solid below, open above
+						if cell_dx == cell_dy {
+							sand.slopes[sand_idx] = .Right
+						} else if cell_dx > cell_dy {
+							sand.cells[sand_idx].material = .Solid
+							sand.cells[sand_idx].color_variant = wang_hash(sand_x, sand_y)
+						}
+					} else if tile == .Slope_Left {
+						// \ diagonal: solid below, open above
+						sum := cell_dx + cell_dy
+						if sum == int(SAND_CELLS_PER_TILE) - 1 {
+							sand.slopes[sand_idx] = .Left
+						} else if sum < int(SAND_CELLS_PER_TILE) - 1 {
+							sand.cells[sand_idx].material = .Solid
+							sand.cells[sand_idx].color_variant = wang_hash(sand_x, sand_y)
+						}
+					} else if orig == .Solid ||
+					   orig == .Slope_Right ||
+					   orig == .Slope_Left ||
+					   orig == .Slope_Ceil_Right ||
+					   orig == .Slope_Ceil_Left {
+						sand.cells[sand_idx].material = .Solid
+						sand.cells[sand_idx].color_variant = wang_hash(sand_x, sand_y)
+					} else if orig == .Platform do sand.cells[sand_idx].material = .Platform
+				}
+			}
 		}
 	}
 
-	// Load pre-placed sand piles from level
+	// Load pre-placed sand piles from level (tile coords → fill all cells in tile)
 	for pos in level.sand_piles {
-		idx := pos.y * sand.width + pos.x
-		sand.cells[idx].material = .Sand
-		sand.cells[idx].color_variant = u8((pos.x * 7 + pos.y * 13) & 3)
-		sand_chunk_mark_dirty(sand, pos.x, pos.y)
+		for cell_dy in 0 ..< int(SAND_CELLS_PER_TILE) {
+			for cell_dx in 0 ..< int(SAND_CELLS_PER_TILE) {
+				sand_x := pos.x * int(SAND_CELLS_PER_TILE) + cell_dx
+				sand_y := pos.y * int(SAND_CELLS_PER_TILE) + cell_dy
+				idx := sand_y * sand.width + sand_x
+				sand.cells[idx].material = .Sand
+				sand.cells[idx].color_variant = wang_hash(sand_x, sand_y)
+				sand_chunk_mark_dirty(sand, sand_x, sand_y)
+			}
+		}
 	}
 	delete(level.sand_piles)
 
-	// Load pre-placed water pools from level
+	// Load pre-placed water pools from level (tile coords → fill all cells in tile)
 	for pos in level.water_piles {
-		idx := pos.y * sand.width + pos.x
-		sand.cells[idx].material = .Water
-		sand.cells[idx].color_variant = u8((pos.x * 7 + pos.y * 13) & 3)
-		sand_chunk_mark_dirty(sand, pos.x, pos.y)
+		for cell_dy in 0 ..< int(SAND_CELLS_PER_TILE) {
+			for cell_dx in 0 ..< int(SAND_CELLS_PER_TILE) {
+				sand_x := pos.x * int(SAND_CELLS_PER_TILE) + cell_dx
+				sand_y := pos.y * int(SAND_CELLS_PER_TILE) + cell_dy
+				idx := sand_y * sand.width + sand_x
+				sand.cells[idx].material = .Water
+				sand.cells[idx].color_variant = wang_hash(sand_x, sand_y)
+				sand_chunk_mark_dirty(sand, sand_x, sand_y)
+			}
+		}
 	}
 	delete(level.water_piles)
 

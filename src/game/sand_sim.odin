@@ -580,17 +580,29 @@ sand_erode_adjacent_platforms :: proc(sand: ^Sand_World, x, y: int) {
 		n_idx := y * sand.width + nx
 		if sand.cells[n_idx].material != .Platform do continue
 
-		// Erase platform cell
-		sand.cells[n_idx] = Sand_Cell{}
-		sand_wake_neighbors(sand, nx, y)
-		sand_chunk_mark_dirty(sand, nx, y)
+		// Erode all sub-cells of the same tile to prevent trapping sand inside
+		cpt := int(SAND_CELLS_PER_TILE)
+		tile_base_x := (nx / cpt) * cpt
+		tile_base_y := (y / cpt) * cpt
 
-		// Decrement chunk active count (Platform is counted as active)
-		chunk := sand_chunk_at(sand, nx, y)
-		if chunk != nil && chunk.active_count > 0 do chunk.active_count -= 1
+		for sub_dy in 0 ..< cpt {
+			for sub_dx in 0 ..< cpt {
+				sx := tile_base_x + sub_dx
+				sy := tile_base_y + sub_dy
+				if !sand_in_bounds(sand, sx, sy) do continue
+				sub_idx := sy * sand.width + sx
+				if sand.cells[sub_idx].material != .Platform do continue
 
-		// Track for restoration when sand moves away
-		append(&sand.eroded_platforms, [2]int{nx, y})
+				sand.cells[sub_idx] = Sand_Cell{}
+				sand_wake_neighbors(sand, sx, sy)
+				sand_chunk_mark_dirty(sand, sx, sy)
+
+				chunk := sand_chunk_at(sand, sx, sy)
+				if chunk != nil && chunk.active_count > 0 do chunk.active_count -= 1
+
+				append(&sand.eroded_platforms, [2]int{sx, sy})
+			}
+		}
 
 		// Wake this cell so it can move into the freed space
 		sand.cells[y * sand.width + x].sleep_counter = 0

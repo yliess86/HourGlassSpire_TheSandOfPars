@@ -35,11 +35,11 @@ sand_compute_water_immersion :: proc(sand: ^Sand_World, player: ^Player) -> f32 
 }
 
 // Find topmost sand cell surface Y in a column near the player's feet
-sand_column_surface_y :: proc(sand: ^Sand_World, tx, base_ty, scan_height: int) -> (f32, bool) {
-	for ty := base_ty + scan_height; ty >= max(base_ty - 1, 0); ty -= 1 {
-		if !sand_in_bounds(sand, tx, ty) do continue
-		col_mat := sand_get(sand, tx, ty).material
-		if col_mat == .Sand || col_mat == .Wet_Sand do return f32(ty + 1) * TILE_SIZE, true
+sand_column_surface_y :: proc(sand: ^Sand_World, gx, base_gy, scan_height: int) -> (f32, bool) {
+	for gy := base_gy + scan_height; gy >= max(base_gy - 1, 0); gy -= 1 {
+		if !sand_in_bounds(sand, gx, gy) do continue
+		col_mat := sand_get(sand, gx, gy).material
+		if col_mat == .Sand || col_mat == .Wet_Sand do return f32(gy + 1) * SAND_CELL_SIZE, true
 	}
 	return 0, false
 }
@@ -47,20 +47,20 @@ sand_column_surface_y :: proc(sand: ^Sand_World, tx, base_ty, scan_height: int) 
 // Interpolated sand surface height under the player's center
 sand_surface_query :: proc(sand: ^Sand_World, player: ^Player) -> (f32, bool) {
 	center_x := player.transform.pos.x
-	center_tx := int(center_x / TILE_SIZE)
-	base_ty := int(player.transform.pos.y / TILE_SIZE)
+	center_gx := int(center_x / SAND_CELL_SIZE)
+	base_gy := int(player.transform.pos.y / SAND_CELL_SIZE)
 	scan := int(SAND_SURFACE_SCAN_HEIGHT)
 
-	left_y, left_ok := sand_column_surface_y(sand, center_tx, base_ty, scan)
+	left_y, left_ok := sand_column_surface_y(sand, center_gx, base_gy, scan)
 	if !left_ok do return 0, false
 
-	frac_x := center_x / TILE_SIZE - f32(center_tx)
-	adj_tx := center_tx + 1 if frac_x >= 0.5 else center_tx - 1
+	frac_x := center_x / SAND_CELL_SIZE - f32(center_gx)
+	adj_gx := center_gx + 1 if frac_x >= 0.5 else center_gx - 1
 
-	right_y, right_ok := sand_column_surface_y(sand, adj_tx, base_ty, scan)
+	right_y, right_ok := sand_column_surface_y(sand, adj_gx, base_gy, scan)
 	if !right_ok do return left_y, true
 
-	if adj_tx > center_tx do return math.lerp(left_y, right_y, frac_x), true
+	if adj_gx > center_gx do return math.lerp(left_y, right_y, frac_x), true
 	return math.lerp(right_y, left_y, frac_x), true
 }
 
@@ -82,27 +82,27 @@ sand_detect_wall :: proc(sand: ^Sand_World, player: ^Player) -> (bool, f32, f32)
 	if sand.width == 0 || sand.height == 0 do return false, 0, 0
 
 	center_y := player.transform.pos.y + PLAYER_SIZE / 2
-	ty_start := int(player.transform.pos.y / TILE_SIZE)
-	ty_end := int((player.transform.pos.y + PLAYER_SIZE) / TILE_SIZE)
+	gy_start := int(player.transform.pos.y / SAND_CELL_SIZE)
+	gy_end := int((player.transform.pos.y + PLAYER_SIZE) / SAND_CELL_SIZE)
 
 	// Check left
 	left_x := player.transform.pos.x - PLAYER_SIZE / 2 - PLAYER_CHECK_SIDE_WALL_EPS
-	left_tx := int(left_x / TILE_SIZE)
-	if sand_in_bounds(sand, left_tx, ty_start) {
-		count := sand_count_wall_column(sand, left_tx, ty_start, ty_end)
+	left_gx := int(left_x / SAND_CELL_SIZE)
+	if sand_in_bounds(sand, left_gx, gy_start) {
+		count := sand_count_wall_column(sand, left_gx, gy_start, gy_end)
 		if count >= int(SAND_WALL_MIN_HEIGHT) {
-			snap_x := f32(left_tx + 1) * TILE_SIZE + PLAYER_SIZE / 2
+			snap_x := f32(left_gx + 1) * SAND_CELL_SIZE + PLAYER_SIZE / 2
 			return true, -1, snap_x
 		}
 	}
 
 	// Check right
 	right_x := player.transform.pos.x + PLAYER_SIZE / 2 + PLAYER_CHECK_SIDE_WALL_EPS
-	right_tx := int(right_x / TILE_SIZE)
-	if sand_in_bounds(sand, right_tx, ty_start) {
-		count := sand_count_wall_column(sand, right_tx, ty_start, ty_end)
+	right_gx := int(right_x / SAND_CELL_SIZE)
+	if sand_in_bounds(sand, right_gx, gy_start) {
+		count := sand_count_wall_column(sand, right_gx, gy_start, gy_end)
 		if count >= int(SAND_WALL_MIN_HEIGHT) {
-			snap_x := f32(right_tx) * TILE_SIZE - PLAYER_SIZE / 2
+			snap_x := f32(right_gx) * SAND_CELL_SIZE - PLAYER_SIZE / 2
 			return true, 1, snap_x
 		}
 	}
@@ -116,17 +116,17 @@ sand_wall_erode :: proc(sand: ^Sand_World, player: ^Player) {
 
 	dir := player.sensor.on_side_wall_dir
 	wall_x := player.transform.pos.x + dir * (PLAYER_SIZE / 2 + PLAYER_CHECK_SIDE_WALL_EPS)
-	wall_tx := int(wall_x / TILE_SIZE)
-	center_ty := int((player.transform.pos.y + PLAYER_SIZE / 2) / TILE_SIZE)
+	wall_gx := int(wall_x / SAND_CELL_SIZE)
+	center_gy := int((player.transform.pos.y + PLAYER_SIZE / 2) / SAND_CELL_SIZE)
 	push_dx: int = dir > 0 ? 1 : -1
 
 	for _ in 0 ..< int(SAND_WALL_ERODE_RATE) {
 		// Priority: center → above → below
-		for try_ty in ([3]int{center_ty, center_ty + 1, center_ty - 1}) {
-			if !sand_in_bounds(sand, wall_tx, try_ty) do continue
-			mat := sand_get(sand, wall_tx, try_ty).material
+		for try_gy in ([3]int{center_gy, center_gy + 1, center_gy - 1}) {
+			if !sand_in_bounds(sand, wall_gx, try_gy) do continue
+			mat := sand_get(sand, wall_gx, try_gy).material
 			if mat != .Sand && mat != .Wet_Sand do continue
-			sand_displace_cell(sand, wall_tx, try_ty, push_dx)
+			sand_displace_cell(sand, wall_gx, try_gy, push_dx)
 			break
 		}
 	}
@@ -163,7 +163,7 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 	sand_displaced := 0
 	wet_sand_displaced := 0
 	water_displaced := 0
-	player_cx := int(player.transform.pos.x / TILE_SIZE)
+	player_cx := int(player.transform.pos.x / SAND_CELL_SIZE)
 
 	// Displacement: push sand, wet sand, and water out of footprint (+ crater ring)
 	for ty in cy0 ..= y1 {
@@ -333,32 +333,32 @@ sand_dash_carve :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 	prev_x := player.transform.pos.x - player.transform.vel.x * dt
 	curr_x := player.transform.pos.x
 
-	tx_start := max(int(math.min(prev_x, curr_x) / TILE_SIZE) - 1, 0)
-	tx_end := min(int(math.max(prev_x, curr_x) / TILE_SIZE) + 1, sand.width - 1)
-	ty_start := max(int(player.transform.pos.y / TILE_SIZE), 0)
-	ty_end := min(int((player.transform.pos.y + PLAYER_SIZE) / TILE_SIZE), sand.height - 1)
+	gx_start := max(int(math.min(prev_x, curr_x) / SAND_CELL_SIZE) - 1, 0)
+	gx_end := min(int(math.max(prev_x, curr_x) / SAND_CELL_SIZE) + 1, sand.width - 1)
+	gy_start := max(int(player.transform.pos.y / SAND_CELL_SIZE), 0)
+	gy_end := min(int((player.transform.pos.y + PLAYER_SIZE) / SAND_CELL_SIZE), sand.height - 1)
 
 	sand_carved := 0
 	water_carved := 0
 	push_dx: int = player.transform.vel.x > 0 ? 1 : -1
 
-	for tx in tx_start ..= tx_end {
-		for ty in ty_start ..= ty_end {
-			if !sand_in_bounds(sand, tx, ty) do continue
-			idx := ty * sand.width + tx
+	for gx in gx_start ..= gx_end {
+		for gy in gy_start ..= gy_end {
+			if !sand_in_bounds(sand, gx, gy) do continue
+			idx := gy * sand.width + gx
 			mat := sand.cells[idx].material
 			if mat != .Sand && mat != .Wet_Sand && mat != .Water do continue
 
 			// Eject upward or sideways, fallback destroy
-			if sand_eject_cell_up(sand, tx, ty, ty_end, push_dx) {
+			if sand_eject_cell_up(sand, gx, gy, gy_end, push_dx) {
 				if mat == .Sand || mat == .Wet_Sand do sand_carved += 1
 				else do water_carved += 1
 			} else {
 				// Destroy cell
 				sand.cells[idx] = Sand_Cell{}
-				sand_wake_neighbors(sand, tx, ty)
-				sand_chunk_mark_dirty(sand, tx, ty)
-				chunk := sand_chunk_at(sand, tx, ty)
+				sand_wake_neighbors(sand, gx, gy)
+				sand_chunk_mark_dirty(sand, gx, gy)
+				chunk := sand_chunk_at(sand, gx, gy)
 				if chunk != nil && chunk.active_count > 0 do chunk.active_count -= 1
 				if mat == .Sand || mat == .Wet_Sand do sand_carved += 1
 				else do water_carved += 1
@@ -429,12 +429,12 @@ sand_dash_carve :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 	}
 }
 
-// Compute the tile range overlapping the player collider
+// Compute the cell range overlapping the player collider
 sand_player_footprint :: proc(sand: ^Sand_World, player: ^Player) -> (x0, y0, x1, y1: int) {
-	x0 = int((player.transform.pos.x - PLAYER_SIZE / 2) / TILE_SIZE)
-	y0 = int(player.transform.pos.y / TILE_SIZE)
-	x1 = int((player.transform.pos.x + PLAYER_SIZE / 2) / TILE_SIZE)
-	y1 = int((player.transform.pos.y + PLAYER_SIZE) / TILE_SIZE)
+	x0 = int((player.transform.pos.x - PLAYER_SIZE / 2) / SAND_CELL_SIZE)
+	y0 = int(player.transform.pos.y / SAND_CELL_SIZE)
+	x1 = int((player.transform.pos.x + PLAYER_SIZE / 2) / SAND_CELL_SIZE)
+	y1 = int((player.transform.pos.y + PLAYER_SIZE) / SAND_CELL_SIZE)
 
 	x0 = math.clamp(x0, 0, sand.width - 1)
 	y0 = math.clamp(y0, 0, sand.height - 1)
@@ -609,11 +609,11 @@ sand_footprint_update :: proc(sand: ^Sand_World, player: ^Player) {
 	player.abilities.footprint_last_x = player.transform.pos.x
 	player.abilities.footprint_side = !player.abilities.footprint_side
 
-	foot_ty := int(player.transform.pos.y / TILE_SIZE) - 1
-	foot_tx := int(player.transform.pos.x / TILE_SIZE)
+	foot_gy := int(player.transform.pos.y / SAND_CELL_SIZE) - 1
+	foot_gx := int(player.transform.pos.x / SAND_CELL_SIZE)
 
-	if !sand_in_bounds(sand, foot_tx, foot_ty) do return
-	idx := foot_ty * sand.width + foot_tx
+	if !sand_in_bounds(sand, foot_gx, foot_gy) do return
+	idx := foot_gy * sand.width + foot_gx
 	foot_mat := sand.cells[idx].material
 	if foot_mat != .Sand && foot_mat != .Wet_Sand do return
 
@@ -621,20 +621,20 @@ sand_footprint_update :: proc(sand: ^Sand_World, player: ^Player) {
 	saved := sand.cells[idx]
 	sand.cells[idx] = Sand_Cell{}
 
-	chunk := sand_chunk_at(sand, foot_tx, foot_ty)
+	chunk := sand_chunk_at(sand, foot_gx, foot_gy)
 	if chunk != nil && chunk.active_count > 0 do chunk.active_count -= 1
-	sand_chunk_mark_dirty(sand, foot_tx, foot_ty)
+	sand_chunk_mark_dirty(sand, foot_gx, foot_gy)
 
 	// Pile removed sand beside the footprint (no wake for persistence)
 	for try_dx in ([2]int{push_dx, -push_dx}) {
-		nx := foot_tx + try_dx
-		if !sand_in_bounds(sand, nx, foot_ty) do continue
-		if sand.cells[foot_ty * sand.width + nx].material != .Empty do continue
-		sand.cells[foot_ty * sand.width + nx] = saved
-		sand.cells[foot_ty * sand.width + nx].sleep_counter = SAND_SLEEP_THRESHOLD
-		n_chunk := sand_chunk_at(sand, nx, foot_ty)
+		nx := foot_gx + try_dx
+		if !sand_in_bounds(sand, nx, foot_gy) do continue
+		if sand.cells[foot_gy * sand.width + nx].material != .Empty do continue
+		sand.cells[foot_gy * sand.width + nx] = saved
+		sand.cells[foot_gy * sand.width + nx].sleep_counter = SAND_SLEEP_THRESHOLD
+		n_chunk := sand_chunk_at(sand, nx, foot_gy)
 		if n_chunk != nil do n_chunk.active_count += 1
-		sand_chunk_mark_dirty(sand, nx, foot_ty)
+		sand_chunk_mark_dirty(sand, nx, foot_gy)
 		break
 	}
 }

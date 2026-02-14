@@ -12,29 +12,37 @@ sand_emitter_update :: proc(sand: ^Sand_World) {
 		for emitter.accumulator >= 1.0 {
 			emitter.accumulator -= 1.0
 
-			// Spawn one tile below the emitter (particle falls from emitter)
-			spawn_y := emitter.ty - 1
-			if !sand_in_bounds(sand, emitter.tx, spawn_y) do continue
+			// Spawn fills all cells in tile below emitter (emitter coords are in tile space)
+			base_sand_x := emitter.tx * int(SAND_CELLS_PER_TILE)
+			base_sand_y := (emitter.ty - 1) * int(SAND_CELLS_PER_TILE)
 
-			idx := spawn_y * sand.width + emitter.tx
-			if sand.cells[idx].material == .Empty {
-				// Create particle
-				hash := u32(emitter.tx * 7 + spawn_y * 13 + int(sand.step_counter))
-				sand.cells[idx] = Sand_Cell {
-					material      = emitter.material,
-					sleep_counter = 0,
-					color_variant = u8(hash & 3),
-					flags         = 0,
+			for cell_dy in 0 ..< int(SAND_CELLS_PER_TILE) {
+				for cell_dx in 0 ..< int(SAND_CELLS_PER_TILE) {
+					sand_x := base_sand_x + cell_dx
+					sand_y := base_sand_y + cell_dy
+					if !sand_in_bounds(sand, sand_x, sand_y) do continue
+
+					idx := sand_y * sand.width + sand_x
+					if sand.cells[idx].material == .Empty {
+						// Create particle
+						hash := u32(sand_x * 7 + sand_y * 13 + int(sand.step_counter))
+						sand.cells[idx] = Sand_Cell {
+							material      = emitter.material,
+							sleep_counter = 0,
+							color_variant = u8(hash & 3),
+							flags         = 0,
+						}
+
+						// Update chunk active count
+						chunk := sand_chunk_at(sand, sand_x, sand_y)
+						if chunk != nil do chunk.active_count += 1
+					}
+
+					// Always keep emitter area active so pile drains when space opens
+					sand_wake_neighbors(sand, sand_x, sand_y)
+					sand_chunk_mark_dirty(sand, sand_x, sand_y)
 				}
-
-				// Update chunk active count
-				chunk := sand_chunk_at(sand, emitter.tx, spawn_y)
-				if chunk != nil do chunk.active_count += 1
 			}
-
-			// Always keep emitter area active so pile drains when space opens
-			sand_wake_neighbors(sand, emitter.tx, spawn_y)
-			sand_chunk_mark_dirty(sand, emitter.tx, spawn_y)
 		}
 	}
 }
