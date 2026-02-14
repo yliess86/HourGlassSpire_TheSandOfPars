@@ -196,39 +196,63 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 	}
 
 	// Displacement particles (scaled by impact)
-	if sand_displaced > 0 {
-		emit_pos := [2]f32{player.transform.pos.x, player.transform.pos.y + PLAYER_SIZE}
-		count :=
-			impact_factor > 0 ? int(math.lerp(f32(SAND_IMPACT_PARTICLE_MIN), f32(SAND_IMPACT_PARTICLE_MAX), impact_factor)) : min(sand_displaced, int(SAND_DISPLACE_PARTICLE_MAX))
-		speed_mult := math.lerp(f32(1), SAND_IMPACT_PARTICLE_SPEED_MULT, impact_factor)
-		sand_particles_emit_scaled(
-			&game.sand_particles,
-			emit_pos,
-			player.transform.vel,
-			SAND_COLOR,
-			count,
-			speed_mult,
-		)
-	}
-	if wet_sand_displaced > 0 {
-		emit_pos := [2]f32{player.transform.pos.x, player.transform.pos.y + PLAYER_SIZE}
-		sand_particles_emit(
-			&game.sand_particles,
-			emit_pos,
-			player.transform.vel,
-			WET_SAND_COLOR,
-			min(wet_sand_displaced, int(SAND_DISPLACE_PARTICLE_MAX)),
-		)
-	}
-	if water_displaced > 0 {
-		emit_pos := [2]f32{player.transform.pos.x, player.transform.pos.y + PLAYER_SIZE}
-		sand_particles_emit(
-			&game.sand_particles,
-			emit_pos,
-			player.transform.vel,
-			WATER_COLOR,
-			min(water_displaced, int(SAND_DISPLACE_PARTICLE_MAX)),
-		)
+	if sand_displaced > 0 || wet_sand_displaced > 0 || water_displaced > 0 {
+		surface_y, surface_ok := sand_surface_query(sand, player)
+		emit_y := surface_y if surface_ok else player.transform.pos.y
+		emit_pos := [2]f32{player.transform.pos.x, emit_y}
+		spread := PLAYER_SIZE / 2
+		base_angle: f32 = math.PI / 2
+		vel := player.transform.vel
+
+		half_spread: f32 = math.PI / 3
+		vel_bias: [2]f32
+		if impact_factor > 0 {
+			half_spread = math.PI / 2.5
+			vel_bias = {0, abs(vel.y) * 0.15}
+		} else if abs(vel.x) > 0 {
+			vel_bias = {-vel.x * 0.3, abs(vel.x) * 0.1}
+		}
+
+		if sand_displaced > 0 {
+			count :=
+				impact_factor > 0 ? int(math.lerp(f32(SAND_IMPACT_PARTICLE_MIN), f32(SAND_IMPACT_PARTICLE_MAX), impact_factor)) : min(sand_displaced, int(SAND_DISPLACE_PARTICLE_MAX))
+			speed_mult := math.lerp(f32(1), SAND_IMPACT_PARTICLE_SPEED_MULT, impact_factor)
+			sand_particles_emit_scaled(
+				&game.sand_particles,
+				emit_pos,
+				spread,
+				base_angle,
+				half_spread,
+				vel_bias,
+				SAND_COLOR,
+				count,
+				speed_mult,
+			)
+		}
+		if wet_sand_displaced > 0 {
+			sand_particles_emit(
+				&game.sand_particles,
+				emit_pos,
+				spread,
+				base_angle,
+				half_spread,
+				vel_bias,
+				WET_SAND_COLOR,
+				min(wet_sand_displaced, int(SAND_DISPLACE_PARTICLE_MAX)),
+			)
+		}
+		if water_displaced > 0 {
+			sand_particles_emit(
+				&game.sand_particles,
+				emit_pos,
+				spread,
+				base_angle,
+				half_spread,
+				vel_bias,
+				WATER_COLOR,
+				min(water_displaced, int(SAND_DISPLACE_PARTICLE_MAX)),
+			)
+		}
 	}
 
 	// Sand_Swim: light displacement drag only, skip heavy forces
@@ -361,15 +385,26 @@ sand_dash_carve :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 		}
 	}
 
-	// Particles
+	// Particles from leading edge of dash
 	total := sand_carved + water_carved
 	if total > 0 {
-		emit_pos := [2]f32{player.transform.pos.x, player.transform.pos.y + PLAYER_SIZE / 2}
+		dash_dir: f32 = player.transform.vel.x > 0 ? 1 : -1
+		emit_pos := [2]f32 {
+			player.transform.pos.x + dash_dir * PLAYER_SIZE / 2,
+			player.transform.pos.y + PLAYER_SIZE / 2,
+		}
+		spread: f32 = PLAYER_SIZE / 4
+		base_angle: f32 = math.PI / 2
+		half_spread: f32 = math.PI / 3
+		vel_bias := [2]f32{-dash_dir * PLAYER_DASH_SPEED * 0.1, 0}
 		if sand_carved > 0 {
 			sand_particles_emit_scaled(
 				&game.sand_particles,
 				emit_pos,
-				player.transform.vel,
+				spread,
+				base_angle,
+				half_spread,
+				vel_bias,
 				SAND_COLOR,
 				min(sand_carved, int(SAND_DASH_PARTICLE_MAX)),
 				SAND_DASH_PARTICLE_SPEED_MULT,
@@ -379,7 +414,10 @@ sand_dash_carve :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 			sand_particles_emit_scaled(
 				&game.sand_particles,
 				emit_pos,
-				player.transform.vel,
+				spread,
+				base_angle,
+				half_spread,
+				vel_bias,
 				WATER_COLOR,
 				min(water_carved, int(SAND_DASH_PARTICLE_MAX)),
 				SAND_DASH_PARTICLE_SPEED_MULT,
@@ -563,32 +601,47 @@ sand_eject_cell_up :: proc(sand: ^Sand_World, tx, ty, ceil_ty, push_dx: int) -> 
 	return sand_displace_cell(sand, tx, ty, push_dx)
 }
 
-// Emit displacement particles with outward velocity away from player
+// Emit displacement particles in a directional cone from a surface point
 sand_particles_emit :: proc(
 	pool: ^engine.Particle_Pool,
-	pos, player_vel: [2]f32,
+	pos: [2]f32,
+	spread_x, base_angle, half_spread: f32,
+	vel_bias: [2]f32,
 	color: [4]u8,
 	count: int,
 ) {
-	sand_particles_emit_scaled(pool, pos, player_vel, color, count, 1.0)
+	sand_particles_emit_scaled(
+		pool,
+		pos,
+		spread_x,
+		base_angle,
+		half_spread,
+		vel_bias,
+		color,
+		count,
+		1.0,
+	)
 }
 
 @(private = "file")
 sand_particles_emit_scaled :: proc(
 	pool: ^engine.Particle_Pool,
-	pos, player_vel: [2]f32,
+	pos: [2]f32,
+	spread_x, base_angle, half_spread: f32,
+	vel_bias: [2]f32,
 	color: [4]u8,
 	count: int,
 	speed_mult: f32,
 ) {
 	for _ in 0 ..< count {
-		angle := rand.float32() * 2 * math.PI
+		spawn_pos := pos + {rand.float32() * spread_x * 2 - spread_x, 0}
+		angle := base_angle + (rand.float32() * 2 - 1) * half_spread
 		speed := SAND_PARTICLE_SPEED * (0.5 + 0.5 * rand.float32()) * speed_mult
-		vel := [2]f32{math.cos(angle) * speed, math.sin(angle) * speed + abs(player_vel.y) * 0.2}
+		vel := [2]f32{math.cos(angle) * speed, math.sin(angle) * speed} + vel_bias
 		engine.particle_pool_emit(
 			pool,
 			engine.Particle {
-				pos = pos,
+				pos = spawn_pos,
 				vel = vel,
 				lifetime = SAND_PARTICLE_LIFETIME * (0.7 + 0.3 * rand.float32()),
 				age = 0,

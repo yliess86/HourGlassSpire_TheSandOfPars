@@ -65,7 +65,10 @@ player_fsm_sand_swim_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State
 		sand_particles_emit(
 			&game.sand_particles,
 			ctx.transform.pos + {0, PLAYER_SIZE},
-			ctx.transform.vel,
+			PLAYER_SIZE / 2,
+			math.PI / 2,
+			math.PI / 3,
+			{0, 0},
 			SAND_COLOR,
 			int(SAND_SWIM_HOP_PARTICLE_COUNT),
 		)
@@ -79,7 +82,10 @@ player_fsm_sand_swim_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State
 		sand_particles_emit(
 			&game.sand_particles,
 			ctx.transform.pos + {0, PLAYER_SIZE},
-			ctx.transform.vel,
+			PLAYER_SIZE / 2,
+			math.PI / 2,
+			math.PI / 3,
+			{0, abs(ctx.transform.vel.y) * 0.15},
 			SAND_COLOR,
 			int(SAND_SWIM_JUMP_PARTICLE_COUNT),
 		)
