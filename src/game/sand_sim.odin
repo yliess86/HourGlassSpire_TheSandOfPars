@@ -459,7 +459,8 @@ sand_try_move_water :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, parity: u32)
 
 // Depth-proportional horizontal flow: surface water moves 1 cell, deeper water flows faster.
 // Scans up to min(1+depth, WATER_FLOW_DISTANCE) cells for an empty cell or drop-off edge.
-// Surface tension: surface cells (empty above) only flow if local depth >= WATER_SURFACE_TENSION_DEPTH.
+// Surface tension: surface cells (empty above) only flow if local depth >= WATER_SURFACE_TENSION_DEPTH
+// or if they have a horizontal water neighbor (puddle-edge spreading).
 @(private = "file")
 sand_try_flow_water :: proc(sand: ^Sand_World, x, y, dx: int, parity: u32) -> bool {
 	// Surface tension: prevent thin films from spreading
@@ -471,7 +472,14 @@ sand_try_flow_water :: proc(sand: ^Sand_World, x, y, dx: int, parity: u32) -> bo
 			if sand.cells[scan_y * sand.width + x].material != .Water do break
 			depth_below += 1
 		}
-		if depth_below < int(WATER_SURFACE_TENSION_DEPTH) do return false
+		if depth_below < int(WATER_SURFACE_TENSION_DEPTH) {
+			has_water_neighbor :=
+				(sand_in_bounds(sand, x - 1, y) &&
+					sand.cells[y * sand.width + (x - 1)].material == .Water) ||
+				(sand_in_bounds(sand, x + 1, y) &&
+						sand.cells[y * sand.width + (x + 1)].material == .Water)
+			if !has_water_neighbor do return false
+		}
 	}
 
 	// Count contiguous water cells above to determine pressure/depth
