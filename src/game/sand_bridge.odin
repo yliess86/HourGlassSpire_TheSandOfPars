@@ -11,7 +11,7 @@ sand_interactor_from_player :: proc(player: ^Player) -> engine.Sand_Interactor {
 		pos = player.body.pos,
 		vel = player.body.vel,
 		size = PLAYER_SIZE,
-		impact_pending = player.impact_pending,
+		impact_pending = player.abilities.impact_pending,
 		sand_immersion = player.sensor.sand_immersion,
 		is_dashing = player.state == .Dashing,
 		is_submerged = player.state == .Sand_Swim,
@@ -20,7 +20,7 @@ sand_interactor_from_player :: proc(player: ^Player) -> engine.Sand_Interactor {
 
 sand_interactor_apply :: proc(player: ^Player, interactor: ^engine.Sand_Interactor) {
 	player.body.vel = interactor.vel
-	player.impact_pending = interactor.impact_pending
+	player.abilities.impact_pending = interactor.impact_pending
 }
 
 // Emit displacement/carve particles based on interactor outputs

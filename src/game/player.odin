@@ -30,6 +30,7 @@ Player_Abilities :: struct {
 	wall_run_dir:            f32,
 	ground_sticky_timer:     f32,
 	sand_hop_cooldown_timer: f32,
+	impact_pending:          f32, // landing speed, consumed by sand_interact
 	footprint_last_x:        f32,
 	footprint_side:          bool,
 }
@@ -68,7 +69,6 @@ Player_Sensor :: struct {
 
 Player :: struct {
 	body:           engine.Physics_Body,
-	impact_pending: f32, // landing speed, consumed by sand_interact
 	abilities:      Player_Abilities,
 	graphics:       Player_Graphics,
 	state:          Player_State,
@@ -243,7 +243,7 @@ state_transition :: proc(p: ^Player, next: Player_State) {
 
 @(private = "file")
 enter_grounded :: proc(p: ^Player) {
-	p.impact_pending = math.abs(p.body.vel.y)
+	p.abilities.impact_pending = math.abs(p.body.vel.y)
 	p.abilities.wall_run_cooldown_timer = 0
 	p.abilities.wall_run_used = false
 	if p.sensor.on_ground {
