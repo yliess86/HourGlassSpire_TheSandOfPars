@@ -104,6 +104,7 @@ SAND_DEBUG_STATS_LINE_OFFSET: u8      // line count offset for stats Y position
 WATER_COLOR: [4]u8                    // base water particle color (translucent cyan)
 WATER_COLOR_VARIATION: u8             // max RGB darkening at depth
 WATER_COLOR_DEPTH_MAX: u8             // cell distance from surface where darkening reaches maximum
+WATER_COLOR_LUT_SIZE: u8              // depth resolution of water color gradient LUT
 WATER_FLOW_DISTANCE: u8               // max horizontal flow per step (depth-proportional: surface=1, +1 per depth cell)
 WATER_EMITTER_RATE: f32               // particles spawned per second per water emitter
 WATER_PLAYER_DRAG_PER_CELL: f32       // velocity drag added per displaced water cell
@@ -240,6 +241,7 @@ sand_config_apply :: proc() {
 	if val, ok := config_get_rgba(&sand_config, "WATER_COLOR"); ok do WATER_COLOR = val
 	if val, ok := config_get_u8(&sand_config, "WATER_COLOR_VARIATION"); ok do WATER_COLOR_VARIATION = val
 	if val, ok := config_get_u8(&sand_config, "WATER_COLOR_DEPTH_MAX"); ok do WATER_COLOR_DEPTH_MAX = val
+	if val, ok := config_get_u8(&sand_config, "WATER_COLOR_LUT_SIZE"); ok do WATER_COLOR_LUT_SIZE = val
 	if val, ok := config_get_u8(&sand_config, "WATER_FLOW_DISTANCE"); ok do WATER_FLOW_DISTANCE = val
 	if val, ok := config_get_f32(&sand_config, "WATER_EMITTER_RATE"); ok do WATER_EMITTER_RATE = val
 	if val, ok := config_get_f32(&sand_config, "WATER_PLAYER_DRAG_PER_CELL"); ok do WATER_PLAYER_DRAG_PER_CELL = val

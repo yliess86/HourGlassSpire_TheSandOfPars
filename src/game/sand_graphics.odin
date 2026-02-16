@@ -12,10 +12,9 @@ Sand_Render_Batch :: struct {
 }
 
 // Pre-computed color LUTs (rebuilt on init + F5 reload)
-WATER_COLOR_LUT_SIZE :: 32
 sand_color_lut: [4]sdl.FColor
 wet_sand_color_lut: [4]sdl.FColor
-water_color_lut: [WATER_COLOR_LUT_SIZE]sdl.FColor
+water_color_lut: [256]sdl.FColor
 
 sand_graphics_init_lut :: proc() {
 	sand_graphics_build_lut(&sand_color_lut, engine.SAND_COLOR, engine.SAND_COLOR_VARIATION)
@@ -24,7 +23,7 @@ sand_graphics_init_lut :: proc() {
 		engine.WET_SAND_COLOR,
 		engine.WET_SAND_COLOR_VARIATION,
 	)
-	for d in 0 ..< WATER_COLOR_LUT_SIZE {
+	for d in 0 ..< engine.WATER_COLOR_LUT_SIZE {
 		t := math.clamp(f32(d) / f32(engine.WATER_COLOR_DEPTH_MAX), 0, 1)
 		offset := t * f32(engine.WATER_COLOR_VARIATION) / 255
 		water_color_lut[d] = {
@@ -108,7 +107,7 @@ sand_graphics_render :: proc(world: ^engine.Sand_World) {
 			if cell.material == .Water {
 				is_surface := !above_is_water
 				if is_surface do dist = 0
-				fc := water_color_lut[min(dist, WATER_COLOR_LUT_SIZE - 1)]
+				fc := water_color_lut[min(dist, int(engine.WATER_COLOR_LUT_SIZE) - 1)]
 				if is_surface {
 					phase :=
 						f32(x) * engine.WATER_SHIMMER_PHASE +
