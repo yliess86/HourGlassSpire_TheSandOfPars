@@ -167,7 +167,6 @@ SAND_PLAYER_DRAG_Y_FACTOR: f32               // Y drag is this fraction of X dra
 SAND_PRESSURE_FORCE: f32                     // downward force per sqrt(sand cells) above player
 SAND_PRESSURE_GAP_TOLERANCE: u8              // empty cells to scan past in pressure column
 SAND_BURIAL_THRESHOLD: f32                   // sand/footprint overlap ratio to count as buried
-SAND_BURIAL_GRAVITY_MULT: f32                // extra gravity multiplier when buried in sand
 SAND_DISPLACE_CHAIN: u8                      // max recursive push depth when displacing sand
 SAND_DISPLACE_PARTICLE_MAX: u8               // max displacement particles per material type
 SAND_SINK_SPEED: f32                         // sinking rate (m/s) when standing on sand
@@ -193,7 +192,6 @@ SAND_DUST_INTERVAL: u8                       // emit every N fixed steps
 SAND_IMPACT_MIN_SPEED: f32                   // below this: no extra displacement (m/s)
 SAND_IMPACT_MAX_SPEED: f32                   // at/above this: maximum crater (m/s)
 SAND_IMPACT_RADIUS: u8                       // max extra cells at max impact
-SAND_IMPACT_EXTRA_CHAIN: u8                  // extra chain depth at max impact
 SAND_IMPACT_PARTICLE_SPEED_MULT: f32         // particle speed multiplier at max impact
 SAND_IMPACT_PARTICLE_MIN: u8                 // displacement particles at zero impact
 SAND_IMPACT_PARTICLE_MAX: u8                 // displacement particles at max impact
@@ -441,7 +439,6 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "SAND_PRESSURE_FORCE"); ok do SAND_PRESSURE_FORCE = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_PRESSURE_GAP_TOLERANCE"); ok do SAND_PRESSURE_GAP_TOLERANCE = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_BURIAL_THRESHOLD"); ok do SAND_BURIAL_THRESHOLD = val
-	if val, ok := engine.config_get_f32(&config_game, "SAND_BURIAL_GRAVITY_MULT"); ok do SAND_BURIAL_GRAVITY_MULT = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_DISPLACE_CHAIN"); ok do SAND_DISPLACE_CHAIN = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_DISPLACE_PARTICLE_MAX"); ok do SAND_DISPLACE_PARTICLE_MAX = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_SINK_SPEED"); ok do SAND_SINK_SPEED = val
@@ -467,7 +464,6 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "SAND_IMPACT_MIN_SPEED"); ok do SAND_IMPACT_MIN_SPEED = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_IMPACT_MAX_SPEED"); ok do SAND_IMPACT_MAX_SPEED = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_IMPACT_RADIUS"); ok do SAND_IMPACT_RADIUS = val
-	if val, ok := engine.config_get_u8(&config_game, "SAND_IMPACT_EXTRA_CHAIN"); ok do SAND_IMPACT_EXTRA_CHAIN = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_IMPACT_PARTICLE_SPEED_MULT"); ok do SAND_IMPACT_PARTICLE_SPEED_MULT = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_IMPACT_PARTICLE_MIN"); ok do SAND_IMPACT_PARTICLE_MIN = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_IMPACT_PARTICLE_MAX"); ok do SAND_IMPACT_PARTICLE_MAX = val

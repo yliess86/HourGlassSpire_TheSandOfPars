@@ -62,18 +62,7 @@ player_particles_step_update :: proc(pool: ^engine.Particle_Pool, dt: f32) {
 	engine.particle_pool_update(pool, dt)
 }
 
-player_particles_step_render :: proc(pool: ^engine.Particle_Pool) {
-	for i in 0 ..< pool.count {
-		p := &pool.items[i]
-		t := p.age / p.lifetime
-		alpha := u8(255 * (1.0 - t))
-		sdl.SetRenderDrawColor(game.win.renderer, p.color.r, p.color.g, p.color.b, alpha)
-		rect := game_world_to_screen(p.pos - {p.size / 2, 0}, {p.size, p.size})
-		sdl.RenderFillRect(game.win.renderer, &rect)
-	}
-}
-
-player_particles_dust_render :: proc(pool: ^engine.Particle_Pool) {
+player_particles_render :: proc(pool: ^engine.Particle_Pool) {
 	for i in 0 ..< pool.count {
 		p := &pool.items[i]
 		t := p.age / p.lifetime

@@ -92,11 +92,6 @@ collider_slope_surface_x :: proc(s: Collider_Slope, world_y: f32) -> f32 {
 	return s.base_x
 }
 
-// Whether X falls within [base_x, base_x + span]
-collider_slope_contains_x :: proc(s: Collider_Slope, x: f32) -> bool {
-	return x >= s.base_x && x <= s.base_x + s.span
-}
-
 // Floor slope?
 collider_slope_is_floor :: proc(s: Collider_Slope) -> bool {
 	return s.kind == .Right || s.kind == .Left

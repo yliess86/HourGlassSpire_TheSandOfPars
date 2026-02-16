@@ -4,10 +4,9 @@ import engine "../engine"
 import "core:math"
 
 player_physics_apply_movement :: proc(player: ^Player, dt: f32) {
-	sand_move_factor: f32 = 1.0 - player.sensor.sand_immersion * SAND_MOVE_PENALTY
 	player.transform.vel.x = math.lerp(
 		player.transform.vel.x,
-		game.input.axis.x * PLAYER_RUN_SPEED * max(sand_move_factor, 0),
+		game.input.axis.x * PLAYER_RUN_SPEED * player_move_factor(player, SAND_MOVE_PENALTY, 0),
 		PLAYER_MOVE_LERP_SPEED * dt,
 	)
 	gravity_mult: f32 =
@@ -205,7 +204,7 @@ player_physics_resolve_slopes :: proc(player: ^Player) {
 player_physics_debug :: proc(player: ^Player) {
 	if game.debug == .PLAYER || game.debug == .ALL {
 		debug_collider_rect(player.collider)
-		debug_point_player(player.transform.pos)
+		debug_point(player.transform.pos, DEBUG_COLOR_PLAYER)
 
 		player_mid_y: [2]f32 = {player.transform.pos.x, player.transform.pos.y + PLAYER_SIZE / 2}
 		player_vel := player.transform.vel * PPM * DEBUG_VEL_SCALE

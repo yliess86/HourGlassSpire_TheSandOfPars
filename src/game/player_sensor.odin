@@ -188,8 +188,8 @@ player_sensor_update :: proc(player: ^Player) {
 	player.sensor.on_ground_snap_y = on_ground_snap_y
 	player.sensor.on_platform = on_platform
 	player.sensor.on_sand = on_sand
-	player.sensor.sand_immersion = sand_compute_immersion(&game.sand, player)
-	water_immersion := sand_compute_water_immersion(&game.sand, player)
+	player.sensor.sand_immersion = sand_compute_immersion(&game.sand, player, {.Sand, .Wet_Sand})
+	water_immersion := sand_compute_immersion(&game.sand, player, {.Water})
 	player.sensor.on_water = water_immersion > 0
 	player.sensor.water_immersion = water_immersion
 	player.sensor.on_side_wall = on_side_wall

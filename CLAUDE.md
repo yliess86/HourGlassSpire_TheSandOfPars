@@ -54,7 +54,7 @@ Odin, SDL3 (`vendor:sdl3`). Main package `src/game/`, engine `src/engine/` (`"..
 | `src/game/player_graphics.odin` | `player_color`, 4-layer visual deformation (velocity/look/bob/impact), `player_graphics_trigger_impact` |
 | `src/game/player_sensor.odin` | `Player_Sensor` struct, per-frame environment queries (ground/slope/platform/sand/water/wall) |
 | `src/game/player_physics.odin` | Separated-axis solver: sweep, resolve X/Y, slope resolve. `player_physics_debug` |
-| `src/game/player_fsm_*.odin` | One file per state: `_grounded`, `_airborne`, `_dashing`, `_dropping`, `_sand_swim`, `_swimming`, `_wall_slide`, `_wall_run_vertical`, `_wall_run_horizontal`. Each has `_init` + `_update`, optional `_enter`/`_exit` |
+| `src/game/player_fsm_*.odin` | One file per state: `_grounded`, `_airborne`, `_dashing`, `_dropping`, `_submerged` (shared by Sand_Swim + Swimming), `_wall_slide`, `_wall_run_vertical`, `_wall_run_horizontal`. Each has `_init` + `_update`, optional `_enter`/`_exit` |
 | `src/game/debug.odin` | `Debug_State` enum, drawing helpers, `debug_camera` |
 | `src/game/level.odin` | BMP loading, tile classification by exposed face, greedy collider merging, slope merging, rendering |
 | `src/game/input.odin` | `Input_Action` enum, `INPUT_DEFAULT_BINDINGS`, `input_binding_apply` |
@@ -62,8 +62,8 @@ Odin, SDL3 (`vendor:sdl3`). Main package `src/game/`, engine `src/engine/` (`"..
 | `src/game/sand_chunk.odin` | 32x32 spatial chunks, dirty propagation, sleep optimization |
 | `src/game/sand_sim.odin` | CA step: bottom-to-top, alternating parity. Sand (down/diagonal), water (down/diagonal/horizontal flow). Sleep/wake system |
 | `src/game/sand_emitter.odin` | Accumulates fractional particles, spawns below emitter at material-specific rate |
-| `src/game/sand_player.odin` | Player-sand/water coupling: displacement → drag → pressure → burial → buoyancy |
-| `src/game/sand_graphics.odin` | Camera-culled rendering: sand opaque with color variants, water alpha-blended with depth gradient |
+| `src/game/sand_player.odin` | Player-sand/water coupling: impact craters → displacement → drag → pressure → quicksand → buoyancy → dash carving → footprints |
+| `src/game/sand_graphics.odin` | Camera-culled rendering: sand opaque with color variants, water alpha-blended with depth gradient + shimmer, surface smoothing |
 
 ### Game loop
 
@@ -78,7 +78,7 @@ Global `game: Game_State`. Player nested as `game.player: Player` with sub-struc
 
 States: `Grounded`, `Airborne`, `Dashing`, `Dropping`, `Sand_Swim`, `Swimming`, `Wall_Run_Horizontal`, `Wall_Slide`, `Wall_Run_Vertical`.
 
-`engine.FSM(Player, Player_State)` via `player.fsm`. Each `update` returns `Maybe(Player_State)` for transitions (nil = stay). `fsm_transition` prevents self-transitions. Handlers receive `ctx: ^Player`. Enter/exit wired for: `Grounded` (enter: reset wall run), `Dashing` (enter: set timers), `Swimming` (enter: reset wall run), `Wall_Run_Vertical` (enter: set used/timer; exit: set cooldown), `Wall_Run_Horizontal` (enter: set used/timer/dir).
+`engine.FSM(Player, Player_State)` via `player.fsm`. Each `update` returns `Maybe(Player_State)` for transitions (nil = stay). `fsm_transition` prevents self-transitions. Handlers receive `ctx: ^Player`. Enter/exit wired for: `Grounded` (enter: reset wall run), `Dashing` (enter: set timers), `Sand_Swim` + `Swimming` (shared `_submerged` handler; enter: reset wall run cooldown/used), `Wall_Run_Vertical` (enter: set used/timer; exit: set cooldown), `Wall_Run_Horizontal` (enter: set used/timer/dir).
 
 Each file: `player_fsm_<state>_init` registers handlers, `_update(ctx, dt)` runs logic. Access state via `ctx.transform`, `ctx.abilities`, `ctx.sensor`; input via `game.input`.
 
@@ -155,7 +155,7 @@ Separated-axis solver: Move X → Sync → Slope resolve → Resolve X → Move 
 | Y platforms | `platform_colliders` | One-way: skip during Dropping, requires pos.y >= top - EPS |
 | Slope (post-Y) | `slope_colliders` | Floor: grounded uses `2*STEP_HEIGHT` snap, else `SLOPE_SNAP`. Ceiling: push down |
 
-**Sensor** (`player.sensor`): caches per-frame queries **after** collision resolution — on_ground (includes slopes/platforms/sand), on_platform, in_platform, on_slope/dir, on_sand, sand_immersion (0-1), on_water, water_immersion (0-1), on_side_wall/dir/snap_x, on_back_wall. Ground = downward raycast from feet; slope = raycast from STEP_HEIGHT above; walls = horizontal raycasts from upper-center.
+**Sensor** (`player.sensor`): caches per-frame queries **after** collision resolution — on_ground (includes slopes/platforms/sand), on_platform, in_platform, on_slope/dir, on_sand, sand_immersion (0-1), on_water, water_immersion (0-1), on_side_wall/dir/snap_x, on_back_wall, on_sand_wall (vertical sand column acts as wall). Ground = downward raycast from feet; slope = raycast from STEP_HEIGHT above; walls = horizontal raycasts from upper-center; sand walls = `SAND_WALL_MIN_HEIGHT` contiguous sand/wet-sand cells when no solid side wall.
 
 ### Level
 
@@ -177,20 +177,25 @@ CA sand/water sim on level-aligned grid (`SAND_CELLS_PER_TILE` cells per tile, c
 
 **Materials:** Empty, Solid (level), Sand (falls), Water (flows horizontally, buoyant), Platform (one-way), Wet_Sand (sand that contacted water: heavier, stickier, darker; dries without water).
 
-**Sim:** Every `SAND_SIM_INTERVAL` fixed steps. Bottom-to-top, alternating L/R parity. Sand: down → diagonal; sinks through water. On slope cells, sand/water slides only in the slope's downhill diagonal direction. Water: down → diagonal → horizontal (up to `WATER_FLOW_DISTANCE` cells). Sleep after `SAND_SLEEP_THRESHOLD` idle steps; movement wakes 8 neighbors. Parity flag prevents double-moves. Player footprint blocking: sim and displacement respect cached player bounds (`sand_is_player_cell`), preventing sand/water from moving into the player.
+**Sim:** Every `SAND_SIM_INTERVAL` fixed steps. Bottom-to-top, alternating L/R parity. Sand: down → diagonal; sinks through water. Wet sand: same as sand but lower repose chance (stickier), higher water swap chance. Water: down → diagonal → horizontal (up to `WATER_FLOW_DISTANCE` cells); wets adjacent sand on contact (`WATER_CONTACT_WET_CHANCE`); surface tension prevents thin film spreading. On slope cells, sand/water slides only in the slope's downhill diagonal direction. Wet sand dries after `WET_SAND_DRY_STEPS` without adjacent water; spreads wetness to neighbors (`WET_SAND_SPREAD_CHANCE`). Sleep after `SAND_SLEEP_THRESHOLD` idle steps; movement wakes 8 neighbors. Parity flag prevents double-moves. Player footprint blocking: sim and displacement respect cached player bounds (`sand_is_player_cell`), preventing sand/water from moving into the player.
 
 **Chunks:** 32x32 partitions. Track active_count, dirty/needs_sim. Dirty propagates to 8-neighbors. Skip chunks with needs_sim=false.
 
 **Emitters:** Accumulate fractional particles at `SAND_EMITTER_RATE`/`WATER_EMITTER_RATE`. Spawn one tile below when ready.
 
 **Player interaction** (`sand_player_interact` each fixed step):
-1. **Displacement** — push sand/wet sand/water out of player footprint. Slope-aware: on slopes, pushes align with surface geometry (downhill diagonals allowed, through-surface blocked). Chaining blocked through slope cells. Flat fallbacks: primary → down → diag → opposite → opposite diag
-2. **Drag** — sand: quadratic by immersion. Wet sand: separate higher drag constants. Water: separate drag constants
-3. **Pressure** — contiguous sand/wet sand above → downward force. Water excluded
-4. **Burial** — sand ratio > threshold → extra gravity. Sand + wet sand
-5. **Buoyancy** — water immersion > threshold → upward force
+1. **Impact craters** — landing speed stored in `impact_pending`; crater radius + particle count scale with impact factor. Ejects sand upward around footprint
+2. **Displacement** — push sand/wet sand/water out of player footprint. Slope-aware: on slopes, pushes align with surface geometry (downhill diagonals allowed, through-surface blocked). Chaining blocked through slope cells. Flat fallbacks: primary → down → diag → opposite → opposite diag
+3. **Drag** — sand: quadratic by immersion. Wet sand: separate higher drag constants. Water: separate drag constants. Dash: reduced drag via `SAND_DASH_DRAG_FACTOR`
+4. **Pressure** — contiguous sand/wet sand above → downward force. Water excluded
+5. **Burial / quicksand** — sand ratio > threshold → extra gravity. Activity-scaled: moving makes you sink faster (`SAND_QUICKSAND_MOVE_MULT`)
+6. **Buoyancy** — water immersion > threshold → upward force
+7. **Dash carving** — dashes tunnel through sand/water, ejecting cells upward/sideways with particles
+8. **Footprints** — running on sand surface creates depressions at `SAND_FOOTPRINT_STRIDE` intervals, piling removed sand beside
 
-**Rendering:** Sand + wet sand = opaque rects (triangles on slope cells), color variants via `SAND_COLOR_VARIATION`/`WET_SAND_COLOR_VARIATION`. Water = alpha-blended, depth-darkened gradient (triangles on slopes). Rendered after player.
+**Sand walls:** Vertical sand columns (≥ `SAND_WALL_MIN_HEIGHT` cells) detected as walls. Wall states erode sand walls via `sand_wall_erode`. Wall jumps from sand walls use `SAND_WALL_JUMP_MULT`.
+
+**Rendering:** Sand + wet sand = opaque rects (triangles on slope cells), color variants via `SAND_COLOR_VARIATION`/`WET_SAND_COLOR_VARIATION`. Water = alpha-blended, depth-darkened gradient (triangles on slopes), surface shimmer effect. Optional `SAND_SURFACE_SMOOTH` for interpolated surface height. Rendered after player.
 
 ### Camera
 
@@ -219,25 +224,26 @@ INI with sections, expressions (`+`,`-`,`*`,`/`, parens, variable refs), `#RRGGB
 
 - **Run:** `PLAYER_RUN_SPEED`, lerp factor `15*dt`
 - **Jump:** `PLAYER_JUMP_FORCE`, buffered (`JUMP_BUFFER_DURATION`), coyote time (`COYOTE_TIME_DURATION`)
-- **Variable jump:** 3x gravity when ascending with jump released (short hop)
-- **Wall slide:** `WALL_SLIDE_SPEED` clamp, raycasts with `WALL_JUMP_EPS`. Unified side+back walls
+- **Variable jump:** `PLAYER_FAST_FALL_MULT` gravity when ascending with jump released (short hop)
+- **Wall slide:** `WALL_SLIDE_SPEED` clamp, raycasts with `WALL_JUMP_EPS`. Unified side+back walls. Sand walls erode on contact
 - **Wall run vertical:** `WALL_RUN_VERTICAL_SPEED`/`_DECAY` (exponential), `WALL_RUN_COOLDOWN`. Side wall needs vel.y > 0 from airborne
 - **Wall run horizontal:** `WALL_RUN_HORIZONTAL_SPEED`/`_LIFT`/`_GRAV_MULT` (parabolic arc on back wall)
-- **Wall jump:** `WALL_JUMP_FORCE` (1.5x), 0.75x vertical
+- **Wall jump:** `WALL_JUMP_FORCE` (1.5x), 0.75x vertical. Sand walls: `SAND_WALL_JUMP_MULT`
 - **Dash:** `DASH_SPEED` (4x run), `DASH_DURATION`, `DASH_COOLDOWN`, direction-locked. Uphill: 45deg decompose, ramp off top. Downhill: lift off
 - **Drop through:** down + jump on platform → nudge down → Dropping state
 - **Step height:** `PLAYER_STEP_HEIGHT` — step over obstacles, wall collision filter, grounded slope snap
-- **Swimming:** enter/exit thresholds (hysteresis), reduced gravity, directional speeds, damping, jump-out at surface
+- **Submerged** (shared handler for Sand_Swim + Swimming): enter/exit thresholds (hysteresis), material-specific params at runtime. Water: reduced gravity, faster movement, passive float, jump-out at surface. Sand: heavy drag, slow movement, passive sink, spammable sand hop (`SAND_SWIM_HOP_FORCE`/`_COOLDOWN`) for escaping deep burial
 - **Impact bounce:** damped cosine spring, purely visual. "Stronger wins" policy
 
 ## Debug Overlays
 
-Cycle F3: `NONE` → `PLAYER` → `BACKGROUND` → `SAND` → `ALL`. FPS + sensor readout in all non-NONE modes.
+Cycle F3: `NONE` → `PLAYER` → `BACKGROUND` → `SAND` → `ALL` → `CONTROLS`. FPS + sensor readout in all non-NONE modes. Label shows current + next state hint. Adaptive input family (keyboard/gamepad).
 
 - **PLAYER** — collider, position, facing, velocity, FSM state, sensor rays, camera dead zone
 - **BACKGROUND** — level collider outlines (ground/ceiling/wall/platform/back wall/slope) + anchors + tile grid
 - **SAND** — stress heatmap, sleeping overlay, chunk boundaries, emitter markers, sand/water stats
 - **ALL** — everything
+- **CONTROLS** — input controls overlay
 
 Config: `DEBUG_COLOR_*` (colors), `DEBUG_*` (sizes/scales), `SAND_DEBUG_*` in `[sand_debug]`.
 

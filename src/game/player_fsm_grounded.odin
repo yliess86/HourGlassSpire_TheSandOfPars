@@ -53,12 +53,12 @@ player_fsm_grounded_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 		uphill := math.sign(game.input.axis.x) == ctx.sensor.on_slope_dir
 		speed_factor = PLAYER_SLOPE_UPHILL_FACTOR if uphill else PLAYER_SLOPE_DOWNHILL_FACTOR
 	}
-	sand_move_factor: f32 = 1.0 - ctx.sensor.sand_immersion * SAND_MOVE_PENALTY
-	water_move_factor: f32 = 1.0 - ctx.sensor.water_immersion * WATER_MOVE_PENALTY
-	combined_move := max(sand_move_factor * water_move_factor, 0)
 	ctx.transform.vel.x = math.lerp(
 		ctx.transform.vel.x,
-		game.input.axis.x * PLAYER_RUN_SPEED * speed_factor * combined_move,
+		game.input.axis.x *
+		PLAYER_RUN_SPEED *
+		speed_factor *
+		player_move_factor(ctx, SAND_MOVE_PENALTY, WATER_MOVE_PENALTY),
 		PLAYER_MOVE_LERP_SPEED * dt,
 	)
 	ctx.transform.vel.y = -SAND_SINK_SPEED if ctx.sensor.on_sand else 0

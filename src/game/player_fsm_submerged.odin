@@ -1,0 +1,109 @@
+package game
+
+import "core:math"
+
+player_fsm_submerged_init :: proc(player: ^Player) {
+	player.fsm.handlers[.Sand_Swim] = {
+		enter  = player_fsm_submerged_enter,
+		update = player_fsm_submerged_update,
+	}
+	player.fsm.handlers[.Swimming] = {
+		enter  = player_fsm_submerged_enter,
+		update = player_fsm_submerged_update,
+	}
+}
+
+@(private = "file")
+player_fsm_submerged_enter :: proc(ctx: ^Player) {
+	ctx.abilities.wall_run_cooldown_timer = 0
+	ctx.abilities.wall_run_used = false
+}
+
+// Submerged — shared handler for Sand_Swim and Swimming.
+// Sand: heavy drag, slow directional movement, sand hop, sand particles.
+// Water: reduced gravity, directional swimming, velocity damping.
+// - Airborne: jump pressed near surface (immersion < surface threshold)
+// - Dashing: DASH pressed && cooldown ready
+// - Grounded: on_ground && immersion < exit threshold
+// - Airborne: immersion < exit threshold (surfaced)
+@(private = "file")
+player_fsm_submerged_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) {
+	in_sand := ctx.fsm.current == .Sand_Swim
+
+	move_penalty := SAND_SWIM_MOVE_PENALTY if in_sand else WATER_MOVE_PENALTY
+	lerp_speed := SAND_SWIM_LERP_SPEED if in_sand else PLAYER_MOVE_LERP_SPEED
+	up_speed := SAND_SWIM_UP_SPEED if in_sand else WATER_SWIM_UP_SPEED
+	down_speed := SAND_SWIM_DOWN_SPEED if in_sand else WATER_SWIM_DOWN_SPEED
+	idle_speed := -SAND_SWIM_SINK_SPEED if in_sand else WATER_SWIM_FLOAT_SPEED
+	grav_mult := SAND_SWIM_GRAVITY_MULT if in_sand else WATER_SWIM_GRAVITY_MULT
+	damping_k := SAND_SWIM_DAMPING if in_sand else WATER_SWIM_DAMPING
+	surface_threshold := SAND_SWIM_SURFACE_THRESHOLD if in_sand else WATER_SWIM_SURFACE_THRESHOLD
+	exit_threshold := SAND_SWIM_EXIT_THRESHOLD if in_sand else WATER_SWIM_EXIT_THRESHOLD
+	jump_force := SAND_SWIM_JUMP_FORCE if in_sand else WATER_SWIM_JUMP_FORCE
+	immersion := ctx.sensor.sand_immersion if in_sand else ctx.sensor.water_immersion
+
+	// Horizontal movement
+	move_factor := max(1.0 - immersion * move_penalty, 0)
+	ctx.transform.vel.x = math.lerp(
+		ctx.transform.vel.x,
+		game.input.axis.x * PLAYER_RUN_SPEED * move_factor,
+		lerp_speed * dt,
+	)
+
+	// Vertical: up input, down input, or passive float/sink
+	if game.input.axis.y > PLAYER_INPUT_AXIS_THRESHOLD {
+		ctx.transform.vel.y = math.lerp(ctx.transform.vel.y, up_speed, lerp_speed * dt)
+	} else if game.input.axis.y < -PLAYER_INPUT_AXIS_THRESHOLD {
+		ctx.transform.vel.y = math.lerp(ctx.transform.vel.y, -down_speed, lerp_speed * dt)
+	} else {
+		ctx.transform.vel.y = math.lerp(ctx.transform.vel.y, idle_speed, lerp_speed * dt)
+	}
+
+	// Reduced gravity + velocity damping
+	ctx.transform.vel.y -= grav_mult * GRAVITY * dt
+	ctx.transform.vel *= math.exp(-damping_k * dt)
+
+	// Sand hop — spam jump when deep to boil upward (sand only)
+	if in_sand &&
+	   game.input.is_pressed[.JUMP] &&
+	   ctx.sensor.sand_immersion >= SAND_SWIM_SURFACE_THRESHOLD &&
+	   ctx.abilities.sand_hop_cooldown_timer <= 0 {
+		ctx.transform.vel.y = SAND_SWIM_HOP_FORCE
+		ctx.abilities.sand_hop_cooldown_timer = SAND_SWIM_HOP_COOLDOWN
+		sand_particles_emit(
+			&game.sand_particles,
+			ctx.transform.pos + {0, PLAYER_SIZE},
+			PLAYER_SIZE / 2,
+			math.PI / 2,
+			math.PI / 3,
+			{0, 0},
+			SAND_COLOR,
+			int(SAND_SWIM_HOP_PARTICLE_COUNT),
+		)
+	}
+
+	// Jump out near surface
+	if ctx.abilities.jump_buffer_timer > 0 && immersion < surface_threshold {
+		ctx.transform.vel.y = jump_force
+		ctx.abilities.jump_buffer_timer = 0
+		if in_sand {
+			sand_particles_emit(
+				&game.sand_particles,
+				ctx.transform.pos + {0, PLAYER_SIZE},
+				PLAYER_SIZE / 2,
+				math.PI / 2,
+				math.PI / 3,
+				{0, abs(ctx.transform.vel.y) * 0.15},
+				SAND_COLOR,
+				int(SAND_SWIM_JUMP_PARTICLE_COUNT),
+			)
+		}
+		return .Airborne
+	}
+
+	if game.input.is_pressed[.DASH] && ctx.abilities.dash_cooldown_timer <= 0 do return .Dashing
+	if ctx.sensor.on_ground && immersion < exit_threshold do return .Grounded
+	if immersion < exit_threshold do return .Airborne
+
+	return nil
+}

@@ -15,65 +15,55 @@ sand_sub_step_tick :: proc(sand: ^Sand_World) {
 sand_step :: proc(sand: ^Sand_World) {
 	parity := sand.step_counter & 1
 	sand.step_counter += 1
-
-	// Propagate dirty flags to determine which chunks need simulation
 	sand_chunk_propagate_dirty(sand)
-
-	// Iterate bottom-to-top so lower cells vacate first
 	for y in 0 ..< sand.height {
-		// Alternate horizontal scan direction each step to eliminate bias
 		if parity == 0 do for x in 0 ..< sand.width do sand_dispatch_cell(sand, x, y, parity)
 		else do for x := sand.width - 1; x >= 0; x -= 1 do sand_dispatch_cell(sand, x, y, parity)
 	}
-
 	sand_restore_platforms(sand)
 }
 
+// Unified sand + wet sand cell update (granular materials)
 @(private = "file")
-sand_update_cell :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
+sand_update_cell_granular :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
 	idx := y * sand.width + x
 	cell := &sand.cells[idx]
+	is_wet := cell.material == .Wet_Sand
 
-	if cell.material != .Sand do return
-
-	// Skip if chunk doesn't need simulation
 	chunk := sand_chunk_at(sand, x, y)
 	if chunk != nil && !chunk.needs_sim do return
 
-	// Skip if already updated this step (parity check)
 	cell_parity := u32(cell.flags & SAND_FLAG_PARITY)
 	if cell_parity == (parity & 1) do return
 
-	// Erode adjacent platform cells
 	sand_erode_adjacent_platforms(sand, x, y)
 
-	// Skip if sleeping
 	if cell.sleep_counter >= SAND_SLEEP_THRESHOLD do return
 
 	slope := sand.slopes[idx]
-
-	// Slopes: single-step diagonal only, reset fall counter
 	if slope == .Right {
 		if sand_try_move(sand, x, y, x - 1, y - 1, parity) do sand_cell_reset_fall(&sand.cells[(y - 1) * sand.width + (x - 1)])
 		else if cell.sleep_counter < 255 do cell.sleep_counter += 1
+		if is_wet {sand_try_wet_neighbors(sand, x, y, WET_SAND_SPREAD_CHANCE); sand_wet_sand_dry_tick(sand, x, y)}
 		return
 	} else if slope == .Left {
 		if sand_try_move(sand, x, y, x + 1, y - 1, parity) do sand_cell_reset_fall(&sand.cells[(y - 1) * sand.width + (x + 1)])
 		else if cell.sleep_counter < 255 do cell.sleep_counter += 1
+		if is_wet {sand_try_wet_neighbors(sand, x, y, WET_SAND_SPREAD_CHANCE); sand_wet_sand_dry_tick(sand, x, y)}
 		return
 	}
 
-	// Flat cells: multi-step descent with momentum
-	sand_update_cell_flat(sand, x, y, parity)
+	sand_update_cell_granular_flat(sand, x, y, parity, is_wet)
 }
 
-// Multi-step descent for flat (non-slope) sand cells
+// Multi-step descent for flat (non-slope) granular cells (sand + wet sand)
 @(private = "file")
-sand_update_cell_flat :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
+sand_update_cell_granular_flat :: proc(sand: ^Sand_World, x, y: int, parity: u32, is_wet: bool) {
 	cell := &sand.cells[y * sand.width + x]
 	fall_count := sand_cell_fall_count(cell)
 	divisor := max(u8(1), SAND_FALL_ACCEL_DIVISOR)
 	max_steps := int(min(1 + fall_count / divisor, SAND_FALL_MAX_STEPS))
+	swap_chance: f32 = WET_SAND_WATER_SWAP_CHANCE if is_wet else SAND_WATER_SWAP_CHANCE
 
 	cx, cy := x, y
 	steps_taken := 0
@@ -85,7 +75,6 @@ sand_update_cell_flat :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
 		dst_mat := sand.cells[dst_idx].material
 
 		if dst_mat == .Empty {
-			// Move down: lightweight copy (wake/dirty deferred)
 			src_idx := cy * sand.width + cx
 			sand.cells[dst_idx] = sand.cells[src_idx]
 			sand.cells[dst_idx].sleep_counter = 0
@@ -93,135 +82,13 @@ sand_update_cell_flat :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
 			cy -= 1
 			steps_taken += 1
 		} else if dst_mat == .Water {
-			// Water swap: reset momentum, sand becomes wet
-			if rand.float32() > SAND_WATER_SWAP_CHANCE do break
+			if rand.float32() > swap_chance do break
 			src_idx := cy * sand.width + cx
 			tmp := sand.cells[dst_idx]
 			sand.cells[dst_idx] = sand.cells[src_idx]
 			sand.cells[dst_idx].sleep_counter = 0
-			sand.cells[dst_idx].material = .Wet_Sand
 			sand.cells[dst_idx].flags &= ~SAND_FLAG_DRY_MASK
-			sand.cells[src_idx] = tmp
-			sand.cells[src_idx].sleep_counter = 0
-			sand.cells[src_idx].flags =
-				(sand.cells[src_idx].flags & ~SAND_FLAG_PARITY) | u8(parity & 1)
-			sand_cell_reset_fall(&sand.cells[dst_idx])
-			cy -= 1
-			steps_taken += 1
-			break // Water breaks momentum
-		} else do break
-	}
-
-	if steps_taken > 0 {
-		// Set parity and increment fall counter at final position
-		final := &sand.cells[cy * sand.width + cx]
-		final.flags = (final.flags & ~SAND_FLAG_PARITY) | u8(parity & 1)
-		new_fall := min(fall_count + u8(steps_taken), 7)
-		sand_cell_set_fall_count(final, new_fall)
-
-		// Wake/dirty at start and end only
-		sand_wake_neighbors(sand, x, y)
-		sand_wake_neighbors(sand, cx, cy)
-		sand_chunk_mark_dirty(sand, x, y)
-		sand_chunk_mark_dirty(sand, cx, cy)
-
-		// Chunk active counts
-		if x / int(SAND_CHUNK_SIZE) != cx / int(SAND_CHUNK_SIZE) ||
-		   y / int(SAND_CHUNK_SIZE) != cy / int(SAND_CHUNK_SIZE) {
-			src_chunk := sand_chunk_at(sand, x, y)
-			dst_chunk := sand_chunk_at(sand, cx, cy)
-			if src_chunk != nil && src_chunk.active_count > 0 do src_chunk.active_count -= 1
-			if dst_chunk != nil do dst_chunk.active_count += 1
-		}
-		return
-	}
-
-	// No downward movement: try diagonal (probability-gated for steeper piles)
-	cell = &sand.cells[cy * sand.width + cx]
-	if rand.float32() < SAND_REPOSE_CHANCE {
-		first_dx: int = (rand.int31() & 1) == 0 ? -1 : 1
-		if sand_try_move(sand, cx, cy, cx + first_dx, cy - 1, parity) {
-			sand_cell_reset_fall(&sand.cells[(cy - 1) * sand.width + (cx + first_dx)])
-			return
-		} else if sand_try_move(sand, cx, cy, cx - first_dx, cy - 1, parity) {
-			sand_cell_reset_fall(&sand.cells[(cy - 1) * sand.width + (cx - first_dx)])
-			return
-		}
-	}
-	// Stuck
-	sand_cell_reset_fall(cell)
-	if cell.sleep_counter < 255 do cell.sleep_counter += 1
-}
-
-// Wet sand cell update: same as sand but stickier, sinks faster, dries without water
-@(private = "file")
-sand_update_cell_wet_sand :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
-	idx := y * sand.width + x
-	cell := &sand.cells[idx]
-
-	if cell.material != .Wet_Sand do return
-
-	chunk := sand_chunk_at(sand, x, y)
-	if chunk != nil && !chunk.needs_sim do return
-
-	cell_parity := u32(cell.flags & SAND_FLAG_PARITY)
-	if cell_parity == (parity & 1) do return
-
-	sand_erode_adjacent_platforms(sand, x, y)
-
-	if cell.sleep_counter >= SAND_SLEEP_THRESHOLD do return
-
-	slope := sand.slopes[idx]
-
-	if slope == .Right {
-		if sand_try_move(sand, x, y, x - 1, y - 1, parity) do sand_cell_reset_fall(&sand.cells[(y - 1) * sand.width + (x - 1)])
-		else if cell.sleep_counter < 255 do cell.sleep_counter += 1
-		sand_wet_sand_spread_tick(sand, x, y)
-		sand_wet_sand_dry_tick(sand, x, y)
-		return
-	} else if slope == .Left {
-		if sand_try_move(sand, x, y, x + 1, y - 1, parity) do sand_cell_reset_fall(&sand.cells[(y - 1) * sand.width + (x + 1)])
-		else if cell.sleep_counter < 255 do cell.sleep_counter += 1
-		sand_wet_sand_spread_tick(sand, x, y)
-		sand_wet_sand_dry_tick(sand, x, y)
-		return
-	}
-
-	sand_update_cell_wet_sand_flat(sand, x, y, parity)
-}
-
-// Multi-step descent for flat wet sand cells (stickier + faster water swap + drying)
-@(private = "file")
-sand_update_cell_wet_sand_flat :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
-	cell := &sand.cells[y * sand.width + x]
-	fall_count := sand_cell_fall_count(cell)
-	divisor := max(u8(1), SAND_FALL_ACCEL_DIVISOR)
-	max_steps := int(min(1 + fall_count / divisor, SAND_FALL_MAX_STEPS))
-
-	cx, cy := x, y
-	steps_taken := 0
-
-	for step in 0 ..< max_steps {
-		if !sand_in_bounds(sand, cx, cy - 1) do break
-		if sand_is_player_cell(sand, cx, cy - 1) do break
-		dst_idx := (cy - 1) * sand.width + cx
-		dst_mat := sand.cells[dst_idx].material
-
-		if dst_mat == .Empty {
-			src_idx := cy * sand.width + cx
-			sand.cells[dst_idx] = sand.cells[src_idx]
-			sand.cells[dst_idx].sleep_counter = 0
-			sand.cells[src_idx] = Sand_Cell{}
-			cy -= 1
-			steps_taken += 1
-		} else if dst_mat == .Water {
-			// Wet sand sinks faster through water
-			if rand.float32() > WET_SAND_WATER_SWAP_CHANCE do break
-			src_idx := cy * sand.width + cx
-			tmp := sand.cells[dst_idx]
-			sand.cells[dst_idx] = sand.cells[src_idx]
-			sand.cells[dst_idx].sleep_counter = 0
-			sand.cells[dst_idx].flags &= ~SAND_FLAG_DRY_MASK // Reset drying counter (touching water)
+			if !is_wet do sand.cells[dst_idx].material = .Wet_Sand
 			sand.cells[src_idx] = tmp
 			sand.cells[src_idx].sleep_counter = 0
 			sand.cells[src_idx].flags =
@@ -238,80 +105,41 @@ sand_update_cell_wet_sand_flat :: proc(sand: ^Sand_World, x, y: int, parity: u32
 		final.flags = (final.flags & ~SAND_FLAG_PARITY) | u8(parity & 1)
 		new_fall := min(fall_count + u8(steps_taken), 7)
 		sand_cell_set_fall_count(final, new_fall)
-
-		sand_wake_neighbors(sand, x, y)
-		sand_wake_neighbors(sand, cx, cy)
-		sand_chunk_mark_dirty(sand, x, y)
-		sand_chunk_mark_dirty(sand, cx, cy)
-
-		if x / int(SAND_CHUNK_SIZE) != cx / int(SAND_CHUNK_SIZE) ||
-		   y / int(SAND_CHUNK_SIZE) != cy / int(SAND_CHUNK_SIZE) {
-			src_chunk := sand_chunk_at(sand, x, y)
-			dst_chunk := sand_chunk_at(sand, cx, cy)
-			if src_chunk != nil && src_chunk.active_count > 0 do src_chunk.active_count -= 1
-			if dst_chunk != nil do dst_chunk.active_count += 1
-		}
-
-		sand_wet_sand_spread_tick(sand, cx, cy)
-		sand_wet_sand_dry_tick(sand, cx, cy)
+		sand_finalize_move(sand, x, y, cx, cy)
+		if is_wet {sand_try_wet_neighbors(sand, cx, cy, WET_SAND_SPREAD_CHANCE); sand_wet_sand_dry_tick(sand, cx, cy)}
 		return
 	}
 
-	// No downward movement: try diagonal (lower repose chance = steeper piles)
+	// No downward movement: try diagonal (probability-gated for steeper piles)
+	repose_chance: f32 = WET_SAND_REPOSE_CHANCE if is_wet else SAND_REPOSE_CHANCE
 	cell = &sand.cells[cy * sand.width + cx]
-	if rand.float32() < WET_SAND_REPOSE_CHANCE {
+	if rand.float32() < repose_chance {
 		first_dx: int = (rand.int31() & 1) == 0 ? -1 : 1
 		if sand_try_move(sand, cx, cy, cx + first_dx, cy - 1, parity) {
 			sand_cell_reset_fall(&sand.cells[(cy - 1) * sand.width + (cx + first_dx)])
-			sand_wet_sand_spread_tick(sand, cx + first_dx, cy - 1)
-			sand_wet_sand_dry_tick(sand, cx + first_dx, cy - 1)
+			if is_wet {sand_try_wet_neighbors(sand, cx + first_dx, cy - 1, WET_SAND_SPREAD_CHANCE); sand_wet_sand_dry_tick(sand, cx + first_dx, cy - 1)}
 			return
 		} else if sand_try_move(sand, cx, cy, cx - first_dx, cy - 1, parity) {
 			sand_cell_reset_fall(&sand.cells[(cy - 1) * sand.width + (cx - first_dx)])
-			sand_wet_sand_spread_tick(sand, cx - first_dx, cy - 1)
-			sand_wet_sand_dry_tick(sand, cx - first_dx, cy - 1)
+			if is_wet {sand_try_wet_neighbors(sand, cx - first_dx, cy - 1, WET_SAND_SPREAD_CHANCE); sand_wet_sand_dry_tick(sand, cx - first_dx, cy - 1)}
 			return
 		}
 	}
 	// Stuck
 	sand_cell_reset_fall(cell)
 	if cell.sleep_counter < 255 do cell.sleep_counter += 1
-	sand_wet_sand_spread_tick(sand, cx, cy)
-	sand_wet_sand_dry_tick(sand, cx, cy)
+	if is_wet {sand_try_wet_neighbors(sand, cx, cy, WET_SAND_SPREAD_CHANCE); sand_wet_sand_dry_tick(sand, cx, cy)}
 }
 
-// Wet adjacent dry sand on water contact (seed for spread propagation)
+// Probabilistically convert adjacent dry sand into wet sand
 @(private = "file")
-sand_water_contact_wet :: proc(sand: ^Sand_World, x, y: int) {
+sand_try_wet_neighbors :: proc(sand: ^Sand_World, x, y: int, chance: f32) {
 	for d in ([4][2]int{{0, 1}, {0, -1}, {1, 0}, {-1, 0}}) {
 		nx, ny := x + d.x, y + d.y
 		if !sand_in_bounds(sand, nx, ny) do continue
 		n_idx := ny * sand.width + nx
 		if sand.cells[n_idx].material != .Sand do continue
-		if rand.float32() >= WATER_CONTACT_WET_CHANCE do continue
-
-		sand.cells[n_idx].material = .Wet_Sand
-		sand.cells[n_idx].flags &= ~SAND_FLAG_DRY_MASK
-		sand.cells[n_idx].sleep_counter = 0
-		sand_wake_neighbors(sand, nx, ny)
-		sand_chunk_mark_dirty(sand, nx, ny)
-	}
-}
-
-// Spread wetness: probabilistically convert adjacent dry sand into wet sand
-@(private = "file")
-sand_wet_sand_spread_tick :: proc(sand: ^Sand_World, x, y: int) {
-	idx := y * sand.width + x
-	cell := &sand.cells[idx]
-	if cell.material != .Wet_Sand do return
-
-	for d in ([4][2]int{{0, 1}, {0, -1}, {1, 0}, {-1, 0}}) {
-		nx, ny := x + d.x, y + d.y
-		if !sand_in_bounds(sand, nx, ny) do continue
-		n_idx := ny * sand.width + nx
-		if sand.cells[n_idx].material != .Sand do continue
-		if rand.float32() >= WET_SAND_SPREAD_CHANCE do continue
-
+		if rand.float32() >= chance do continue
 		sand.cells[n_idx].material = .Wet_Sand
 		sand.cells[n_idx].flags &= ~SAND_FLAG_DRY_MASK
 		sand.cells[n_idx].sleep_counter = 0
@@ -388,37 +216,26 @@ sand_try_move :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, parity: u32) -> bo
 		sand.cells[src_idx] = Sand_Cell{}
 	}
 
-	// Wake neighbors around both old and new positions
-	sand_wake_neighbors(sand, sx, sy)
-	sand_wake_neighbors(sand, dx, dy)
-
-	// Mark chunks dirty
-	sand_chunk_mark_dirty(sand, sx, sy)
-	sand_chunk_mark_dirty(sand, dx, dy)
-
-	// Update chunk active counts (only when moving into empty — swap keeps counts balanced)
 	if dst_mat == .Empty {
-		if sx / int(SAND_CHUNK_SIZE) != dx / int(SAND_CHUNK_SIZE) ||
-		   sy / int(SAND_CHUNK_SIZE) != dy / int(SAND_CHUNK_SIZE) {
-			src_chunk := sand_chunk_at(sand, sx, sy)
-			dst_chunk := sand_chunk_at(sand, dx, dy)
-			if src_chunk != nil && src_chunk.active_count > 0 do src_chunk.active_count -= 1
-			if dst_chunk != nil do dst_chunk.active_count += 1
-		}
+		// Empty → full finalize (wake + dirty + chunk transfer)
+		sand_finalize_move(sand, sx, sy, dx, dy)
+	} else {
+		// Water swap: wake + dirty only, no chunk transfer (counts stay balanced)
+		sand_wake_neighbors(sand, sx, sy)
+		sand_wake_neighbors(sand, dx, dy)
+		sand_chunk_mark_dirty(sand, sx, sy)
+		sand_chunk_mark_dirty(sand, dx, dy)
 	}
 
 	return true
 }
-
-// Water uses only the parity bit from flag layout
 
 // Dispatch cell update based on material
 @(private = "file")
 sand_dispatch_cell :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
 	idx := y * sand.width + x
 	mat := sand.cells[idx].material
-	if mat == .Sand do sand_update_cell(sand, x, y, parity)
-	else if mat == .Wet_Sand do sand_update_cell_wet_sand(sand, x, y, parity)
+	if mat == .Sand || mat == .Wet_Sand do sand_update_cell_granular(sand, x, y, parity)
 	else if mat == .Water do sand_update_cell_water(sand, x, y, parity)
 }
 
@@ -440,7 +257,7 @@ sand_update_cell_water :: proc(sand: ^Sand_World, x, y: int, parity: u32) {
 	sand_erode_adjacent_platforms(sand, x, y)
 
 	// Wet adjacent dry sand (before sleep gate so stationary water still wets)
-	sand_water_contact_wet(sand, x, y)
+	sand_try_wet_neighbors(sand, x, y, WATER_CONTACT_WET_CHANCE)
 
 	// Skip if sleeping
 	if cell.sleep_counter >= SAND_SLEEP_THRESHOLD do return
@@ -493,19 +310,7 @@ sand_try_move_water :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, parity: u32)
 	sand.cells[dst_idx].flags = u8(parity & 1)
 	sand.cells[dst_idx].sleep_counter = 0
 	sand.cells[src_idx] = Sand_Cell{}
-
-	sand_wake_neighbors(sand, sx, sy)
-	sand_wake_neighbors(sand, dx, dy)
-	sand_chunk_mark_dirty(sand, sx, sy)
-	sand_chunk_mark_dirty(sand, dx, dy)
-
-	if sx / int(SAND_CHUNK_SIZE) != dx / int(SAND_CHUNK_SIZE) ||
-	   sy / int(SAND_CHUNK_SIZE) != dy / int(SAND_CHUNK_SIZE) {
-		src_chunk := sand_chunk_at(sand, sx, sy)
-		dst_chunk := sand_chunk_at(sand, dx, dy)
-		if src_chunk != nil && src_chunk.active_count > 0 do src_chunk.active_count -= 1
-		if dst_chunk != nil do dst_chunk.active_count += 1
-	}
+	sand_finalize_move(sand, sx, sy, dx, dy)
 
 	return true
 }
@@ -571,18 +376,7 @@ sand_try_flow_water :: proc(sand: ^Sand_World, x, y, dx: int, parity: u32) -> bo
 	sand.cells[dst_idx].flags = u8(parity & 1) | flow_bits
 	sand.cells[dst_idx].sleep_counter = 0
 	sand.cells[src_idx] = Sand_Cell{}
-
-	sand_wake_neighbors(sand, x, y)
-	sand_wake_neighbors(sand, target_x, y)
-	sand_chunk_mark_dirty(sand, x, y)
-	sand_chunk_mark_dirty(sand, target_x, y)
-
-	if x / int(SAND_CHUNK_SIZE) != target_x / int(SAND_CHUNK_SIZE) {
-		src_chunk := sand_chunk_at(sand, x, y)
-		dst_chunk := sand_chunk_at(sand, target_x, y)
-		if src_chunk != nil && src_chunk.active_count > 0 do src_chunk.active_count -= 1
-		if dst_chunk != nil do dst_chunk.active_count += 1
-	}
+	sand_finalize_move(sand, x, y, target_x, y)
 
 	return true
 }

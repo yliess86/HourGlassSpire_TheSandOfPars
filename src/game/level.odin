@@ -328,7 +328,7 @@ level_merge_colliders :: proc(level: ^Level) {
 		i := 0
 		for i < len(active) {
 			if active[i].y1 <= y {
-				level_emit_run(level, active[i])
+				level_emit_rect(&level.platform_colliders, active[i])
 				ordered_remove(&active, i)
 			} else do i += 1
 		}
@@ -336,25 +336,10 @@ level_merge_colliders :: proc(level: ^Level) {
 		for rr, ri in row_runs do if !matched[ri] do append(&active, rr)
 	}
 
-	for ar in active do level_emit_run(level, ar)
+	for ar in active do level_emit_rect(&level.platform_colliders, ar)
 
 	// Merge slope tiles into diagonal runs
 	level_merge_slopes(level)
-}
-
-@(private = "file")
-level_emit_run :: proc(level: ^Level, run: Level_Merge_Run) {
-	w := f32(run.x1 - run.x0) * TILE_SIZE
-	h := f32(run.y1 - run.y0) * TILE_SIZE
-	cx := f32(run.x0) * TILE_SIZE + w / 2
-	cy := f32(run.y0) * TILE_SIZE + h / 2
-
-	rect := engine.Collider_Rect {
-		pos  = {cx, cy},
-		size = {w, h},
-	}
-
-	append(&level.platform_colliders, rect)
 }
 
 @(private = "file")

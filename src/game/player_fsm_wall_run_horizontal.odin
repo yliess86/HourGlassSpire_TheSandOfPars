@@ -24,9 +24,7 @@ player_fsm_wall_run_horizontal_enter :: proc(ctx: ^Player) {
 // - Airborne: on_side_wall (hit side wall)
 player_fsm_wall_run_horizontal_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) {
 	ctx.abilities.wall_run_timer += dt
-	sand_factor := max(1.0 - ctx.sensor.sand_immersion * SAND_WALL_RUN_PENALTY, 0)
-	water_factor := max(1.0 - ctx.sensor.water_immersion * WATER_MOVE_PENALTY, 0)
-	combined := max(sand_factor * water_factor, 0)
+	combined := player_move_factor(ctx, SAND_WALL_RUN_PENALTY, WATER_MOVE_PENALTY)
 	ctx.transform.vel.x = PLAYER_WALL_RUN_HORIZONTAL_SPEED * ctx.abilities.wall_run_dir * combined
 	ctx.transform.vel.y =
 		PLAYER_WALL_RUN_HORIZONTAL_LIFT * combined -

@@ -50,10 +50,6 @@ debug_point :: proc(pos: [2]f32, color: [4]u8 = DEBUG_COLOR_STATE) {
 	sdl.RenderLine(game.win.renderer, sp.x, sp.y - DEBUG_CROSS_HALF, sp.x, sp.y + DEBUG_CROSS_HALF)
 }
 
-debug_point_player :: proc(pos: [2]f32) {
-	debug_point(pos, DEBUG_COLOR_PLAYER)
-}
-
 debug_vector :: proc(pos: [2]f32, dir: [2]f32, color: [4]u8) {
 	sp := game_world_to_screen_point(pos)
 	sd := game_world_to_screen_point(pos + dir)

@@ -5,33 +5,22 @@ import "core:math"
 import "core:math/rand"
 import sdl "vendor:sdl3"
 
-// Compute sand immersion ratio (0.0–1.0) from player's tile footprint
-sand_compute_immersion :: proc(sand: ^Sand_World, player: ^Player) -> f32 {
+// Compute immersion ratio (0.0–1.0) for a set of materials in the player's footprint
+sand_compute_immersion :: proc(
+	sand: ^Sand_World,
+	player: ^Player,
+	materials: bit_set[Sand_Material],
+) -> f32 {
 	if sand.width == 0 || sand.height == 0 do return 0
 	x0, y0, x1, y1 := sand_player_footprint(sand, player)
 	total := max((x1 - x0 + 1) * (y1 - y0 + 1), 1)
-	sand_count := 0
+	count := 0
 	for ty in y0 ..= y1 {
 		for tx in x0 ..= x1 {
-			mat := sand_get(sand, tx, ty).material
-			if sand_in_bounds(sand, tx, ty) && (mat == .Sand || mat == .Wet_Sand) do sand_count += 1
+			if sand_in_bounds(sand, tx, ty) && sand_get(sand, tx, ty).material in materials do count += 1
 		}
 	}
-	return f32(sand_count) / f32(total)
-}
-
-// Compute water immersion ratio (0.0–1.0) from player's tile footprint
-sand_compute_water_immersion :: proc(sand: ^Sand_World, player: ^Player) -> f32 {
-	if sand.width == 0 || sand.height == 0 do return 0
-	x0, y0, x1, y1 := sand_player_footprint(sand, player)
-	total := max((x1 - x0 + 1) * (y1 - y0 + 1), 1)
-	water_count := 0
-	for ty in y0 ..= y1 {
-		for tx in x0 ..= x1 {
-			if sand_in_bounds(sand, tx, ty) && sand_get(sand, tx, ty).material == .Water do water_count += 1
-		}
-	}
-	return f32(water_count) / f32(total)
+	return f32(count) / f32(total)
 }
 
 // Find topmost sand cell surface Y in a column near the player's feet
@@ -217,7 +206,7 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 			count :=
 				impact_factor > 0 ? int(math.lerp(f32(SAND_IMPACT_PARTICLE_MIN), f32(SAND_IMPACT_PARTICLE_MAX), impact_factor)) : min(sand_displaced, int(SAND_DISPLACE_PARTICLE_MAX))
 			speed_mult := math.lerp(f32(1), SAND_IMPACT_PARTICLE_SPEED_MULT, impact_factor)
-			sand_particles_emit_scaled(
+			sand_particles_emit(
 				&game.sand_particles,
 				emit_pos,
 				spread,
@@ -257,47 +246,31 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 
 	// Sand_Swim: light displacement drag only, skip heavy forces
 	if player.fsm.current == .Sand_Swim {
-		if sand_displaced > 0 {
-			drag := SAND_SWIM_DRAG_FACTOR * SAND_PLAYER_DRAG_MAX
-			player.transform.vel.x *= (1.0 - drag)
-			player.transform.vel.y *= (1.0 - drag * SAND_PLAYER_DRAG_Y_FACTOR)
-		}
-		if wet_sand_displaced > 0 {
-			drag := SAND_SWIM_DRAG_FACTOR * WET_SAND_PLAYER_DRAG_MAX
-			player.transform.vel.x *= (1.0 - drag)
-			player.transform.vel.y *= (1.0 - drag * WET_SAND_PLAYER_DRAG_Y_FACTOR)
-		}
-		if water_displaced > 0 {
-			drag := min(f32(water_displaced) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX)
-			player.transform.vel.x *= (1.0 - drag)
-			player.transform.vel.y *= (1.0 - drag * WATER_PLAYER_DRAG_Y_FACTOR)
-		}
+		if sand_displaced > 0 do sand_apply_drag(&player.transform.vel, SAND_SWIM_DRAG_FACTOR * SAND_PLAYER_DRAG_MAX, SAND_PLAYER_DRAG_Y_FACTOR, false)
+		if wet_sand_displaced > 0 do sand_apply_drag(&player.transform.vel, SAND_SWIM_DRAG_FACTOR * WET_SAND_PLAYER_DRAG_MAX, WET_SAND_PLAYER_DRAG_Y_FACTOR, false)
+		if water_displaced > 0 do sand_apply_drag(&player.transform.vel, min(f32(water_displaced) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX), WATER_PLAYER_DRAG_Y_FACTOR, false)
 		// Skip to water buoyancy + current (below)
 	} else {
 		// Sand drag — quadratic scaling by immersion, skip Y drag when jumping
 		if sand_displaced > 0 {
 			immersion := player.sensor.sand_immersion
-			effective_drag := immersion * immersion * SAND_PLAYER_DRAG_MAX
-			player.transform.vel.x *= (1.0 - effective_drag)
-			if player.transform.vel.y <= 0 do player.transform.vel.y *= (1.0 - effective_drag * SAND_PLAYER_DRAG_Y_FACTOR)
+			sand_apply_drag(
+				&player.transform.vel,
+				immersion * immersion * SAND_PLAYER_DRAG_MAX,
+				SAND_PLAYER_DRAG_Y_FACTOR,
+				true,
+			)
 		}
-
 		// Wet sand drag — higher than dry sand
 		if wet_sand_displaced > 0 {
 			drag := min(
 				f32(wet_sand_displaced) * WET_SAND_PLAYER_DRAG_PER_CELL,
 				WET_SAND_PLAYER_DRAG_MAX,
 			)
-			player.transform.vel.x *= (1.0 - drag)
-			if player.transform.vel.y <= 0 do player.transform.vel.y *= (1.0 - drag * WET_SAND_PLAYER_DRAG_Y_FACTOR)
+			sand_apply_drag(&player.transform.vel, drag, WET_SAND_PLAYER_DRAG_Y_FACTOR, true)
 		}
-
 		// Water drag — full horizontal, reduced vertical
-		if water_displaced > 0 {
-			drag := min(f32(water_displaced) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX)
-			player.transform.vel.x *= (1.0 - drag)
-			player.transform.vel.y *= (1.0 - drag * WATER_PLAYER_DRAG_Y_FACTOR)
-		}
+		if water_displaced > 0 do sand_apply_drag(&player.transform.vel, min(f32(water_displaced) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX), WATER_PLAYER_DRAG_Y_FACTOR, false)
 
 		// Pressure: count sand/wet sand cells directly above player (water does not create pressure)
 		// Gap tolerance: scan past small empty gaps in the column
@@ -331,7 +304,7 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 	}
 
 	// Buoyancy: upward force scaled by water immersion ratio
-	water_immersion := sand_compute_water_immersion(sand, player)
+	water_immersion := sand_compute_immersion(sand, player, {.Water})
 	if water_immersion > WATER_BUOYANCY_THRESHOLD {
 		buoyancy := water_immersion * WATER_BUOYANCY_FORCE
 		player.transform.vel.y += buoyancy * dt
@@ -398,7 +371,7 @@ sand_dash_carve :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 		half_spread: f32 = math.PI / 3
 		vel_bias := [2]f32{-dash_dir * PLAYER_DASH_SPEED * 0.1, 0}
 		if sand_carved > 0 {
-			sand_particles_emit_scaled(
+			sand_particles_emit(
 				&game.sand_particles,
 				emit_pos,
 				spread,
@@ -411,7 +384,7 @@ sand_dash_carve :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 			)
 		}
 		if water_carved > 0 {
-			sand_particles_emit_scaled(
+			sand_particles_emit(
 				&game.sand_particles,
 				emit_pos,
 				spread,
@@ -439,27 +412,15 @@ sand_dash_carve :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 			else if mat == .Water do water_count += 1
 		}
 	}
-	if sand_count > 0 {
-		drag :=
-			min(f32(sand_count) * SAND_PLAYER_DRAG_PER_CELL, SAND_PLAYER_DRAG_MAX) *
-			SAND_DASH_DRAG_FACTOR
-		player.transform.vel.x *= (1.0 - drag)
-		player.transform.vel.y *= (1.0 - drag * SAND_PLAYER_DRAG_Y_FACTOR)
-	}
-	if wet_sand_count > 0 {
-		drag :=
-			min(f32(wet_sand_count) * WET_SAND_PLAYER_DRAG_PER_CELL, WET_SAND_PLAYER_DRAG_MAX) *
-			SAND_DASH_DRAG_FACTOR
-		player.transform.vel.x *= (1.0 - drag)
-		player.transform.vel.y *= (1.0 - drag * WET_SAND_PLAYER_DRAG_Y_FACTOR)
-	}
-	if water_count > 0 {
-		drag :=
-			min(f32(water_count) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX) *
-			SAND_DASH_DRAG_FACTOR
-		player.transform.vel.x *= (1.0 - drag)
-		player.transform.vel.y *= (1.0 - drag * WATER_PLAYER_DRAG_Y_FACTOR)
-	}
+	if sand_count > 0 do sand_apply_drag(&player.transform.vel, min(f32(sand_count) * SAND_PLAYER_DRAG_PER_CELL, SAND_PLAYER_DRAG_MAX) * SAND_DASH_DRAG_FACTOR, SAND_PLAYER_DRAG_Y_FACTOR, false)
+	if wet_sand_count > 0 do sand_apply_drag(&player.transform.vel, min(f32(wet_sand_count) * WET_SAND_PLAYER_DRAG_PER_CELL, WET_SAND_PLAYER_DRAG_MAX) * SAND_DASH_DRAG_FACTOR, WET_SAND_PLAYER_DRAG_Y_FACTOR, false)
+	if water_count > 0 do sand_apply_drag(&player.transform.vel, min(f32(water_count) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX) * SAND_DASH_DRAG_FACTOR, WATER_PLAYER_DRAG_Y_FACTOR, false)
+}
+
+@(private = "file")
+sand_apply_drag :: proc(vel: ^[2]f32, drag, y_factor: f32, skip_positive_y: bool) {
+	vel.x *= (1.0 - drag)
+	if !skip_positive_y || vel.y <= 0 do vel.y *= (1.0 - drag * y_factor)
 }
 
 // Compute the cell range overlapping the player collider
@@ -549,22 +510,9 @@ sand_try_displace_to :: proc(sand: ^Sand_World, sx, sy, dx, dy: int, depth: int 
 	src_idx := sy * sand.width + sx
 	sand.cells[dst_idx] = sand.cells[src_idx]
 	sand.cells[dst_idx].sleep_counter = 0
-	sand_cell_reset_fall(&sand.cells[dst_idx]) // Displacement is not natural fall
+	sand_cell_reset_fall(&sand.cells[dst_idx])
 	sand.cells[src_idx] = Sand_Cell{}
-
-	sand_wake_neighbors(sand, sx, sy)
-	sand_wake_neighbors(sand, dx, dy)
-	sand_chunk_mark_dirty(sand, sx, sy)
-	sand_chunk_mark_dirty(sand, dx, dy)
-
-	// Update chunk active counts if crossing chunk boundary
-	if sx / int(SAND_CHUNK_SIZE) != dx / int(SAND_CHUNK_SIZE) ||
-	   sy / int(SAND_CHUNK_SIZE) != dy / int(SAND_CHUNK_SIZE) {
-		src_chunk := sand_chunk_at(sand, sx, sy)
-		dst_chunk := sand_chunk_at(sand, dx, dy)
-		if src_chunk != nil && src_chunk.active_count > 0 do src_chunk.active_count -= 1
-		if dst_chunk != nil do dst_chunk.active_count += 1
-	}
+	sand_finalize_move(sand, sx, sy, dx, dy)
 
 	return true
 }
@@ -584,18 +532,7 @@ sand_eject_cell_up :: proc(sand: ^Sand_World, tx, ty, ceil_ty, push_dx: int) -> 
 		sand.cells[dst_idx].sleep_counter = 0
 		sand_cell_reset_fall(&sand.cells[dst_idx])
 		sand.cells[src_idx] = Sand_Cell{}
-
-		sand_wake_neighbors(sand, tx, ty)
-		sand_wake_neighbors(sand, tx, eject_y)
-		sand_chunk_mark_dirty(sand, tx, ty)
-		sand_chunk_mark_dirty(sand, tx, eject_y)
-
-		if ty / int(SAND_CHUNK_SIZE) != eject_y / int(SAND_CHUNK_SIZE) {
-			src_chunk := sand_chunk_at(sand, tx, ty)
-			dst_chunk := sand_chunk_at(sand, tx, eject_y)
-			if src_chunk != nil && src_chunk.active_count > 0 do src_chunk.active_count -= 1
-			if dst_chunk != nil do dst_chunk.active_count += 1
-		}
+		sand_finalize_move(sand, tx, ty, tx, eject_y)
 		return true
 	}
 	return sand_displace_cell(sand, tx, ty, push_dx)
@@ -609,29 +546,7 @@ sand_particles_emit :: proc(
 	vel_bias: [2]f32,
 	color: [4]u8,
 	count: int,
-) {
-	sand_particles_emit_scaled(
-		pool,
-		pos,
-		spread_x,
-		base_angle,
-		half_spread,
-		vel_bias,
-		color,
-		count,
-		1.0,
-	)
-}
-
-@(private = "file")
-sand_particles_emit_scaled :: proc(
-	pool: ^engine.Particle_Pool,
-	pos: [2]f32,
-	spread_x, base_angle, half_spread: f32,
-	vel_bias: [2]f32,
-	color: [4]u8,
-	count: int,
-	speed_mult: f32,
+	speed_mult: f32 = 1.0,
 ) {
 	for _ in 0 ..< count {
 		spawn_pos := pos + {rand.float32() * spread_x * 2 - spread_x, 0}

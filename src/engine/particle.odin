@@ -33,7 +33,3 @@ particle_pool_update :: proc(pool: ^Particle_Pool, dt: f32) {
 		i -= 1
 	}
 }
-
-particle_pool_clear :: proc(pool: ^Particle_Pool) {
-	pool.count = 0
-}

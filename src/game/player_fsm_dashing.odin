@@ -42,10 +42,7 @@ player_fsm_dashing_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) 
 		return .Airborne
 	}
 
-	speed := PLAYER_DASH_SPEED
-	sand_factor := max(1.0 - ctx.sensor.sand_immersion * SAND_MOVE_PENALTY, 0)
-	water_factor := max(1.0 - ctx.sensor.water_immersion * WATER_MOVE_PENALTY, 0)
-	speed *= max(sand_factor * water_factor, 0)
+	speed := PLAYER_DASH_SPEED * player_move_factor(ctx, SAND_MOVE_PENALTY, WATER_MOVE_PENALTY)
 	if ctx.sensor.on_slope {
 		uphill := ctx.abilities.dash_dir == ctx.sensor.on_slope_dir
 		if uphill {

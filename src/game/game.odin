@@ -137,8 +137,8 @@ game_fixed_update :: proc(dt: f32) {
 game_render :: proc() {
 	level_render(&game.level)
 	sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
-	player_particles_step_render(&game.steps)
-	player_particles_dust_render(&game.dust)
+	player_particles_render(&game.steps)
+	player_particles_render(&game.dust)
 	player_graphics_render(&game.player)
 	sand_particles_render(&game.sand_particles)
 	sand_graphics_render(&game.sand)

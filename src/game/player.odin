@@ -55,6 +55,37 @@ Player :: struct {
 	sensor:    Player_Sensor,
 }
 
+// Perform a wall jump from a side wall. Returns true if jump executed.
+player_wall_jump :: proc(ctx: ^Player) -> bool {
+	if ctx.abilities.jump_buffer_timer <= 0 || !ctx.sensor.on_side_wall do return false
+	ctx.transform.pos.x -= ctx.sensor.on_side_wall_dir * EPS
+	ctx.transform.vel.y = PLAYER_WALL_JUMP_VERTICAL_MULT * PLAYER_JUMP_FORCE
+	ctx.transform.vel.x = -ctx.sensor.on_side_wall_dir * PLAYER_WALL_JUMP_FORCE
+	if ctx.sensor.on_sand_wall {
+		ctx.transform.vel.y *= SAND_WALL_JUMP_MULT
+		ctx.transform.vel.x *= SAND_WALL_JUMP_MULT
+	}
+	ctx.abilities.jump_buffer_timer = 0
+	wall_pos := [2]f32 {
+		ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2,
+		ctx.transform.pos.y + PLAYER_SIZE / 2,
+	}
+	player_particles_dust_emit(
+		&game.dust,
+		wall_pos,
+		{-ctx.sensor.on_side_wall_dir * PLAYER_PARTICLE_DUST_SPEED_MAX, 0},
+		int(PLAYER_PARTICLE_DUST_WALL_JUMP_COUNT),
+	)
+	player_particles_step_emit(&game.steps, wall_pos)
+	return true
+}
+
+player_move_factor :: proc(ctx: ^Player, sand_penalty, water_penalty: f32) -> f32 {
+	sand := max(1.0 - ctx.sensor.sand_immersion * sand_penalty, 0)
+	water := max(1.0 - ctx.sensor.water_immersion * water_penalty, 0)
+	return max(sand * water, 0)
+}
+
 player_sync_collider :: proc(player: ^Player) {
 	player.collider.pos.x = player.transform.pos.x
 	player.collider.pos.y = player.transform.pos.y + PLAYER_SIZE / 2
@@ -66,8 +97,7 @@ player_init :: proc(player: ^Player) {
 	player_fsm_dashing_init(player)
 	player_fsm_dropping_init(player)
 	player_fsm_grounded_init(player)
-	player_fsm_sand_swim_init(player)
-	player_fsm_swimming_init(player)
+	player_fsm_submerged_init(player)
 	player_fsm_wall_run_horizontal_init(player)
 	player_fsm_wall_run_vertical_init(player)
 	player_fsm_wall_slide_init(player)

@@ -40,11 +40,6 @@ sand_cell_set_fall_count :: proc(cell: ^Sand_Cell, count: u8) {
 	cell.flags = (cell.flags & ~SAND_FLAG_FALL_MASK) | (min(count, 7) << SAND_FLAG_FALL_SHIFT)
 }
 
-sand_cell_increment_fall :: proc(cell: ^Sand_Cell) {
-	count := sand_cell_fall_count(cell)
-	if count < 7 do sand_cell_set_fall_count(cell, count + 1)
-}
-
 sand_cell_reset_fall :: proc(cell: ^Sand_Cell) {
 	cell.flags &= ~SAND_FLAG_FALL_MASK
 }
@@ -85,16 +80,6 @@ sand_get :: proc(sand: ^Sand_World, x, y: int) -> Sand_Cell {
 	return sand.cells[y * sand.width + x]
 }
 
-sand_set :: proc(sand: ^Sand_World, x, y: int, cell: Sand_Cell) {
-	if x < 0 || x >= sand.width || y < 0 || y >= sand.height do return
-	sand.cells[y * sand.width + x] = cell
-}
-
-sand_get_ptr :: proc(sand: ^Sand_World, x, y: int) -> ^Sand_Cell {
-	if x < 0 || x >= sand.width || y < 0 || y >= sand.height do return nil
-	return &sand.cells[y * sand.width + x]
-}
-
 sand_in_bounds :: proc(sand: ^Sand_World, x, y: int) -> bool {
 	return x >= 0 && x < sand.width && y >= 0 && y < sand.height
 }
@@ -102,6 +87,21 @@ sand_in_bounds :: proc(sand: ^Sand_World, x, y: int) -> bool {
 sand_get_slope :: proc(sand: ^Sand_World, x, y: int) -> Sand_Slope_Kind {
 	if x < 0 || x >= sand.width || y < 0 || y >= sand.height do return .None
 	return sand.slopes[y * sand.width + x]
+}
+
+// Wake neighbors, mark chunks dirty, transfer active counts across chunk boundaries.
+sand_finalize_move :: proc(sand: ^Sand_World, sx, sy, dx, dy: int) {
+	sand_wake_neighbors(sand, sx, sy)
+	sand_wake_neighbors(sand, dx, dy)
+	sand_chunk_mark_dirty(sand, sx, sy)
+	sand_chunk_mark_dirty(sand, dx, dy)
+	if sx / int(SAND_CHUNK_SIZE) != dx / int(SAND_CHUNK_SIZE) ||
+	   sy / int(SAND_CHUNK_SIZE) != dy / int(SAND_CHUNK_SIZE) {
+		src_chunk := sand_chunk_at(sand, sx, sy)
+		dst_chunk := sand_chunk_at(sand, dx, dy)
+		if src_chunk != nil && src_chunk.active_count > 0 do src_chunk.active_count -= 1
+		if dst_chunk != nil do dst_chunk.active_count += 1
+	}
 }
 
 sand_is_player_cell :: proc(sand: ^Sand_World, x, y: int) -> bool {
@@ -177,34 +177,10 @@ sand_init :: proc(sand: ^Sand_World, level: ^Level) {
 		}
 	}
 
-	// Load pre-placed sand piles from level (tile coords → fill all cells in tile)
-	for pos in level.sand_piles {
-		for cell_dy in 0 ..< int(SAND_CELLS_PER_TILE) {
-			for cell_dx in 0 ..< int(SAND_CELLS_PER_TILE) {
-				sand_x := pos.x * int(SAND_CELLS_PER_TILE) + cell_dx
-				sand_y := pos.y * int(SAND_CELLS_PER_TILE) + cell_dy
-				idx := sand_y * sand.width + sand_x
-				sand.cells[idx].material = .Sand
-				sand.cells[idx].color_variant = wang_hash(sand_x, sand_y)
-				sand_chunk_mark_dirty(sand, sand_x, sand_y)
-			}
-		}
-	}
+	// Load pre-placed sand and water piles from level
+	sand_load_piles(sand, level.sand_piles[:], .Sand)
 	delete(level.sand_piles)
-
-	// Load pre-placed water pools from level (tile coords → fill all cells in tile)
-	for pos in level.water_piles {
-		for cell_dy in 0 ..< int(SAND_CELLS_PER_TILE) {
-			for cell_dx in 0 ..< int(SAND_CELLS_PER_TILE) {
-				sand_x := pos.x * int(SAND_CELLS_PER_TILE) + cell_dx
-				sand_y := pos.y * int(SAND_CELLS_PER_TILE) + cell_dy
-				idx := sand_y * sand.width + sand_x
-				sand.cells[idx].material = .Water
-				sand.cells[idx].color_variant = wang_hash(sand_x, sand_y)
-				sand_chunk_mark_dirty(sand, sand_x, sand_y)
-			}
-		}
-	}
+	sand_load_piles(sand, level.water_piles[:], .Water)
 	delete(level.water_piles)
 
 	// Load emitters from level
@@ -216,6 +192,22 @@ sand_init :: proc(sand: ^Sand_World, level: ^Level) {
 
 	// Initial chunk active counts
 	sand_chunk_recount(sand)
+}
+
+@(private = "file")
+sand_load_piles :: proc(sand: ^Sand_World, piles: [][2]int, material: Sand_Material) {
+	for pos in piles {
+		for cell_dy in 0 ..< int(SAND_CELLS_PER_TILE) {
+			for cell_dx in 0 ..< int(SAND_CELLS_PER_TILE) {
+				sand_x := pos.x * int(SAND_CELLS_PER_TILE) + cell_dx
+				sand_y := pos.y * int(SAND_CELLS_PER_TILE) + cell_dy
+				idx := sand_y * sand.width + sand_x
+				sand.cells[idx].material = material
+				sand.cells[idx].color_variant = wang_hash(sand_x, sand_y)
+				sand_chunk_mark_dirty(sand, sand_x, sand_y)
+			}
+		}
+	}
 }
 
 sand_destroy :: proc(sand: ^Sand_World) {

@@ -17,24 +17,8 @@ wet_sand_color_lut: [4]sdl.FColor
 water_color_lut: [WATER_COLOR_LUT_SIZE]sdl.FColor
 
 sand_graphics_init_lut :: proc() {
-	for v in 0 ..< 4 {
-		offset := i16(v) * i16(SAND_COLOR_VARIATION) - i16(SAND_COLOR_VARIATION) * 2
-		sand_color_lut[v] = {
-			f32(math.clamp(i16(SAND_COLOR.r) + offset, 0, 255)) / 255,
-			f32(math.clamp(i16(SAND_COLOR.g) + offset, 0, 255)) / 255,
-			f32(math.clamp(i16(SAND_COLOR.b) + offset, 0, 255)) / 255,
-			f32(SAND_COLOR.a) / 255,
-		}
-	}
-	for v in 0 ..< 4 {
-		offset := i16(v) * i16(WET_SAND_COLOR_VARIATION) - i16(WET_SAND_COLOR_VARIATION) * 2
-		wet_sand_color_lut[v] = {
-			f32(math.clamp(i16(WET_SAND_COLOR.r) + offset, 0, 255)) / 255,
-			f32(math.clamp(i16(WET_SAND_COLOR.g) + offset, 0, 255)) / 255,
-			f32(math.clamp(i16(WET_SAND_COLOR.b) + offset, 0, 255)) / 255,
-			f32(WET_SAND_COLOR.a) / 255,
-		}
-	}
+	sand_graphics_build_lut(&sand_color_lut, SAND_COLOR, SAND_COLOR_VARIATION)
+	sand_graphics_build_lut(&wet_sand_color_lut, WET_SAND_COLOR, WET_SAND_COLOR_VARIATION)
 	for d in 0 ..< WATER_COLOR_LUT_SIZE {
 		t := math.clamp(f32(d) / f32(WATER_COLOR_DEPTH_MAX), 0, 1)
 		offset := t * f32(WATER_COLOR_VARIATION) / 255
@@ -43,6 +27,19 @@ sand_graphics_init_lut :: proc() {
 			f32(WATER_COLOR.g) / 255 - min(offset, f32(WATER_COLOR.g) / 255),
 			f32(WATER_COLOR.b) / 255 - min(offset, f32(WATER_COLOR.b) / 255),
 			f32(WATER_COLOR.a) / 255,
+		}
+	}
+}
+
+@(private = "file")
+sand_graphics_build_lut :: proc(lut: ^[4]sdl.FColor, base: [4]u8, variation: u8) {
+	for v in 0 ..< 4 {
+		offset := i16(v) * i16(variation) - i16(variation) * 2
+		lut[v] = {
+			f32(math.clamp(i16(base.r) + offset, 0, 255)) / 255,
+			f32(math.clamp(i16(base.g) + offset, 0, 255)) / 255,
+			f32(math.clamp(i16(base.b) + offset, 0, 255)) / 255,
+			f32(base.a) / 255,
 		}
 	}
 }
@@ -202,17 +199,6 @@ sand_graphics_batch_slope_tri :: proc(
 	)
 	append(&batch.indices, base, base + 1, base + 2)
 }
-
-sand_graphics_sand_color :: proc(cell: Sand_Cell) -> [4]u8 {
-	offset := i16(cell.color_variant) * i16(SAND_COLOR_VARIATION) - i16(SAND_COLOR_VARIATION) * 2
-	return {
-		u8(math.clamp(i16(SAND_COLOR.r) + offset, 0, 255)),
-		u8(math.clamp(i16(SAND_COLOR.g) + offset, 0, 255)),
-		u8(math.clamp(i16(SAND_COLOR.b) + offset, 0, 255)),
-		SAND_COLOR.a,
-	}
-}
-
 
 sand_graphics_debug :: proc(sand: ^Sand_World) {
 	if game.debug != .SAND && game.debug != .ALL do return

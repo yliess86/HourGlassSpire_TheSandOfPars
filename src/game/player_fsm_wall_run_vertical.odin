@@ -32,9 +32,7 @@ player_fsm_wall_run_vertical_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Play
 
 	speed := PLAYER_WALL_RUN_VERTICAL_SPEED
 	decay := PLAYER_WALL_RUN_VERTICAL_DECAY
-	sand_factor := max(1.0 - ctx.sensor.sand_immersion * SAND_WALL_RUN_PENALTY, 0)
-	water_factor := max(1.0 - ctx.sensor.water_immersion * WATER_MOVE_PENALTY, 0)
-	combined := max(sand_factor * water_factor, 0)
+	combined := player_move_factor(ctx, SAND_WALL_RUN_PENALTY, WATER_MOVE_PENALTY)
 	ctx.transform.vel.y = speed * combined * math.exp(-decay * ctx.abilities.wall_run_timer)
 	ctx.transform.vel.x = 0
 
@@ -49,38 +47,19 @@ player_fsm_wall_run_vertical_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Play
 
 	if ctx.sensor.on_sand_wall do sand_wall_erode(&game.sand, ctx)
 
+	if player_wall_jump(ctx) do return .Airborne
 	if ctx.abilities.jump_buffer_timer > 0 {
-		if ctx.sensor.on_side_wall {
-			ctx.transform.pos.x -= ctx.sensor.on_side_wall_dir * EPS
-			ctx.transform.vel.y = PLAYER_WALL_JUMP_VERTICAL_MULT * PLAYER_JUMP_FORCE
-			ctx.transform.vel.x = -ctx.sensor.on_side_wall_dir * PLAYER_WALL_JUMP_FORCE
-			if ctx.sensor.on_sand_wall {
-				ctx.transform.vel.y *= SAND_WALL_JUMP_MULT
-				ctx.transform.vel.x *= SAND_WALL_JUMP_MULT
-			}
-			wall_pos := [2]f32 {
-				ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2,
-				ctx.transform.pos.y + PLAYER_SIZE / 2,
-			}
-			player_particles_dust_emit(
-				&game.dust,
-				wall_pos,
-				{-ctx.sensor.on_side_wall_dir * PLAYER_PARTICLE_DUST_SPEED_MAX, 0},
-				int(PLAYER_PARTICLE_DUST_WALL_JUMP_COUNT),
-			)
-			player_particles_step_emit(&game.steps, wall_pos)
-		} else {
-			ctx.transform.vel.y = PLAYER_JUMP_FORCE
-			if ctx.sensor.on_sand_wall do ctx.transform.vel.y *= SAND_WALL_JUMP_MULT
-			player_particles_dust_emit(
-				&game.dust,
-				ctx.transform.pos,
-				{0, -PLAYER_PARTICLE_DUST_SPEED_MAX},
-				int(PLAYER_PARTICLE_DUST_WALL_JUMP_COUNT),
-			)
-			player_particles_step_emit(&game.steps, ctx.transform.pos)
-		}
+		// Back wall: straight-up jump
+		ctx.transform.vel.y = PLAYER_JUMP_FORCE
+		if ctx.sensor.on_sand_wall do ctx.transform.vel.y *= SAND_WALL_JUMP_MULT
 		ctx.abilities.jump_buffer_timer = 0
+		player_particles_dust_emit(
+			&game.dust,
+			ctx.transform.pos,
+			{0, -PLAYER_PARTICLE_DUST_SPEED_MAX},
+			int(PLAYER_PARTICLE_DUST_WALL_JUMP_COUNT),
+		)
+		player_particles_step_emit(&game.steps, ctx.transform.pos)
 		return .Airborne
 	}
 
