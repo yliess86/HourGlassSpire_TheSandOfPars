@@ -381,7 +381,10 @@ sand_graphics_debug :: proc(world: ^engine.Sand_World) {
 	y1 := min(int(cam_tr.y / engine.SAND_CELL_SIZE) + 1, world.height)
 
 	// Stress heatmap: compute pressure per visible column (top-down)
-	sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
+	heatmap_batch := Sand_Render_Batch {
+		vertices = make([dynamic]sdl.Vertex, 0, 4000, context.temp_allocator),
+		indices  = make([dynamic]c.int, 0, 6000, context.temp_allocator),
+	}
 	for x in x0 ..< x1 {
 		pressure: f32 = 0
 		for y := min(y1, world.height) - 1; y >= y0; y -= 1 {
@@ -398,16 +401,35 @@ sand_graphics_debug :: proc(world: ^engine.Sand_World) {
 				else if t < engine.SAND_DEBUG_HEATMAP_HIGH do color = engine.SAND_DEBUG_COLOR_MID
 				else do color = engine.SAND_DEBUG_COLOR_HIGH
 
-				world_pos := [2]f32{f32(x) * engine.SAND_CELL_SIZE, f32(y) * engine.SAND_CELL_SIZE}
-				world_size := [2]f32{engine.SAND_CELL_SIZE, engine.SAND_CELL_SIZE}
-				rect := game_world_to_screen(world_pos, world_size)
-				sdl.SetRenderDrawColor(game.win.renderer, color.r, color.g, color.b, color.a)
-				sdl.RenderFillRect(game.win.renderer, &rect)
+				fc := sdl.FColor {
+					f32(color.r) / 255,
+					f32(color.g) / 255,
+					f32(color.b) / 255,
+					f32(color.a) / 255,
+				}
+				sand_graphics_batch_rect(&heatmap_batch, x, y, fc)
 			}
 		}
 	}
+	if len(heatmap_batch.indices) > 0 {
+		sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
+		sdl.RenderGeometry(
+			game.win.renderer,
+			nil,
+			raw_data(heatmap_batch.vertices[:]),
+			c.int(len(heatmap_batch.vertices)),
+			raw_data(heatmap_batch.indices[:]),
+			c.int(len(heatmap_batch.indices)),
+		)
+		sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_NONE)
+	}
 
 	// Sleeping particles dimmed overlay (includes particles in inactive chunks)
+	sleep_batch := Sand_Render_Batch {
+		vertices = make([dynamic]sdl.Vertex, 0, 4000, context.temp_allocator),
+		indices  = make([dynamic]c.int, 0, 6000, context.temp_allocator),
+	}
+	sleep_fc := sdl.FColor{0, 0, 0, f32(engine.SAND_DEBUG_SLEEP_DIM) / 255}
 	for y in y0 ..< y1 {
 		for x in x0 ..< x1 {
 			cell := world.cells[y * world.width + x]
@@ -417,18 +439,36 @@ sand_graphics_debug :: proc(world: ^engine.Sand_World) {
 			if !is_sleeping {
 				chunk := engine.sand_chunk_at(world, x, y)
 				is_sleeping = chunk != nil && !chunk.needs_sim
-				continue
 			}
+			if !is_sleeping do continue
 
-			world_pos := [2]f32{f32(x) * engine.SAND_CELL_SIZE, f32(y) * engine.SAND_CELL_SIZE}
-			world_size := [2]f32{engine.SAND_CELL_SIZE, engine.SAND_CELL_SIZE}
-			rect := game_world_to_screen(world_pos, world_size)
-			sdl.SetRenderDrawColor(game.win.renderer, 0, 0, 0, engine.SAND_DEBUG_SLEEP_DIM)
-			sdl.RenderFillRect(game.win.renderer, &rect)
+			sand_graphics_batch_rect(&sleep_batch, x, y, sleep_fc)
 		}
+	}
+	if len(sleep_batch.indices) > 0 {
+		sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
+		sdl.RenderGeometry(
+			game.win.renderer,
+			nil,
+			raw_data(sleep_batch.vertices[:]),
+			c.int(len(sleep_batch.vertices)),
+			raw_data(sleep_batch.indices[:]),
+			c.int(len(sleep_batch.indices)),
+		)
+		sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_NONE)
 	}
 
 	// Chunk boundaries and active chunk highlighting
+	chunk_batch := Sand_Render_Batch {
+		vertices = make([dynamic]sdl.Vertex, 0, 256, context.temp_allocator),
+		indices  = make([dynamic]c.int, 0, 384, context.temp_allocator),
+	}
+	chunk_fc := sdl.FColor {
+		f32(engine.SAND_DEBUG_COLOR_CHUNK.r) / 255,
+		f32(engine.SAND_DEBUG_COLOR_CHUNK.g) / 255,
+		f32(engine.SAND_DEBUG_COLOR_CHUNK.b) / 255,
+		f32(engine.SAND_DEBUG_COLOR_CHUNK.a) / 255,
+	}
 	for cy in 0 ..< world.chunks_h {
 		for cx in 0 ..< world.chunks_w {
 			cs := int(engine.SAND_CHUNK_SIZE)
@@ -437,20 +477,44 @@ sand_graphics_debug :: proc(world: ^engine.Sand_World) {
 			chunk_w := f32(min((cx + 1) * cs, world.width) - cx * cs) * engine.SAND_CELL_SIZE
 			chunk_h := f32(min((cy + 1) * cs, world.height) - cy * cs) * engine.SAND_CELL_SIZE
 
+			if chunk_x0 + chunk_w < cam_bl.x || chunk_x0 > cam_tr.x do continue
+			if chunk_y0 + chunk_h < cam_bl.y || chunk_y0 > cam_tr.y do continue
+
 			world_pos := [2]f32{chunk_x0, chunk_y0}
 			world_size := [2]f32{chunk_w, chunk_h}
 			rect := game_world_to_screen(world_pos, world_size)
 
 			chunk := world.chunks[cy * world.chunks_w + cx]
 			if chunk.needs_sim {
-				sdl.SetRenderDrawColor(
-					game.win.renderer,
-					engine.SAND_DEBUG_COLOR_CHUNK.r,
-					engine.SAND_DEBUG_COLOR_CHUNK.g,
-					engine.SAND_DEBUG_COLOR_CHUNK.b,
-					engine.SAND_DEBUG_COLOR_CHUNK.a,
+				base := c.int(len(chunk_batch.vertices))
+				append(
+					&chunk_batch.vertices,
+					sdl.Vertex{position = {rect.x, rect.y}, color = chunk_fc, tex_coord = {0, 0}},
+					sdl.Vertex {
+						position = {rect.x + rect.w, rect.y},
+						color = chunk_fc,
+						tex_coord = {0, 0},
+					},
+					sdl.Vertex {
+						position = {rect.x, rect.y + rect.h},
+						color = chunk_fc,
+						tex_coord = {0, 0},
+					},
+					sdl.Vertex {
+						position = {rect.x + rect.w, rect.y + rect.h},
+						color = chunk_fc,
+						tex_coord = {0, 0},
+					},
 				)
-				sdl.RenderFillRect(game.win.renderer, &rect)
+				append(
+					&chunk_batch.indices,
+					base,
+					base + 1,
+					base + 2,
+					base + 1,
+					base + 3,
+					base + 2,
+				)
 			}
 
 			sdl.SetRenderDrawColor(
@@ -462,6 +526,18 @@ sand_graphics_debug :: proc(world: ^engine.Sand_World) {
 			)
 			sdl.RenderRect(game.win.renderer, &rect)
 		}
+	}
+	if len(chunk_batch.indices) > 0 {
+		sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
+		sdl.RenderGeometry(
+			game.win.renderer,
+			nil,
+			raw_data(chunk_batch.vertices[:]),
+			c.int(len(chunk_batch.vertices)),
+			raw_data(chunk_batch.indices[:]),
+			c.int(len(chunk_batch.indices)),
+		)
+		sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_NONE)
 	}
 
 	// Emitter markers
@@ -478,6 +554,7 @@ sand_graphics_debug :: proc(world: ^engine.Sand_World) {
 		)
 		sdl.RenderRect(game.win.renderer, &rect)
 	}
+
 
 	// Stats text
 	sand_count := 0
@@ -508,41 +585,51 @@ sand_graphics_debug :: proc(world: ^engine.Sand_World) {
 	}
 	active_chunks := 0
 	for chunk in world.chunks do if chunk.needs_sim do active_chunks += 1
-	sleeping_chunks := len(world.chunks) - active_chunks
 
-	// Render stats: [NAME]: [ACTIVE] / [TOTAL]
+	// Render stats: [NAME]: [ACTIVE] / [TOTAL] - [PERCENT] %
 	stats_y := DEBUG_TEXT_MARGIN_Y + f32(engine.SAND_DEBUG_STATS_LINE_OFFSET) * DEBUG_TEXT_LINE_H
 	sand_active := sand_count - sand_sleeping
 	wet_active := wet_sand_count - wet_sand_sleeping
 	water_active := water_count - water_sleeping
+	sand_pct := sand_count > 0 ? 100 * f32(sand_active) / f32(sand_count) : 0
+	wet_pct := wet_sand_count > 0 ? 100 * f32(wet_active) / f32(wet_sand_count) : 0
+	water_pct := water_count > 0 ? 100 * f32(water_active) / f32(water_count) : 0
+	chunk_pct := len(world.chunks) > 0 ? 100 * f32(active_chunks) / f32(len(world.chunks)) : 0
+	proj_pct :=
+		engine.SAND_PROJ_MAX_COUNT > 0 ? 100 * f32(len(world.projectiles)) / f32(engine.SAND_PROJ_MAX_COUNT) : 0
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,
 		stats_y,
 		"Sand:",
-		fmt.ctprintf("%d / %d", sand_active, sand_count),
+		fmt.ctprintf("%d / %d - %.2f %%", sand_active, sand_count, sand_pct),
 	)
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,
 		stats_y + DEBUG_TEXT_LINE_H,
 		"Wet Sand:",
-		fmt.ctprintf("%d / %d", wet_active, wet_sand_count),
+		fmt.ctprintf("%d / %d - %.2f %%", wet_active, wet_sand_count, wet_pct),
 	)
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,
 		stats_y + 2 * DEBUG_TEXT_LINE_H,
 		"Water:",
-		fmt.ctprintf("%d / %d", water_active, water_count),
+		fmt.ctprintf("%d / %d - %.2f %%", water_active, water_count, water_pct),
 	)
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,
 		stats_y + 3 * DEBUG_TEXT_LINE_H,
 		"Chunks:",
-		fmt.ctprintf("%d / %d", active_chunks, len(world.chunks)),
+		fmt.ctprintf("%d / %d - %.2f %%", active_chunks, len(world.chunks), chunk_pct),
 	)
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,
 		stats_y + 4 * DEBUG_TEXT_LINE_H,
 		"Projectiles:",
-		fmt.ctprintf("%d / %d", len(world.projectiles), int(engine.SAND_PROJ_MAX_COUNT)),
+		fmt.ctprintf(
+			"%d / %d - %.2f %%",
+			len(world.projectiles),
+			int(engine.SAND_PROJ_MAX_COUNT),
+			proj_pct,
+		),
 	)
 }
