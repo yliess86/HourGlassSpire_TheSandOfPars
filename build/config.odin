@@ -121,6 +121,148 @@ config_extract_comment :: proc(raw_value: string) -> string {
 	return strings.trim_space(first[1:])
 }
 
+SAND_SECTIONS :: [?]string{"sand", "sand_debug", "water", "wet_sand"}
+
+config_is_sand_section :: proc(section: string) -> bool {
+	for s in SAND_SECTIONS do if section == s do return true
+	return false
+}
+
+type_str_len :: proc(t: Config_Entry_Type) -> int {
+	switch t {
+	case .F32:
+		return 3
+	case .U8:
+		return 2
+	case .RGBA:
+		return 5
+	case .String:
+		return 6
+	}
+	return 0
+}
+
+Config_File :: struct {
+	pkg:         string,
+	path:        string,
+	import_path: string,
+	config_var:  string,
+}
+
+config_write_file :: proc(file: Config_File, entries: []Config_Entry) -> bool {
+	b := strings.builder_make()
+	defer strings.builder_destroy(&b)
+
+	strings.write_string(
+		&b,
+		"// AUTO-GENERATED from assets/game.ini \xe2\x80\x94 do not edit manually\n",
+	)
+	fmt.sbprintf(&b, "package %s\n\n", file.pkg)
+	fmt.sbprintf(&b, "import engine \"%s\"\n", file.import_path)
+	strings.write_string(&b, "import \"core:fmt\"\n")
+
+	// Compute max declaration length for comment alignment
+	max_decl_len := 0
+	for entry in entries {
+		decl_len := len(entry.key) + 2 + type_str_len(entry.type)
+		if decl_len > max_decl_len do max_decl_len = decl_len
+	}
+
+	// Variable declarations grouped by section with aligned comments
+	prev_section := ""
+	for entry in entries {
+		if entry.section != prev_section {
+			strings.write_string(&b, "\n// [")
+			strings.write_string(&b, entry.section)
+			strings.write_string(&b, "]\n")
+			prev_section = entry.section
+		}
+		type_str: string
+		switch entry.type {
+		case .F32:
+			type_str = ": f32"
+		case .U8:
+			type_str = ": u8"
+		case .RGBA:
+			type_str = ": [4]u8"
+		case .String:
+			type_str = ": string"
+		}
+		strings.write_string(&b, entry.key)
+		strings.write_string(&b, type_str)
+		if len(entry.comment) > 0 {
+			decl_len := len(entry.key) + len(type_str)
+			for _ in 0 ..< max_decl_len - decl_len do strings.write_byte(&b, ' ')
+			strings.write_string(&b, "  // ")
+			strings.write_string(&b, entry.comment)
+		}
+		strings.write_byte(&b, '\n')
+	}
+
+	// config_apply proc
+	strings.write_string(&b, "\nconfig_apply :: proc() {\n")
+	for entry in entries {
+		strings.write_string(&b, "\tif val, ok := engine.config_get_")
+		switch entry.type {
+		case .F32:
+			strings.write_string(&b, "f32")
+		case .U8:
+			strings.write_string(&b, "u8")
+		case .RGBA:
+			strings.write_string(&b, "rgba")
+		case .String:
+			strings.write_string(&b, "string")
+		}
+		fmt.sbprintf(&b, "(&%s, \"", file.config_var)
+		strings.write_string(&b, entry.key)
+		strings.write_string(&b, "\"); ok do ")
+		strings.write_string(&b, entry.key)
+		strings.write_string(&b, " = val\n")
+	}
+	strings.write_string(&b, "}\n")
+
+	// config global
+	fmt.sbprintf(&b, "\n%s: engine.Config\n", file.config_var)
+
+	// config_load_and_apply proc
+	strings.write_string(&b, "\nconfig_load_and_apply :: proc() {\n")
+	strings.write_string(&b, "\tconfig, ok := engine.config_load(\"assets/game.ini\")\n")
+	strings.write_string(&b, "\tif !ok {\n")
+	fmt.sbprintf(&b, "\t\tfmt.eprintf(\"[%s config] Failed to load config\\n\")\n", file.pkg)
+	strings.write_string(&b, "\t\treturn\n")
+	strings.write_string(&b, "\t}\n")
+	fmt.sbprintf(&b, "\t%s = config\n", file.config_var)
+	strings.write_string(&b, "\tconfig_apply()\n")
+	strings.write_string(&b, "}\n")
+
+	// config_reload proc
+	strings.write_string(&b, "\nconfig_reload :: proc() -> bool {\n")
+	strings.write_string(&b, "\tif len(")
+	strings.write_string(&b, file.config_var)
+	strings.write_string(&b, ".path) == 0 {\n")
+	strings.write_string(&b, "\t\tconfig_load_and_apply()\n")
+	strings.write_string(&b, "\t\treturn true\n")
+	strings.write_string(&b, "\t}\n")
+	strings.write_string(&b, "\tif engine.config_reload(&")
+	strings.write_string(&b, file.config_var)
+	strings.write_string(&b, ") {\n")
+	strings.write_string(&b, "\t\tconfig_apply()\n")
+	strings.write_string(&b, "\t\treturn true\n")
+	strings.write_string(&b, "\t}\n")
+	strings.write_string(&b, "\treturn false\n")
+	strings.write_string(&b, "}\n")
+
+	output := strings.to_string(b)
+	write_ok := os.write_entire_file(file.path, transmute([]u8)output)
+	if !write_ok {
+		fmt.eprintf("Error: could not write %s\n", file.path)
+		return false
+	}
+
+	fmt.printf("Generated %s with %d entries\n", file.path, len(entries))
+	return true
+}
+
 config_game_name: string
 
 config_gen :: proc() -> bool {
@@ -191,123 +333,40 @@ config_gen :: proc() -> bool {
 
 	if len(config_game_name) == 0 do config_game_name = "game"
 
-	// Generate output
-	b := strings.builder_make()
-	defer strings.builder_destroy(&b)
+	// Partition entries: game vs sand
+	game_entries: [dynamic]Config_Entry
+	defer delete(game_entries)
+	sand_entries: [dynamic]Config_Entry
+	defer delete(sand_entries)
 
-	strings.write_string(&b, "// AUTO-GENERATED from assets/game.ini — do not edit manually\n")
-	strings.write_string(&b, "package game\n\n")
-	strings.write_string(&b, "import engine \"../engine\"\n")
-	strings.write_string(&b, "import \"core:fmt\"\n")
-
-	// Compute max declaration length for comment alignment
-	type_str_len :: proc(t: Config_Entry_Type) -> int {
-		switch t {
-		case .F32:
-			return 3 // "f32"
-		case .U8:
-			return 2 // "u8"
-		case .RGBA:
-			return 5 // "[4]u8"
-		case .String:
-			return 6 // "string"
-		}
-		return 0
-	}
-	max_decl_len := 0
 	for entry in entries {
-		decl_len := len(entry.key) + 2 + type_str_len(entry.type) // "key: type"
-		if decl_len > max_decl_len do max_decl_len = decl_len
+		if config_is_sand_section(entry.section) do append(&sand_entries, entry)
+		else do append(&game_entries, entry)
 	}
 
-	// Variable declarations grouped by section with aligned comments
-	prev_section := ""
-	for entry in entries {
-		if entry.section != prev_section {
-			strings.write_string(&b, "\n// [")
-			strings.write_string(&b, entry.section)
-			strings.write_string(&b, "]\n")
-			prev_section = entry.section
-		}
-		type_str: string
-		switch entry.type {
-		case .F32:
-			type_str = ": f32"
-		case .U8:
-			type_str = ": u8"
-		case .RGBA:
-			type_str = ": [4]u8"
-		case .String:
-			type_str = ": string"
-		}
-		strings.write_string(&b, entry.key)
-		strings.write_string(&b, type_str)
-		if len(entry.comment) > 0 {
-			decl_len := len(entry.key) + len(type_str)
-			for _ in 0 ..< max_decl_len - decl_len do strings.write_byte(&b, ' ')
-			strings.write_string(&b, "  // ")
-			strings.write_string(&b, entry.comment)
-		}
-		strings.write_byte(&b, '\n')
-	}
+	// Generate game config
+	game_ok := config_write_file(
+		{
+			pkg = "game",
+			path = "src/game/config.odin",
+			import_path = "../engine",
+			config_var = "config_game",
+		},
+		game_entries[:],
+	)
+	if !game_ok do return false
 
-	// config_apply proc
-	strings.write_string(&b, "\nconfig_apply :: proc() {\n")
-	for entry in entries {
-		strings.write_string(&b, "\tif val, ok := engine.config_get_")
-		switch entry.type {
-		case .F32:
-			strings.write_string(&b, "f32")
-		case .U8:
-			strings.write_string(&b, "u8")
-		case .RGBA:
-			strings.write_string(&b, "rgba")
-		case .String:
-			strings.write_string(&b, "string")
-		}
-		strings.write_string(&b, "(&config_game, \"")
-		strings.write_string(&b, entry.key)
-		strings.write_string(&b, "\"); ok do ")
-		strings.write_string(&b, entry.key)
-		strings.write_string(&b, " = val\n")
-	}
-	strings.write_string(&b, "}\n")
+	// Generate sand config
+	sand_ok := config_write_file(
+		{
+			pkg = "sand",
+			path = "src/sand/config.odin",
+			import_path = "../engine",
+			config_var = "config_sand",
+		},
+		sand_entries[:],
+	)
+	if !sand_ok do return false
 
-	// config_game global
-	strings.write_string(&b, "\nconfig_game: engine.Config\n")
-
-	// config_load_and_apply proc
-	strings.write_string(&b, "\nconfig_load_and_apply :: proc() {\n")
-	strings.write_string(&b, "\tconfig, ok := engine.config_load(\"assets/game.ini\")\n")
-	strings.write_string(&b, "\tif !ok {\n")
-	strings.write_string(&b, "\t\tfmt.eprintf(\"[config] Failed to load config\\n\")\n")
-	strings.write_string(&b, "\t\treturn\n")
-	strings.write_string(&b, "\t}\n")
-	strings.write_string(&b, "\tconfig_game = config\n")
-	strings.write_string(&b, "\tconfig_apply()\n")
-	strings.write_string(&b, "}\n")
-
-	// config_reload_all proc
-	strings.write_string(&b, "\nconfig_reload_all :: proc() {\n")
-	strings.write_string(&b, "\tif len(config_game.path) == 0 {\n")
-	strings.write_string(&b, "\t\tconfig_load_and_apply()\n")
-	strings.write_string(&b, "\t\tgame_config_post_apply()\n")
-	strings.write_string(&b, "\t\treturn\n")
-	strings.write_string(&b, "\t}\n")
-	strings.write_string(&b, "\tif engine.config_reload(&config_game) {\n")
-	strings.write_string(&b, "\t\tconfig_apply()\n")
-	strings.write_string(&b, "\t\tgame_config_post_apply()\n")
-	strings.write_string(&b, "\t\tfmt.eprintf(\"[config] Reloaded\\n\")\n")
-	strings.write_string(&b, "\t}\n")
-	strings.write_string(&b, "}\n")
-
-	output := strings.to_string(b)
-	write_ok := os.write_entire_file("src/game/config.odin", transmute([]u8)output)
-	if !write_ok {
-		fmt.eprintf("Error: could not write src/game/config.odin\n")
-		return false
-	}
-
-	fmt.printf("Generated src/game/config.odin with %d entries\n", len(entries))
 	return true
 }

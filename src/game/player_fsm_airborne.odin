@@ -1,5 +1,6 @@
 package game
 
+import sand "../sand"
 import "core:math"
 
 player_fsm_airborne_init :: proc(player: ^Player) {
@@ -31,8 +32,8 @@ player_fsm_airborne_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 		ctx.body.vel.y = 0
 		return .Grounded
 	}
-	if ctx.sensor.sand_immersion > SAND_SWIM_ENTER_THRESHOLD do return .Sand_Swim
-	if ctx.sensor.water_immersion > WATER_SWIM_ENTER_THRESHOLD do return .Swimming
+	if ctx.sensor.sand_immersion > sand.SAND_SWIM_ENTER_THRESHOLD do return .Sand_Swim
+	if ctx.sensor.water_immersion > sand.WATER_SWIM_ENTER_THRESHOLD do return .Swimming
 
 	if ctx.sensor.on_back_wall {
 		if game.input.is_down[.WALL_RUN] && math.abs(game.input.axis.x) > PLAYER_INPUT_AXIS_THRESHOLD && !(ctx.sensor.on_slope && math.sign(game.input.axis.x) == ctx.sensor.on_slope_dir) && !ctx.abilities.wall_run_used && ctx.abilities.wall_run_cooldown_timer <= 0 do return .Wall_Run_Horizontal

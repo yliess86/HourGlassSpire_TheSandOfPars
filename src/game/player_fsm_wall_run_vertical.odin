@@ -1,5 +1,6 @@
 package game
 
+import sand "../sand"
 import "core:math"
 
 player_fsm_wall_run_vertical_init :: proc(player: ^Player) {
@@ -32,7 +33,7 @@ player_fsm_wall_run_vertical_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Play
 
 	speed := PLAYER_WALL_RUN_VERTICAL_SPEED
 	decay := PLAYER_WALL_RUN_VERTICAL_DECAY
-	combined := player_move_factor(ctx, SAND_WALL_RUN_PENALTY, WATER_MOVE_PENALTY)
+	combined := player_move_factor(ctx, sand.SAND_WALL_RUN_PENALTY, sand.WATER_MOVE_PENALTY)
 	ctx.body.vel.y = speed * combined * math.exp(-decay * ctx.abilities.wall_run_timer)
 	ctx.body.vel.x = 0
 
@@ -45,13 +46,13 @@ player_fsm_wall_run_vertical_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Play
 		ctx.body.pos.x = ctx.sensor.on_side_wall_snap_x
 	}
 
-	if ctx.sensor.on_sand_wall do sand_wall_erode(&game.sand, ctx)
+	if ctx.sensor.on_sand_wall do sand.wall_erode(&game.sand_world, ctx.body.pos, PLAYER_SIZE, ctx.sensor.on_side_wall_dir)
 
 	if player_wall_jump(ctx) do return .Airborne
 	if ctx.abilities.jump_buffer_timer > 0 {
 		// Back wall: straight-up jump
 		ctx.body.vel.y = PLAYER_JUMP_FORCE
-		if ctx.sensor.on_sand_wall do ctx.body.vel.y *= SAND_WALL_JUMP_MULT
+		if ctx.sensor.on_sand_wall do ctx.body.vel.y *= sand.SAND_WALL_JUMP_MULT
 		ctx.abilities.jump_buffer_timer = 0
 		player_particles_dust_emit(
 			&game.dust,

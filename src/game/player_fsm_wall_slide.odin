@@ -1,5 +1,6 @@
 package game
 
+import sand "../sand"
 import "core:math"
 import "core:math/rand"
 
@@ -28,7 +29,7 @@ player_fsm_wall_slide_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_Stat
 		ctx.body.vel.x = 0
 	}
 
-	if ctx.sensor.on_sand_wall do sand_wall_erode(&game.sand, ctx)
+	if ctx.sensor.on_sand_wall do sand.wall_erode(&game.sand_world, ctx.body.pos, PLAYER_SIZE, ctx.sensor.on_side_wall_dir)
 
 	if player_wall_jump(ctx) do return .Airborne
 

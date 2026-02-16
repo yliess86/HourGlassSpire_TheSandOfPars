@@ -1,5 +1,6 @@
 package game
 
+import sand "../sand"
 import "core:math"
 
 player_fsm_submerged_init :: proc(player: ^Player) {
@@ -30,16 +31,17 @@ player_fsm_submerged_enter :: proc(ctx: ^Player) {
 player_fsm_submerged_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) {
 	in_sand := ctx.fsm.current == .Sand_Swim
 
-	move_penalty := SAND_SWIM_MOVE_PENALTY if in_sand else WATER_MOVE_PENALTY
-	lerp_speed := SAND_SWIM_LERP_SPEED if in_sand else PLAYER_MOVE_LERP_SPEED
-	up_speed := SAND_SWIM_UP_SPEED if in_sand else WATER_SWIM_UP_SPEED
-	down_speed := SAND_SWIM_DOWN_SPEED if in_sand else WATER_SWIM_DOWN_SPEED
-	idle_speed := -SAND_SWIM_SINK_SPEED if in_sand else WATER_SWIM_FLOAT_SPEED
-	grav_mult := SAND_SWIM_GRAVITY_MULT if in_sand else WATER_SWIM_GRAVITY_MULT
-	damping_k := SAND_SWIM_DAMPING if in_sand else WATER_SWIM_DAMPING
-	surface_threshold := SAND_SWIM_SURFACE_THRESHOLD if in_sand else WATER_SWIM_SURFACE_THRESHOLD
-	exit_threshold := SAND_SWIM_EXIT_THRESHOLD if in_sand else WATER_SWIM_EXIT_THRESHOLD
-	jump_force := SAND_SWIM_JUMP_FORCE if in_sand else WATER_SWIM_JUMP_FORCE
+	move_penalty := sand.SAND_SWIM_MOVE_PENALTY if in_sand else sand.WATER_MOVE_PENALTY
+	lerp_speed := sand.SAND_SWIM_LERP_SPEED if in_sand else PLAYER_MOVE_LERP_SPEED
+	up_speed := sand.SAND_SWIM_UP_SPEED if in_sand else sand.WATER_SWIM_UP_SPEED
+	down_speed := sand.SAND_SWIM_DOWN_SPEED if in_sand else sand.WATER_SWIM_DOWN_SPEED
+	idle_speed := -sand.SAND_SWIM_SINK_SPEED if in_sand else sand.WATER_SWIM_FLOAT_SPEED
+	grav_mult := sand.SAND_SWIM_GRAVITY_MULT if in_sand else sand.WATER_SWIM_GRAVITY_MULT
+	damping_k := sand.SAND_SWIM_DAMPING if in_sand else sand.WATER_SWIM_DAMPING
+	surface_threshold :=
+		sand.SAND_SWIM_SURFACE_THRESHOLD if in_sand else sand.WATER_SWIM_SURFACE_THRESHOLD
+	exit_threshold := sand.SAND_SWIM_EXIT_THRESHOLD if in_sand else sand.WATER_SWIM_EXIT_THRESHOLD
+	jump_force := sand.SAND_SWIM_JUMP_FORCE if in_sand else sand.WATER_SWIM_JUMP_FORCE
 	immersion := ctx.sensor.sand_immersion if in_sand else ctx.sensor.water_immersion
 
 	// Horizontal movement
@@ -66,19 +68,19 @@ player_fsm_submerged_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State
 	// Sand hop — spam jump when deep to boil upward (sand only)
 	if in_sand &&
 	   game.input.is_pressed[.JUMP] &&
-	   ctx.sensor.sand_immersion >= SAND_SWIM_SURFACE_THRESHOLD &&
+	   ctx.sensor.sand_immersion >= sand.SAND_SWIM_SURFACE_THRESHOLD &&
 	   ctx.abilities.sand_hop_cooldown_timer <= 0 {
-		ctx.body.vel.y = SAND_SWIM_HOP_FORCE
-		ctx.abilities.sand_hop_cooldown_timer = SAND_SWIM_HOP_COOLDOWN
-		sand_particles_emit(
+		ctx.body.vel.y = sand.SAND_SWIM_HOP_FORCE
+		ctx.abilities.sand_hop_cooldown_timer = sand.SAND_SWIM_HOP_COOLDOWN
+		sand.particles_emit(
 			&game.sand_particles,
 			ctx.body.pos + {0, PLAYER_SIZE},
 			PLAYER_SIZE / 2,
 			math.PI / 2,
 			math.PI / 3,
 			{0, 0},
-			SAND_COLOR,
-			int(SAND_SWIM_HOP_PARTICLE_COUNT),
+			sand.SAND_COLOR,
+			int(sand.SAND_SWIM_HOP_PARTICLE_COUNT),
 		)
 	}
 
@@ -87,15 +89,15 @@ player_fsm_submerged_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State
 		ctx.body.vel.y = jump_force
 		ctx.abilities.jump_buffer_timer = 0
 		if in_sand {
-			sand_particles_emit(
+			sand.particles_emit(
 				&game.sand_particles,
 				ctx.body.pos + {0, PLAYER_SIZE},
 				PLAYER_SIZE / 2,
 				math.PI / 2,
 				math.PI / 3,
-				{0, abs(ctx.body.vel.y) * SAND_IMPACT_PARTICLE_VEL_BIAS},
-				SAND_COLOR,
-				int(SAND_SWIM_JUMP_PARTICLE_COUNT),
+				{0, abs(ctx.body.vel.y) * sand.SAND_IMPACT_PARTICLE_VEL_BIAS},
+				sand.SAND_COLOR,
+				int(sand.SAND_SWIM_JUMP_PARTICLE_COUNT),
 			)
 		}
 		return .Airborne

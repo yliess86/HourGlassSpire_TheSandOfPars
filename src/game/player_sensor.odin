@@ -1,6 +1,7 @@
 package game
 
 import engine "../engine"
+import sand "../sand"
 import "core:fmt"
 
 Player_Sensor :: struct {
@@ -95,7 +96,7 @@ player_sensor_update :: proc(player: ^Player) {
 
 	// Sand wall detection (only if no solid side wall)
 	if !on_side_wall {
-		found, dir, snap_x := sand_detect_wall(&game.sand, player)
+		found, dir, snap_x := sand.detect_wall(&game.sand_world, player.body.pos, PLAYER_SIZE)
 		if found {
 			on_side_wall = true
 			on_side_wall_dir = dir
@@ -150,8 +151,12 @@ player_sensor_update :: proc(player: ^Player) {
 
 	// Sand ground detection (only if no solid/slope/platform ground)
 	if !on_ground {
-		if SAND_SURFACE_SMOOTH > 0 {
-			surface_y, found := sand_surface_query(&game.sand, player)
+		if sand.SAND_SURFACE_SMOOTH > 0 {
+			surface_y, found := sand.surface_query(
+				&game.sand_world,
+				player.body.pos.x,
+				player.body.pos.y,
+			)
 			if found {
 				dist := player.body.pos.y - surface_y
 				if dist >= -PLAYER_STEP_HEIGHT && dist <= PLAYER_CHECK_GROUND_EPS {
@@ -161,16 +166,16 @@ player_sensor_update :: proc(player: ^Player) {
 				}
 			}
 		} else {
-			foot_gx0 := int((player.body.pos.x - PLAYER_SIZE / 2) / SAND_CELL_SIZE)
-			foot_gx1 := int((player.body.pos.x + PLAYER_SIZE / 2) / SAND_CELL_SIZE)
-			foot_gy := int(player.body.pos.y / SAND_CELL_SIZE)
+			foot_gx0 := int((player.body.pos.x - PLAYER_SIZE / 2) / sand.SAND_CELL_SIZE)
+			foot_gx1 := int((player.body.pos.x + PLAYER_SIZE / 2) / sand.SAND_CELL_SIZE)
+			foot_gy := int(player.body.pos.y / sand.SAND_CELL_SIZE)
 			for check_gy in ([2]int{foot_gy, foot_gy - 1}) {
 				if on_sand do break
 				for gx in foot_gx0 ..= foot_gx1 {
-					if !sand_in_bounds(&game.sand, gx, check_gy) do continue
-					sensor_mat := sand_get(&game.sand, gx, check_gy).material
+					if !sand.in_bounds(&game.sand_world, gx, check_gy) do continue
+					sensor_mat := sand.get(&game.sand_world, gx, check_gy).material
 					if sensor_mat != .Sand && sensor_mat != .Wet_Sand do continue
-					surface_y := f32(check_gy + 1) * SAND_CELL_SIZE
+					surface_y := f32(check_gy + 1) * sand.SAND_CELL_SIZE
 					dist := player.body.pos.y - surface_y
 					if dist >= -PLAYER_STEP_HEIGHT && dist <= PLAYER_CHECK_GROUND_EPS {
 						on_ground = true
@@ -188,8 +193,18 @@ player_sensor_update :: proc(player: ^Player) {
 	player.sensor.on_ground_snap_y = on_ground_snap_y
 	player.sensor.on_platform = on_platform
 	player.sensor.on_sand = on_sand
-	player.sensor.sand_immersion = sand_compute_immersion(&game.sand, player, {.Sand, .Wet_Sand})
-	water_immersion := sand_compute_immersion(&game.sand, player, {.Water})
+	player.sensor.sand_immersion = sand.compute_immersion(
+		&game.sand_world,
+		player.body.pos,
+		PLAYER_SIZE,
+		{.Sand, .Wet_Sand},
+	)
+	water_immersion := sand.compute_immersion(
+		&game.sand_world,
+		player.body.pos,
+		PLAYER_SIZE,
+		{.Water},
+	)
 	player.sensor.on_water = water_immersion > 0
 	player.sensor.water_immersion = water_immersion
 	player.sensor.on_side_wall = on_side_wall

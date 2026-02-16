@@ -1,6 +1,7 @@
 package game
 
 import engine "../engine"
+import sand "../sand"
 import "core:fmt"
 import "core:math"
 
@@ -42,7 +43,7 @@ Player_Graphics :: struct {
 
 Player :: struct {
 	body:           engine.Physics_Body,
-	impact_pending: f32, // landing speed, consumed by sand_player_interact
+	impact_pending: f32, // landing speed, consumed by sand.interact
 	abilities:      Player_Abilities,
 	graphics:       Player_Graphics,
 	fsm:            engine.FSM(Player, Player_State),
@@ -56,8 +57,8 @@ player_wall_jump :: proc(ctx: ^Player) -> bool {
 	ctx.body.vel.y = PLAYER_WALL_JUMP_VERTICAL_MULT * PLAYER_JUMP_FORCE
 	ctx.body.vel.x = -ctx.sensor.on_side_wall_dir * PLAYER_WALL_JUMP_FORCE
 	if ctx.sensor.on_sand_wall {
-		ctx.body.vel.y *= SAND_WALL_JUMP_MULT
-		ctx.body.vel.x *= SAND_WALL_JUMP_MULT
+		ctx.body.vel.y *= sand.SAND_WALL_JUMP_MULT
+		ctx.body.vel.x *= sand.SAND_WALL_JUMP_MULT
 	}
 	ctx.abilities.jump_buffer_timer = 0
 	wall_pos := [2]f32 {

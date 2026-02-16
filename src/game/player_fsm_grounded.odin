@@ -1,5 +1,6 @@
 package game
 
+import sand "../sand"
 import "core:math"
 
 player_fsm_grounded_init :: proc(player: ^Player) {
@@ -57,14 +58,14 @@ player_fsm_grounded_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 		game.input.axis.x *
 		PLAYER_RUN_SPEED *
 		speed_factor *
-		player_move_factor(ctx, SAND_MOVE_PENALTY, WATER_MOVE_PENALTY),
+		player_move_factor(ctx, sand.SAND_MOVE_PENALTY, sand.WATER_MOVE_PENALTY),
 		PLAYER_MOVE_LERP_SPEED * dt,
 	)
-	ctx.body.vel.y = -SAND_SINK_SPEED if ctx.sensor.on_sand else 0
+	ctx.body.vel.y = -sand.SAND_SINK_SPEED if ctx.sensor.on_sand else 0
 	ctx.abilities.coyote_timer = PLAYER_COYOTE_TIME_DURATION
 
-	if ctx.sensor.sand_immersion > SAND_SWIM_ENTER_THRESHOLD do return .Sand_Swim
-	if ctx.sensor.water_immersion > WATER_SWIM_ENTER_THRESHOLD do return .Swimming
+	if ctx.sensor.sand_immersion > sand.SAND_SWIM_ENTER_THRESHOLD do return .Sand_Swim
+	if ctx.sensor.water_immersion > sand.WATER_SWIM_ENTER_THRESHOLD do return .Swimming
 
 	if ctx.sensor.on_platform &&
 	   game.input.axis.y < -PLAYER_INPUT_AXIS_THRESHOLD &&
@@ -76,8 +77,8 @@ player_fsm_grounded_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 	}
 
 	if ctx.abilities.jump_buffer_timer > 0 {
-		sand_jump := 1.0 - ctx.sensor.sand_immersion * SAND_JUMP_PENALTY
-		water_jump := 1.0 - ctx.sensor.water_immersion * WATER_JUMP_PENALTY
+		sand_jump := 1.0 - ctx.sensor.sand_immersion * sand.SAND_JUMP_PENALTY
+		water_jump := 1.0 - ctx.sensor.water_immersion * sand.WATER_JUMP_PENALTY
 		jump_factor := max(sand_jump * water_jump, 0)
 		if jump_factor > 0 {
 			ctx.body.vel.y = PLAYER_JUMP_FORCE * jump_factor

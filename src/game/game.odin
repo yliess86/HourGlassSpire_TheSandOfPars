@@ -1,6 +1,7 @@
 package game
 
 import engine "../engine"
+import sand "../sand"
 import "core:fmt"
 import sdl "vendor:sdl3"
 
@@ -33,7 +34,7 @@ Game_State :: struct {
 	steps:          engine.Particle_Pool,
 
 	// Sand
-	sand:           Sand_World,
+	sand_world:     sand.World,
 	sand_particles: engine.Particle_Pool,
 }
 
@@ -46,10 +47,19 @@ game_config_post_apply :: proc() {
 	game.camera.dead_zone = CAMERA_DEAD_ZONE
 	game.camera.boundary_zone = CAMERA_BOUNDARY_ZONE
 	sand_graphics_init_lut()
+	sand.config_reload()
+	game_sand_inject_fields()
+}
+
+game_sand_inject_fields :: proc() {
+	game.sand_world.gravity = GRAVITY
+	game.sand_world.run_speed = PLAYER_RUN_SPEED
+	game.sand_world.wall_detect_eps = PLAYER_CHECK_SIDE_WALL_EPS
+	game.sand_world.fixed_dt = 1.0 / (f32(FPS) * f32(FIXED_STEPS))
 }
 
 game_clean :: proc() {
-	sand_destroy(&game.sand)
+	sand.destroy(&game.sand_world)
 	engine.config_destroy(&config_game)
 	level_destroy(&game.level)
 	engine.window_clean(&game.win)
@@ -61,6 +71,7 @@ game_init :: proc() {
 
 	// Load config first (before window_init so WINDOW_TITLE/LOGICAL_H/WINDOW_SCALE are available)
 	config_load_and_apply()
+	sand.config_load_and_apply()
 
 	win, ok := engine.window_init(
 		fmt.ctprintf("%s", WINDOW_TITLE),
@@ -94,7 +105,16 @@ game_init :: proc() {
 	player_init(&game.player)
 
 	// Sand
-	sand_init(&game.sand, &game.level)
+	level_data := sand_level_data_from_level(&game.level)
+	sand.init(&game.sand_world, &level_data)
+	delete(level_data.tiles)
+	delete(level_data.original_tiles)
+	delete(game.level.sand_piles)
+	delete(game.level.sand_emitters)
+	delete(game.level.water_piles)
+	delete(game.level.water_emitters)
+	delete(game.level.original_tiles)
+	game_sand_inject_fields()
 
 	// Apply post-config (input bindings + camera params) and snap camera to player spawn
 	game_config_post_apply()
@@ -116,12 +136,15 @@ game_update :: proc(dt: f32) {
 
 game_fixed_update :: proc(dt: f32) {
 	player_fixed_update(&game.player, dt)
-	sand_player_interact(&game.sand, &game.player, dt)
-	sand_footprint_update(&game.sand, &game.player)
+	interactor := sand_interactor_from_player(&game.player)
+	sand.interact(&game.sand_world, &interactor, dt)
+	sand_interactor_apply(&game.player, &interactor)
+	sand_interact_particles(&game.sand_particles, &interactor)
+	sand_footprint_update(&game.sand_world, &game.player)
 	sand_dust_tick(&game.player)
-	sand_sub_step_tick(&game.sand)
-	sand_emitter_update(&game.sand)
-	sand_particles_update(&game.sand_particles, dt)
+	sand.sub_step_tick(&game.sand_world)
+	sand.emitter_update(&game.sand_world)
+	sand.particles_update(&game.sand_particles, dt)
 	player_particles_dust_update(&game.dust, dt)
 	player_particles_step_update(&game.steps, dt)
 	engine.camera_follow(
@@ -141,7 +164,7 @@ game_render :: proc() {
 	player_particles_render(&game.dust)
 	player_graphics_render(&game.player)
 	sand_particles_render(&game.sand_particles)
-	sand_graphics_render(&game.sand)
+	sand_graphics_render(&game.sand_world)
 }
 
 game_render_debug :: proc() {
@@ -176,7 +199,7 @@ game_render_debug :: proc() {
 	}
 
 	level_debug(&game.level)
-	sand_graphics_debug(&game.sand)
+	sand_graphics_debug(&game.sand_world)
 
 	sensor_pos: [2]f32 = {DEBUG_TEXT_MARGIN_X, DEBUG_TEXT_MARGIN_Y + 2 * DEBUG_TEXT_LINE_H}
 	player_sensor_debug(&game.player, sensor_pos)
@@ -205,4 +228,14 @@ game_render_debug :: proc() {
 		fmt.ctprintf("%s - %s - %s", VERSION_NAME, VERSION_DATE, VERSION_TIME),
 		DEBUG_COLOR_STATE_MUTED,
 	)
+}
+
+// Reload both game and sand configs
+config_reload_all :: proc() {
+	game_reloaded := config_reload()
+	sand_reloaded := sand.config_reload()
+	if game_reloaded || sand_reloaded {
+		game_config_post_apply()
+		fmt.eprintf("[config] Reloaded\n")
+	}
 }

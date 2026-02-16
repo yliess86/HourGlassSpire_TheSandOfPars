@@ -1,5 +1,6 @@
 package game
 
+import sand "../sand"
 import "core:math"
 
 player_fsm_dashing_init :: proc(player: ^Player) {
@@ -31,8 +32,8 @@ player_fsm_dashing_enter :: proc(ctx: ^Player) {
 player_fsm_dashing_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) {
 	if ctx.abilities.dash_active_timer <= 0 {
 		player_physics_apply_movement(ctx, dt)
-		if ctx.sensor.sand_immersion > SAND_SWIM_ENTER_THRESHOLD do return .Sand_Swim
-		if ctx.sensor.water_immersion > WATER_SWIM_ENTER_THRESHOLD do return .Swimming
+		if ctx.sensor.sand_immersion > sand.SAND_SWIM_ENTER_THRESHOLD do return .Sand_Swim
+		if ctx.sensor.water_immersion > sand.WATER_SWIM_ENTER_THRESHOLD do return .Swimming
 		if ctx.sensor.on_ground do return .Grounded
 		if ctx.sensor.on_side_wall {
 			if math.abs(ctx.body.vel.x) > PLAYER_IMPACT_THRESHOLD do player_graphics_trigger_impact(ctx, math.abs(ctx.body.vel.x), {1, 0})
@@ -42,7 +43,9 @@ player_fsm_dashing_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) 
 		return .Airborne
 	}
 
-	speed := PLAYER_DASH_SPEED * player_move_factor(ctx, SAND_MOVE_PENALTY, WATER_MOVE_PENALTY)
+	speed :=
+		PLAYER_DASH_SPEED *
+		player_move_factor(ctx, sand.SAND_MOVE_PENALTY, sand.WATER_MOVE_PENALTY)
 	if ctx.sensor.on_slope {
 		uphill := ctx.abilities.dash_dir == ctx.sensor.on_slope_dir
 		if uphill {
