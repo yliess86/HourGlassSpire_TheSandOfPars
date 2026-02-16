@@ -139,13 +139,13 @@ game_fixed_update :: proc(dt: f32) {
 	engine.sand_interact(&game.sand_world, &interactor, dt)
 	sand_interactor_apply(&game.player, &interactor)
 	sand_interact_particles(&game.sand_particles, &interactor)
-	sand_footprint_update(&game.sand_world, &game.player)
-	sand_dust_tick(&game.player)
+	player_sand_footprint_update(&game.sand_world, &game.player)
+	player_graphics_sand_dust_tick(&game.player)
 	engine.sand_sub_step_tick(&game.sand_world)
 	engine.sand_emitter_update(&game.sand_world)
 	engine.sand_particles_update(&game.sand_particles, dt)
-	player_particles_dust_update(&game.dust, dt)
-	player_particles_step_update(&game.steps, dt)
+	player_graphics_dust_update(&game.dust, dt)
+	player_graphics_step_update(&game.steps, dt)
 	engine.camera_follow(
 		&game.camera,
 		engine.physics_body_center(&game.player.body),
@@ -159,10 +159,10 @@ game_fixed_update :: proc(dt: f32) {
 game_render :: proc() {
 	level_render(&game.level)
 	sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
-	player_particles_render(&game.steps)
-	player_particles_render(&game.dust)
+	player_graphics_particle_render(&game.steps)
+	player_graphics_particle_render(&game.dust)
 	player_graphics_render(&game.player)
-	sand_particles_render(&game.sand_particles)
+	player_graphics_sand_particle_render(&game.sand_particles)
 	sand_graphics_render(&game.sand_world)
 }
 
@@ -201,9 +201,9 @@ game_render_debug :: proc() {
 	sand_graphics_debug(&game.sand_world)
 
 	sensor_pos: [2]f32 = {DEBUG_TEXT_MARGIN_X, DEBUG_TEXT_MARGIN_Y + 2 * DEBUG_TEXT_LINE_H}
-	player_sensor_debug(&game.player, sensor_pos)
-	player_physics_debug(&game.player)
-	player_debug(&game.player)
+	player_graphics_sensor_debug(&game.player, sensor_pos)
+	player_graphics_physics_debug(&game.player)
+	player_graphics_debug(&game.player)
 	debug_camera()
 
 	debug_value_with_label(
