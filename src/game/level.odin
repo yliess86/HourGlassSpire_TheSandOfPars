@@ -35,6 +35,7 @@ Level :: struct {
 	platform_colliders:  [dynamic]engine.Physics_Rect,
 	back_wall_colliders: [dynamic]engine.Physics_Rect,
 	slope_colliders:     [dynamic]engine.Physics_Slope,
+	window_rects:        [dynamic]engine.Physics_Rect,
 
 	// Temp fields: populated during level_load, consumed by sand_init
 	original_tiles:      []Level_Tile_Kind, // pre-reclassification, consumed by sand_init
@@ -294,6 +295,12 @@ level_merge_colliders :: proc(level: ^Level) {
 	}
 	level_merge_mask(level.width, level.height, back_wall_mask, &level.back_wall_colliders)
 
+	// Auto-detect window zones: Back_Wall tiles near Empty boundaries
+	window_mask := make([]bool, n)
+	defer delete(window_mask)
+	level_detect_windows(level, window_mask)
+	level_merge_mask(level.width, level.height, window_mask, &level.window_rects)
+
 	// Greedy row-merge for Platform tiles
 	active: [dynamic]Level_Merge_Run
 	defer delete(active)
@@ -393,6 +400,65 @@ level_merge_mask :: proc(width, height: int, mask: []bool, target: ^[dynamic]eng
 	}
 
 	for ar in active do level_emit_rect(target, ar)
+}
+
+// BFS flood from Empty tiles adjacent to Back_Wall, expanding through Empty up to ATMOSPHERE_WINDOW_DEPTH steps
+@(private = "file")
+level_detect_windows :: proc(level: ^Level, mask: []bool) {
+	w, h := level.width, level.height
+	depth := int(ATMOSPHERE_WINDOW_DEPTH)
+	if depth <= 0 do return
+
+	// Distance from nearest Back_Wall neighbor (-1 = not a candidate)
+	dist := make([]int, w * h)
+	defer delete(dist)
+	for i in 0 ..< w * h do dist[i] = -1
+
+	// Queue for BFS (tile coords packed as y*w+x)
+	queue := make([dynamic]int, 0, w * h / 4)
+	defer delete(queue)
+
+	// Seed: Empty tiles with at least one Back_Wall cardinal neighbor
+	for y in 0 ..< h {
+		for x in 0 ..< w {
+			idx := y * w + x
+			if level.tiles[idx] != .Empty do continue
+			has_back_wall := false
+			if x > 0 && level.tiles[idx - 1] == .Back_Wall do has_back_wall = true
+			if x < w - 1 && level.tiles[idx + 1] == .Back_Wall do has_back_wall = true
+			if y > 0 && level.tiles[(y - 1) * w + x] == .Back_Wall do has_back_wall = true
+			if y < h - 1 && level.tiles[(y + 1) * w + x] == .Back_Wall do has_back_wall = true
+			if has_back_wall {
+				dist[idx] = 0
+				mask[idx] = true
+				append(&queue, idx)
+			}
+		}
+	}
+
+	// BFS expansion through Empty tiles
+	qi := 0
+	for qi < len(queue) {
+		idx := queue[qi]
+		qi += 1
+		d := dist[idx]
+		if d >= depth do continue
+		y := idx / w
+		x := idx % w
+		neighbors := [4]int{idx - 1, idx + 1, idx - w, idx + w}
+		nx_arr := [4]int{x - 1, x + 1, x, x}
+		ny_arr := [4]int{y, y, y - 1, y + 1}
+		for ni in 0 ..< 4 {
+			nx, ny := nx_arr[ni], ny_arr[ni]
+			if nx < 0 || nx >= w || ny < 0 || ny >= h do continue
+			nidx := neighbors[ni]
+			if dist[nidx] >= 0 do continue
+			if level.tiles[nidx] != .Empty do continue
+			dist[nidx] = d + 1
+			mask[nidx] = true
+			append(&queue, nidx)
+		}
+	}
 }
 
 @(private = "file")
@@ -576,6 +642,7 @@ level_destroy :: proc(level: ^Level) {
 	delete(level.platform_colliders)
 	delete(level.back_wall_colliders)
 	delete(level.slope_colliders)
+	delete(level.window_rects)
 }
 
 level_debug :: proc(level: ^Level) {

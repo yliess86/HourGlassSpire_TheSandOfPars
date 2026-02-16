@@ -56,16 +56,17 @@ Odin, SDL3 (`vendor:sdl3`). Main package `src/game/`, engine `src/engine/` (`"..
 | `src/game/player.odin` | `Player_State` enum, `Player`/`Player_Sensor` structs, `player_init`/`player_fixed_update`, state machine, physics solver, sensor queries, footprints |
 | `src/game/player_graphics.odin` | `player_color`, 4-layer visual deformation, particle emit/update/render, debug overlays |
 | `src/game/debug.odin` | `Debug_State` enum, drawing helpers, `debug_camera`, controls overlay |
-| `src/game/level.odin` | BMP loading, tile classification by exposed face, greedy collider merging, slope merging, rendering |
+| `src/game/level.odin` | BMP loading, tile classification by exposed face, greedy collider merging, slope merging, window zone detection, rendering |
 | `src/game/input.odin` | `Input_Action` enum, `INPUT_DEFAULT_BINDINGS`, `input_binding_apply` |
+| `src/game/atmosphere.odin` | `Atmosphere` struct, window-zone dust motes: spawn/update/render with sway + fade |
 | `src/game/sand_graphics.odin` | Camera-culled rendering: sand opaque with color variants, water alpha-blended with depth gradient + shimmer, surface smoothing |
 
 ### Game loop
 
 Fixed-timestep: `game_update(dt)` → N × `game_fixed_update(fixed_dt)` → `game_render()`.
 - `game_update` — SDL events → input system
-- `game_fixed_update` — player → sand interaction → sand sim → emitters → particles → camera
-- `game_render` — level tiles → particles → player → sand (back-to-front)
+- `game_fixed_update` — player → sand interaction → sand sim → emitters → particles → atmosphere → camera
+- `game_render` — level tiles → atmosphere → particles → player → sand (back-to-front)
 
 Global `game: Game_State`. Player nested as `game.player: Player` with sub-structs: `body` (Physics_Body), `abilities`, `graphics`, `state`/`previous_state`, `sensor`. Sand state: `game.sand_world: engine.Sand_World`. All player procs take `player: ^Player`; call sites pass `&game.player`.
 
@@ -202,7 +203,7 @@ INI with sections, expressions (`+`,`-`,`*`,`/`, parens, variable refs), `#RRGGB
 
 **Workflow:** edit `game.ini` → `odin run build/ -- gen` → update source → `odin run build/ -- check`.
 
-**Sections:** `[game]`, `[version]`, `[engine]`, `[physics]`, `[camera]` (`CAMERA_*`), `[level]` (`LEVEL_COLOR_*`), `[player]`/`[player_run]`/`[player_jump]`/`[player_dash]`/`[player_wall]`/`[player_slopes]`/`[player_graphics]`/`[player_particles]`/`[player_particle_colors]`, `[sand]` (`SAND_*`), `[sand_debug]` (`SAND_DEBUG_*`), `[water]` (`WATER_*`), `[wet_sand]` (`WET_SAND_*`), `[fire]` (`FIRE_*`), `[smoke]` (`SMOKE_*`), `[input]` (`INPUT_KB_*`/`INPUT_GP_*`), `[debug_colors]` (`DEBUG_COLOR_*`), `[debug]` (`DEBUG_*`).
+**Sections:** `[game]`, `[version]`, `[engine]`, `[physics]`, `[camera]` (`CAMERA_*`), `[level]` (`LEVEL_COLOR_*`), `[player]`/`[player_run]`/`[player_jump]`/`[player_dash]`/`[player_wall]`/`[player_slopes]`/`[player_graphics]`/`[player_particles]`/`[player_particle_colors]`, `[sand]` (`SAND_*`), `[sand_debug]` (`SAND_DEBUG_*`), `[water]` (`WATER_*`), `[wet_sand]` (`WET_SAND_*`), `[fire]` (`FIRE_*`), `[smoke]` (`SMOKE_*`), `[atmosphere]` (`ATMOSPHERE_*`), `[input]` (`INPUT_KB_*`/`INPUT_GP_*`), `[debug_colors]` (`DEBUG_COLOR_*`), `[debug]` (`DEBUG_*`).
 
 ## Units & Coordinates
 

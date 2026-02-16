@@ -35,6 +35,9 @@ Game_State :: struct {
 	// Sand
 	sand_world:     engine.Sand_World,
 	sand_particles: engine.Particle_Pool,
+
+	// Atmosphere
+	atmosphere:     Atmosphere,
 }
 
 game: Game_State
@@ -61,6 +64,7 @@ game_clean :: proc() {
 	engine.particle_pool_destroy(&game.dust)
 	engine.particle_pool_destroy(&game.steps)
 	engine.particle_pool_destroy(&game.sand_particles)
+	atmosphere_destroy(&game.atmosphere)
 	engine.sand_destroy(&game.sand_world)
 	engine.config_destroy(&config_game)
 	level_destroy(&game.level)
@@ -147,6 +151,7 @@ game_fixed_update :: proc(dt: f32) {
 	engine.sand_particles_update(&game.sand_particles, dt)
 	player_graphics_dust_update(&game.dust, dt)
 	player_graphics_step_update(&game.steps, dt)
+	atmosphere_update(&game.atmosphere, &game.level, dt)
 	engine.camera_follow(
 		&game.camera,
 		engine.physics_body_center(&game.player.body),
@@ -159,6 +164,7 @@ game_fixed_update :: proc(dt: f32) {
 
 game_render :: proc() {
 	level_render(&game.level)
+	atmosphere_render(&game.atmosphere)
 	sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
 	player_graphics_particle_render(&game.steps)
 	player_graphics_particle_render(&game.dust)

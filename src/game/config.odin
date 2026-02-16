@@ -197,6 +197,16 @@ DEBUG_TEXT_STATE_GAP: f32                    // vertical gap between FSM state l
 DEBUG_VEL_SCALE: f32                         // velocity vector display scale (world units per m/s)
 DEBUG_TEXT_TITLE_GAP: f32                    // multiplier on line height after title
 
+// [atmosphere]
+ATMOSPHERE_WINDOW_DEPTH: u8                  // tiles inward from opening to spawn dust
+ATMOSPHERE_DUST_COLOR: [4]u8                 // dust mote color (warm golden, translucent)
+ATMOSPHERE_DUST_SIZE: f32                    // dust mote radius (meters)
+ATMOSPHERE_DUST_SPEED_Y: f32                 // slow downward drift (m/s)
+ATMOSPHERE_DUST_SWAY_AMP: f32                // horizontal sway amplitude (meters)
+ATMOSPHERE_DUST_SWAY_FREQ: f32               // horizontal sway frequency (rad/s)
+ATMOSPHERE_DUST_LIFETIME: f32                // dust mote lifetime (seconds)
+ATMOSPHERE_DUST_SPAWN_RATE: f32              // particles per second per square meter of window
+
 config_apply :: proc() {
 	if val, ok := engine.config_get_string(&config_game, "GAME_TITLE"); ok do GAME_TITLE = val
 	if val, ok := engine.config_get_string(&config_game, "GAME_SUBTITLE"); ok do GAME_SUBTITLE = val
@@ -355,6 +365,14 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "DEBUG_TEXT_STATE_GAP"); ok do DEBUG_TEXT_STATE_GAP = val
 	if val, ok := engine.config_get_f32(&config_game, "DEBUG_VEL_SCALE"); ok do DEBUG_VEL_SCALE = val
 	if val, ok := engine.config_get_f32(&config_game, "DEBUG_TEXT_TITLE_GAP"); ok do DEBUG_TEXT_TITLE_GAP = val
+	if val, ok := engine.config_get_u8(&config_game, "ATMOSPHERE_WINDOW_DEPTH"); ok do ATMOSPHERE_WINDOW_DEPTH = val
+	if val, ok := engine.config_get_rgba(&config_game, "ATMOSPHERE_DUST_COLOR"); ok do ATMOSPHERE_DUST_COLOR = val
+	if val, ok := engine.config_get_f32(&config_game, "ATMOSPHERE_DUST_SIZE"); ok do ATMOSPHERE_DUST_SIZE = val
+	if val, ok := engine.config_get_f32(&config_game, "ATMOSPHERE_DUST_SPEED_Y"); ok do ATMOSPHERE_DUST_SPEED_Y = val
+	if val, ok := engine.config_get_f32(&config_game, "ATMOSPHERE_DUST_SWAY_AMP"); ok do ATMOSPHERE_DUST_SWAY_AMP = val
+	if val, ok := engine.config_get_f32(&config_game, "ATMOSPHERE_DUST_SWAY_FREQ"); ok do ATMOSPHERE_DUST_SWAY_FREQ = val
+	if val, ok := engine.config_get_f32(&config_game, "ATMOSPHERE_DUST_LIFETIME"); ok do ATMOSPHERE_DUST_LIFETIME = val
+	if val, ok := engine.config_get_f32(&config_game, "ATMOSPHERE_DUST_SPAWN_RATE"); ok do ATMOSPHERE_DUST_SPAWN_RATE = val
 }
 
 config_game: engine.Config
