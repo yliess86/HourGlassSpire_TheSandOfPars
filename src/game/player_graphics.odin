@@ -116,10 +116,10 @@ player_graphics_dust_emit :: proc(
 
 player_graphics_dust_update :: proc(pool: ^engine.Particle_Pool, dt: f32) {
 	engine.particle_pool_update(pool, dt)
-	for i in 0 ..< pool.count {
-		pool.items[i].vel.y -= PLAYER_PARTICLE_DUST_GRAVITY * dt
-		pool.items[i].vel *= 1.0 - PLAYER_PARTICLE_DUST_FRICTION * dt
-		pool.items[i].pos += pool.items[i].vel * dt
+	for i in 0 ..< len(pool.particles) {
+		pool.particles[i].vel.y -= PLAYER_PARTICLE_DUST_GRAVITY * dt
+		pool.particles[i].vel *= 1.0 - PLAYER_PARTICLE_DUST_FRICTION * dt
+		pool.particles[i].pos += pool.particles[i].vel * dt
 	}
 }
 
@@ -142,23 +142,25 @@ player_graphics_step_update :: proc(pool: ^engine.Particle_Pool, dt: f32) {
 }
 
 player_graphics_particle_render :: proc(pool: ^engine.Particle_Pool) {
-	for i in 0 ..< pool.count {
-		p := &pool.items[i]
-		t := p.age / p.lifetime
+	for i in 0 ..< len(pool.particles) {
+		t := pool.particles[i].age / pool.particles[i].lifetime
 		alpha := u8(255 * (1.0 - t))
-		sdl.SetRenderDrawColor(game.win.renderer, p.color.r, p.color.g, p.color.b, alpha)
-		rect := game_world_to_screen(p.pos - {p.size / 2, 0}, {p.size, p.size})
+		color := pool.particles[i].color
+		sdl.SetRenderDrawColor(game.win.renderer, color.r, color.g, color.b, alpha)
+		size := pool.particles[i].size
+		rect := game_world_to_screen(pool.particles[i].pos - {size / 2, 0}, {size, size})
 		sdl.RenderFillRect(game.win.renderer, &rect)
 	}
 }
 
 player_graphics_sand_particle_render :: proc(pool: ^engine.Particle_Pool) {
-	for i in 0 ..< pool.count {
-		p := &pool.items[i]
-		t := p.age / p.lifetime
-		alpha := u8(f32(p.color.a) * (1.0 - t))
-		sdl.SetRenderDrawColor(game.win.renderer, p.color.r, p.color.g, p.color.b, alpha)
-		rect := game_world_to_screen(p.pos - {p.size / 2, 0}, {p.size, p.size})
+	for i in 0 ..< len(pool.particles) {
+		t := pool.particles[i].age / pool.particles[i].lifetime
+		color := pool.particles[i].color
+		alpha := u8(f32(color.a) * (1.0 - t))
+		sdl.SetRenderDrawColor(game.win.renderer, color.r, color.g, color.b, alpha)
+		size := pool.particles[i].size
+		rect := game_world_to_screen(pool.particles[i].pos - {size / 2, 0}, {size, size})
 		sdl.RenderFillRect(game.win.renderer, &rect)
 	}
 }

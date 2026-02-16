@@ -58,6 +58,9 @@ game_sand_inject_fields :: proc() {
 }
 
 game_clean :: proc() {
+	engine.particle_pool_destroy(&game.dust)
+	engine.particle_pool_destroy(&game.steps)
+	engine.particle_pool_destroy(&game.sand_particles)
 	engine.sand_destroy(&game.sand_world)
 	engine.config_destroy(&config_game)
 	level_destroy(&game.level)

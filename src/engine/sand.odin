@@ -853,10 +853,10 @@ sand_particles_emit :: proc(
 
 sand_particles_update :: proc(pool: ^Particle_Pool, dt: f32) {
 	particle_pool_update(pool, dt)
-	for i in 0 ..< pool.count {
-		pool.items[i].vel.y -= SAND_PARTICLE_GRAVITY * dt
-		pool.items[i].vel *= 1.0 - SAND_PARTICLE_FRICTION * dt
-		pool.items[i].pos += pool.items[i].vel * dt
+	for i in 0 ..< len(pool.particles) {
+		pool.particles[i].vel.y -= SAND_PARTICLE_GRAVITY * dt
+		pool.particles[i].vel *= 1.0 - SAND_PARTICLE_FRICTION * dt
+		pool.particles[i].pos += pool.particles[i].vel * dt
 	}
 }
 

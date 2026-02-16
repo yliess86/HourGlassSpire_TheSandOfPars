@@ -9,27 +9,23 @@ Particle :: struct {
 	color:    [4]u8,
 }
 
-PARTICLE_POOL_MAX :: 256
-
 Particle_Pool :: struct {
-	items: [PARTICLE_POOL_MAX]Particle,
-	count: int,
+	particles: #soa[dynamic]Particle,
 }
 
 particle_pool_emit :: proc(pool: ^Particle_Pool, p: Particle) {
-	if pool.count >= PARTICLE_POOL_MAX do return
-	pool.items[pool.count] = p
-	pool.count += 1
+	append_soa(&pool.particles, p)
 }
 
 particle_pool_update :: proc(pool: ^Particle_Pool, dt: f32) {
-	i := pool.count - 1
-	for i >= 0 {
-		pool.items[i].age += dt
-		if pool.items[i].age >= pool.items[i].lifetime {
-			pool.count -= 1
-			pool.items[i] = pool.items[pool.count]
+	for i := len(pool.particles) - 1; i >= 0; i -= 1 {
+		pool.particles[i].age += dt
+		if pool.particles[i].age >= pool.particles[i].lifetime {
+			unordered_remove_soa(&pool.particles, i)
 		}
-		i -= 1
 	}
+}
+
+particle_pool_destroy :: proc(pool: ^Particle_Pool) {
+	delete(pool.particles)
 }
