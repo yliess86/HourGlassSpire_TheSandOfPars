@@ -19,8 +19,8 @@ player_physics_apply_movement :: proc(player: ^Player, dt: f32) {
 
 player_physics_update :: proc(player: ^Player, dt: f32) {
 	player.body.flags = {}
-	if player.fsm.current == .Dropping do player.body.flags += {.Dropping}
-	if player.fsm.current == .Grounded do player.body.flags += {.Grounded}
+	if player.state == .Dropping do player.body.flags += {.Dropping}
+	if player.state == .Grounded do player.body.flags += {.Grounded}
 
 	geom := engine.Physics_Static_Geometry {
 		ground    = game.level.ground_colliders[:],

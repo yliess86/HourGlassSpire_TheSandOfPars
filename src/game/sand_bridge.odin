@@ -14,8 +14,8 @@ sand_interactor_from_player :: proc(player: ^Player) -> sand.Interactor {
 		size = PLAYER_SIZE,
 		impact_pending = player.impact_pending,
 		sand_immersion = player.sensor.sand_immersion,
-		is_dashing = player.fsm.current == .Dashing,
-		is_submerged = player.fsm.current == .Sand_Swim,
+		is_dashing = player.state == .Dashing,
+		is_submerged = player.state == .Sand_Swim,
 	}
 }
 

@@ -46,15 +46,14 @@ Odin, SDL3 (`vendor:sdl3`). Main package `src/game/`, engine `src/engine/` (`"..
 | `src/engine/window.odin` | SDL3 window/renderer init, VSync, logical presentation |
 | `src/engine/clock.odin` | Frame timing, fixed timestep accumulator, dt capped at 0.1s |
 | `src/engine/input.odin` | Generic `Input($Action)` with bindings, deadzone; `is_down`/`is_pressed`/`axis` |
-| `src/engine/collider.odin` | AABB overlap, single-axis resolve, raycasts (rect + slope), slope surface helpers |
-| `src/engine/fsm.odin` | Generic `FSM($Ctx, $State)` with enter/update/exit, tracks `previous` |
+| `src/engine/physics.odin` | `Physics_Body`, `Physics_Static_Geometry`, separated-axis collision solver, raycasts, slope helpers |
 | `src/game/main.odin` | Entry point: game loop (fixed-timestep update, render, present) |
 | `src/game/game.odin` | `Game_State` struct, `game` global, lifecycle, update/render, `game_world_to_screen` wrappers |
-| `src/game/player.odin` | `Player_State` enum, `Player` struct (transform/abilities/graphics/fsm/sensor), `player_init`/`player_fixed_update`/`player_sync_collider`/`player_debug` |
+| `src/game/player.odin` | `Player_State` enum, `Player` struct (body/abilities/graphics/state/sensor), `player_init`/`player_fixed_update`/`player_debug` |
 | `src/game/player_graphics.odin` | `player_color`, 4-layer visual deformation (velocity/look/bob/impact), `player_graphics_trigger_impact` |
 | `src/game/player_sensor.odin` | `Player_Sensor` struct, per-frame environment queries (ground/slope/platform/sand/water/wall) |
 | `src/game/player_physics.odin` | Separated-axis solver: sweep, resolve X/Y, slope resolve. `player_physics_debug` |
-| `src/game/player_fsm_*.odin` | One file per state: `_grounded`, `_airborne`, `_dashing`, `_dropping`, `_submerged` (shared by Sand_Swim + Swimming), `_wall_slide`, `_wall_run_vertical`, `_wall_run_horizontal`. Each has `_init` + `_update`, optional `_enter`/`_exit` |
+| `src/game/player_state.odin` | `player_state_update` (switch dispatch), `player_state_transition` (enter/exit), all 9 state handlers in one file |
 | `src/game/debug.odin` | `Debug_State` enum, drawing helpers, `debug_camera` |
 | `src/game/level.odin` | BMP loading, tile classification by exposed face, greedy collider merging, slope merging, rendering |
 | `src/game/input.odin` | `Input_Action` enum, `INPUT_DEFAULT_BINDINGS`, `input_binding_apply` |
@@ -72,15 +71,13 @@ Fixed-timestep: `game_update(dt)` → N × `game_fixed_update(fixed_dt)` → `ga
 - `game_fixed_update` — player → sand interaction → sand sim → emitters → particles → camera
 - `game_render` — level tiles → particles → player → sand (back-to-front)
 
-Global `game: Game_State`. Player nested as `game.player: Player` with sub-structs: `transform` (pos, vel), `collider`, `abilities`, `graphics`, `fsm`, `sensor`. Sand state: `game.sand: Sand_World`. All player procs take `player: ^Player`; call sites pass `&game.player`.
+Global `game: Game_State`. Player nested as `game.player: Player` with sub-structs: `body` (Physics_Body), `abilities`, `graphics`, `state`/`previous_state`, `sensor`. Sand state: `game.sand: Sand_World`. All player procs take `player: ^Player`; call sites pass `&game.player`.
 
-### Player FSM
+### Player State Machine
 
 States: `Grounded`, `Airborne`, `Dashing`, `Dropping`, `Sand_Swim`, `Swimming`, `Wall_Run_Horizontal`, `Wall_Slide`, `Wall_Run_Vertical`.
 
-`engine.FSM(Player, Player_State)` via `player.fsm`. Each `update` returns `Maybe(Player_State)` for transitions (nil = stay). `fsm_transition` prevents self-transitions. Handlers receive `ctx: ^Player`. Enter/exit wired for: `Grounded` (enter: reset wall run), `Dashing` (enter: set timers), `Sand_Swim` + `Swimming` (shared `_submerged` handler; enter: reset wall run cooldown/used), `Wall_Run_Vertical` (enter: set used/timer; exit: set cooldown), `Wall_Run_Horizontal` (enter: set used/timer/dir).
-
-Each file: `player_fsm_<state>_init` registers handlers, `_update(ctx, dt)` runs logic. Access state via `ctx.transform`, `ctx.abilities`, `ctx.sensor`; input via `game.input`.
+Plain `switch player.state` dispatch in `player_state_update`. Each case calls a private `player_state_update_<state>` proc returning `Maybe(Player_State)` for transitions (nil = stay). `player_state_transition` prevents self-transitions, runs exit/enter logic. `Sand_Swim` + `Swimming` share `player_state_update_submerged`.
 
 **Keep each state's doc comment in sync with implementation. Update `PLAYER.md` on state/transition changes.**
 

@@ -16,7 +16,7 @@ sand_dust_tick :: proc(player: ^Player) {
 	sand_dust_counter = 0
 
 	if !player.sensor.on_sand do return
-	if player.fsm.current != .Grounded do return
+	if player.state != .Grounded do return
 	if math.abs(player.body.vel.x) < sand.SAND_DUST_MIN_SPEED do return
 
 	emit_x := player.body.pos.x - math.sign(player.body.vel.x) * PLAYER_SIZE / 4
@@ -49,7 +49,7 @@ sand_dust_tick :: proc(player: ^Player) {
 }
 
 sand_footprint_update :: proc(world: ^sand.World, player: ^Player) {
-	if player.fsm.current != .Grounded do return
+	if player.state != .Grounded do return
 	if !player.sensor.on_sand do return
 	if math.abs(player.body.vel.x) < sand.SAND_FOOTPRINT_MIN_SPEED do return
 	if math.abs(player.body.pos.x - player.abilities.footprint_last_x) < sand.SAND_FOOTPRINT_STRIDE do return

@@ -46,7 +46,8 @@ Player :: struct {
 	impact_pending: f32, // landing speed, consumed by sand.interact
 	abilities:      Player_Abilities,
 	graphics:       Player_Graphics,
-	fsm:            engine.FSM(Player, Player_State),
+	state:          Player_State,
+	previous_state: Player_State,
 	sensor:         Player_Sensor,
 }
 
@@ -85,15 +86,8 @@ player_init :: proc(player: ^Player) {
 	player.body.size = {PLAYER_SIZE, PLAYER_SIZE}
 	player.body.offset = {0, PLAYER_SIZE / 2}
 
-	player_fsm_airborne_init(player)
-	player_fsm_dashing_init(player)
-	player_fsm_dropping_init(player)
-	player_fsm_grounded_init(player)
-	player_fsm_submerged_init(player)
-	player_fsm_wall_run_horizontal_init(player)
-	player_fsm_wall_run_vertical_init(player)
-	player_fsm_wall_slide_init(player)
-	engine.fsm_init(&player.fsm, player, Player_State.Grounded)
+	player.state = .Grounded
+	player.previous_state = .Grounded
 
 	player_sensor_update(player)
 }
@@ -116,7 +110,7 @@ player_fixed_update :: proc(player: ^Player, dt: f32) {
 
 	if game.input.is_pressed[.JUMP] do player.abilities.jump_buffer_timer = PLAYER_JUMP_BUFFER_DURATION
 
-	engine.fsm_update(&player.fsm, dt)
+	player_state_update(player, dt)
 	player_physics_update(player, dt)
 	player_sensor_update(player)
 }
@@ -125,11 +119,11 @@ player_debug :: proc(player: ^Player) {
 	player_top := game_world_to_screen_point({player.body.pos.x, player.body.pos.y + PLAYER_SIZE})
 	player_subti := player_top - {0, DEBUG_TEXT_STATE_GAP}
 	player_title := player_subti - {0, DEBUG_TEXT_LINE_H}
-	debug_text_center(player_title.x, player_title.y, fmt.ctprintf("%v", player.fsm.current))
+	debug_text_center(player_title.x, player_title.y, fmt.ctprintf("%v", player.state))
 	debug_text_center(
 		player_subti.x,
 		player_subti.y,
-		fmt.ctprintf("%v", player.fsm.previous),
+		fmt.ctprintf("%v", player.previous_state),
 		DEBUG_COLOR_STATE_MUTED,
 	)
 }
