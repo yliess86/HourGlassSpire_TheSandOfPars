@@ -50,6 +50,12 @@ SAND_MAT_PROPS := [Sand_Material]Sand_Material_Props {
 	.Smoke = {behavior = .Gas, density = 1, inert = false},
 }
 
+SAND_INERT_MATERIALS :: bit_set[Sand_Material]{.Empty, .Solid, .Platform}
+SAND_GRANULAR_MATERIALS :: bit_set[Sand_Material]{.Sand, .Wet_Sand}
+SAND_DISPLACEABLE_MATERIALS :: bit_set[Sand_Material]{.Sand, .Wet_Sand, .Water}
+SAND_SIMULATABLE_MATERIALS :: bit_set[Sand_Material]{.Sand, .Wet_Sand, .Water, .Fire, .Smoke}
+SAND_GAS_MATERIALS :: bit_set[Sand_Material]{.Fire, .Smoke}
+
 // --- Projectile ---
 
 Sand_Projectile :: struct {
@@ -209,6 +215,9 @@ Sand_World :: struct {
 	interactor_x0, interactor_y0, interactor_x1, interactor_y1: int,
 	interactor_blocking:                                        bool,
 
+	// Inline RNG state (xorshift32)
+	rng_state:                                                  u32,
+
 	// Injected external constants (set by caller before init)
 	gravity:                                                    f32,
 	run_speed:                                                  f32,
@@ -265,6 +274,7 @@ sand_init :: proc(world: ^Sand_World, level: ^Sand_Level_Data) {
 	world.slopes = make([]Sand_Slope_Kind, n)
 	world.step_counter = 1
 	world.sub_step_acc = 0
+	world.rng_state = 0xDEADBEEF
 
 	sand_chunk_init(world)
 
@@ -342,6 +352,26 @@ sand_wang_hash :: proc(x, y: int) -> u8 {
 }
 
 @(private = "file")
+sand_rng_next :: proc(world: ^Sand_World) -> u32 {
+	s := world.rng_state
+	s ~= s << 13
+	s ~= s >> 17
+	s ~= s << 5
+	world.rng_state = s
+	return s
+}
+
+@(private = "file")
+sand_rng_float :: proc(world: ^Sand_World) -> f32 {
+	return f32(sand_rng_next(world) >> 8) / f32(1 << 24)
+}
+
+@(private = "file")
+sand_rng_bool :: proc(world: ^Sand_World) -> bool {
+	return sand_rng_next(world) & 1 == 0
+}
+
+@(private = "file")
 sand_load_piles :: proc(world: ^Sand_World, piles: [][2]int, material: Sand_Material) {
 	for pos in piles {
 		for cell_dy in 0 ..< int(SAND_CELLS_PER_TILE) {
@@ -362,7 +392,7 @@ sand_load_piles :: proc(world: ^Sand_World, piles: [][2]int, material: Sand_Mate
 // Wake neighbors, mark chunks dirty, transfer active counts across chunk boundaries.
 @(private = "file")
 sand_finalize_move :: proc(world: ^Sand_World, sx, sy, dx, dy: int) {
-	sand_wake_neighbors(world, sx, sy)
+	sand_wake_neighbors_cardinal(world, sx, sy)
 	sand_wake_neighbors(world, dx, dy)
 	sand_chunk_mark_dirty(world, sx, sy)
 	sand_chunk_mark_dirty(world, dx, dy)
@@ -394,8 +424,18 @@ sand_wake_neighbors :: proc(world: ^Sand_World, x, y: int) {
 			nx, ny := x + dx, y + dy
 			if !sand_in_bounds(world, nx, ny) do continue
 			cell := &world.cells[ny * world.width + nx]
-			if !SAND_MAT_PROPS[cell.material].inert do cell.sleep_counter = 0
+			if cell.material not_in SAND_INERT_MATERIALS do cell.sleep_counter = 0
 		}
+	}
+}
+
+@(private = "file")
+sand_wake_neighbors_cardinal :: proc(world: ^Sand_World, x, y: int) {
+	for d in ([4][2]int{{0, 1}, {0, -1}, {1, 0}, {-1, 0}}) {
+		nx, ny := x + d.x, y + d.y
+		if !sand_in_bounds(world, nx, ny) do continue
+		cell := &world.cells[ny * world.width + nx]
+		if cell.material not_in SAND_INERT_MATERIALS do cell.sleep_counter = 0
 	}
 }
 
@@ -426,7 +466,7 @@ sand_column_surface_y :: proc(world: ^Sand_World, gx, base_gy, scan_height: int)
 	for gy := base_gy + scan_height; gy >= max(base_gy - 1, 0); gy -= 1 {
 		if !sand_in_bounds(world, gx, gy) do continue
 		col_mat := sand_get(world, gx, gy).material
-		if col_mat == .Sand || col_mat == .Wet_Sand do return f32(gy + 1) * SAND_CELL_SIZE, true
+		if col_mat in SAND_GRANULAR_MATERIALS do return f32(gy + 1) * SAND_CELL_SIZE, true
 	}
 	return 0, false
 }
@@ -457,7 +497,7 @@ sand_count_wall_column :: proc(world: ^Sand_World, tx, ty_start, ty_end: int) ->
 	for ty in ty_start ..= ty_end {
 		if !sand_in_bounds(world, tx, ty) do break
 		mat := sand_get(world, tx, ty).material
-		if mat != .Sand && mat != .Wet_Sand do break
+		if mat not_in SAND_GRANULAR_MATERIALS do break
 		count += 1
 	}
 	return count
@@ -506,7 +546,7 @@ sand_wall_erode :: proc(world: ^Sand_World, pos: [2]f32, size, dir: f32) {
 		for try_gy in ([3]int{center_gy, center_gy + 1, center_gy - 1}) {
 			if !sand_in_bounds(world, wall_gx, try_gy) do continue
 			mat := sand_get(world, wall_gx, try_gy).material
-			if mat != .Sand && mat != .Wet_Sand do continue
+			if mat not_in SAND_GRANULAR_MATERIALS do continue
 			sand_displace_cell(world, wall_gx, try_gy, push_dx)
 			break
 		}
@@ -563,8 +603,8 @@ sand_apply_physics :: proc(
 		for tx in cx0 ..= cx1 {
 			if !sand_in_bounds(world, tx, ty) do continue
 			mat := world.cells[ty * world.width + tx].material
-			is_gas := mat == .Fire || mat == .Smoke
-			if !is_gas && mat != .Sand && mat != .Wet_Sand && mat != .Water do continue
+			is_gas := mat in SAND_GAS_MATERIALS
+			if !is_gas && mat not_in SAND_DISPLACEABLE_MATERIALS do continue
 
 			push_dx: int = tx >= center_cx ? 1 : -1
 			in_ring := tx < x0 || tx > x1 || ty < y0
@@ -583,7 +623,7 @@ sand_apply_physics :: proc(
 				// Water splash: more upward, spread horizontal
 				if mat == .Water {
 					eject_vel.y *= SAND_PROJ_WATER_UP_MULT
-					eject_vel.x += (rand.float32() * 2 - 1) * SAND_PROJ_WATER_SPREAD
+					eject_vel.x += (sand_rng_float(world) * 2 - 1) * SAND_PROJ_WATER_SPREAD
 				}
 				sand_projectile_emit(world, tx, ty, eject_vel)
 				displaced = true
@@ -636,7 +676,7 @@ sand_apply_physics :: proc(
 			gap := 0
 			for ty := y1 + 1; ty < world.height; ty += 1 {
 				cell := sand_get(world, tx, ty)
-				if cell.material == .Sand || cell.material == .Wet_Sand {
+				if cell.material in SAND_GRANULAR_MATERIALS {
 					above_count += 1
 					gap = 0
 				} else if cell.material == .Solid {break} else {
@@ -722,15 +762,15 @@ sand_dash_carve :: proc(
 			if !sand_in_bounds(world, gx, gy) do continue
 			idx := gy * world.width + gx
 			mat := world.cells[idx].material
-			if mat != .Sand && mat != .Wet_Sand && mat != .Water && mat != .Fire && mat != .Smoke do continue
+			if mat not_in SAND_SIMULATABLE_MATERIALS do continue
 
 			// Projectile: upward + random horizontal spread perpendicular to dash
 			eject_vel := [2]f32 {
-				(rand.float32() * 2 - 1) * SAND_PROJ_DASH_SPREAD,
+				(sand_rng_float(world) * 2 - 1) * SAND_PROJ_DASH_SPREAD,
 				SAND_PROJ_DASH_SPEED,
 			}
 			sand_projectile_emit(world, gx, gy, eject_vel)
-			if mat == .Sand || mat == .Wet_Sand do sand_carved += 1
+			if mat in SAND_GRANULAR_MATERIALS do sand_carved += 1
 			else do water_carved += 1
 		}
 	}
@@ -824,8 +864,7 @@ sand_try_displace_to :: proc(world: ^Sand_World, sx, sy, dx, dy: int, depth: int
 	dst_idx := dy * world.width + dx
 	dst_mat := world.cells[dst_idx].material
 
-	if (dst_mat == .Sand || dst_mat == .Wet_Sand || dst_mat == .Water) &&
-	   depth < int(SAND_DISPLACE_CHAIN) {
+	if dst_mat in SAND_DISPLACEABLE_MATERIALS && depth < int(SAND_DISPLACE_CHAIN) {
 		if sand_get_slope(world, dx, dy) != .None do return false
 		chain_dx := dx + (dx - sx)
 		chain_dy := dy + (dy - sy)
@@ -905,9 +944,26 @@ sand_step :: proc(world: ^Sand_World) {
 	parity := world.step_counter & 1
 	world.step_counter += 1
 	sand_chunk_propagate_dirty(world)
+	cs := int(SAND_CHUNK_SIZE)
 	for y in 0 ..< world.height {
-		if parity == 0 do for x in 0 ..< world.width do sand_dispatch_cell(world, x, y, parity)
-		else do for x := world.width - 1; x >= 0; x -= 1 do sand_dispatch_cell(world, x, y, parity)
+		cy := y / cs
+		if parity == 0 {
+			for cx in 0 ..< world.chunks_w {
+				chunk := &world.chunks[cy * world.chunks_w + cx]
+				if !chunk.needs_sim do continue
+				x_start := cx * cs
+				x_end := min(x_start + cs, world.width)
+				for x in x_start ..< x_end do sand_dispatch_cell(world, x, y, parity)
+			}
+		} else {
+			for cx := world.chunks_w - 1; cx >= 0; cx -= 1 {
+				chunk := &world.chunks[cy * world.chunks_w + cx]
+				if !chunk.needs_sim do continue
+				x_start := cx * cs
+				x_end := min(x_start + cs, world.width)
+				for x := x_end - 1; x >= x_start; x -= 1 do sand_dispatch_cell(world, x, y, parity)
+			}
+		}
 	}
 	sand_restore_platforms(world)
 }
@@ -917,18 +973,14 @@ sand_step :: proc(world: ^Sand_World) {
 sand_dispatch_cell :: proc(world: ^Sand_World, x, y: int, parity: u32) {
 	idx := y * world.width + x
 	cell := &world.cells[idx]
-	props := SAND_MAT_PROPS[cell.material]
-	if props.inert do return
-
-	chunk := sand_chunk_at(world, x, y)
-	if chunk != nil && !chunk.needs_sim do return
+	if cell.material in SAND_INERT_MATERIALS do return
 	if u32(cell.flags & SAND_FLAG_PARITY) == (parity & 1) do return
 
 	sand_erode_adjacent_platforms(world, x, y)
 	if cell.material == .Water do sand_try_wet_neighbors(world, x, y, WATER_CONTACT_WET_CHANCE)
 	if cell.sleep_counter >= SAND_SLEEP_THRESHOLD do return
 
-	switch props.behavior {
+	switch SAND_MAT_PROPS[cell.material].behavior {
 	case .Powder:
 		sand_update_cell_powder(world, x, y, parity)
 	case .Liquid:
@@ -970,7 +1022,7 @@ sand_try_move :: proc(world: ^Sand_World, sx, sy, dx, dy: int, parity: u32) -> b
 		if dst_mat == .Water {
 			swap_chance = WET_SAND_WATER_SWAP_CHANCE if is_wet else SAND_WATER_SWAP_CHANCE
 		}
-		if rand.float32() > swap_chance do return false
+		if sand_rng_float(world) > swap_chance do return false
 
 		tmp := world.cells[dst_idx]
 		world.cells[dst_idx] = world.cells[src_idx]
@@ -1045,7 +1097,7 @@ sand_update_cell_powder :: proc(world: ^Sand_World, x, y: int, parity: u32) {
 			if dst_mat == .Water {
 				swap_chance = WET_SAND_WATER_SWAP_CHANCE if is_wet else SAND_WATER_SWAP_CHANCE
 			}
-			if rand.float32() > swap_chance do break
+			if sand_rng_float(world) > swap_chance do break
 			src_idx := cy * world.width + cx
 			tmp := world.cells[dst_idx]
 			world.cells[dst_idx] = world.cells[src_idx]
@@ -1078,8 +1130,8 @@ sand_update_cell_powder :: proc(world: ^Sand_World, x, y: int, parity: u32) {
 	// No downward movement: try diagonal (probability-gated for steeper piles)
 	repose_chance: f32 = WET_SAND_REPOSE_CHANCE if is_wet else SAND_REPOSE_CHANCE
 	cell = &world.cells[cy * world.width + cx]
-	if rand.float32() < repose_chance {
-		first_dx: int = (rand.int31() & 1) == 0 ? -1 : 1
+	if sand_rng_float(world) < repose_chance {
+		first_dx: int = sand_rng_bool(world) ? -1 : 1
 		if sand_try_move(world, cx, cy, cx + first_dx, cy - 1, parity) {
 			sand_cell_reset_fall(&world.cells[(cy - 1) * world.width + (cx + first_dx)])
 			if is_wet {sand_try_wet_neighbors(world, cx + first_dx, cy - 1, WET_SAND_SPREAD_CHANCE); sand_wet_sand_dry_tick(world, cx + first_dx, cy - 1)}
@@ -1112,11 +1164,11 @@ sand_update_cell_liquid :: proc(world: ^Sand_World, x, y: int, parity: u32) {
 	} else {
 		if sand_try_move(world, x, y, x, y - 1, parity) do moved = true
 		else {
-			first_dx: int = (rand.int31() & 1) == 0 ? -1 : 1
+			first_dx: int = sand_rng_bool(world) ? -1 : 1
 			if sand_try_move(world, x, y, x + first_dx, y - 1, parity) do moved = true
 			else if sand_try_move(world, x, y, x - first_dx, y - 1, parity) do moved = true
 			else {
-				first_dx2: int = (rand.int31() & 1) == 0 ? -1 : 1
+				first_dx2: int = sand_rng_bool(world) ? -1 : 1
 				if sand_try_flow(world, x, y, first_dx2, parity) do moved = true
 				else if sand_try_flow(world, x, y, -first_dx2, parity) do moved = true
 			}
@@ -1136,7 +1188,7 @@ sand_update_cell_gas :: proc(world: ^Sand_World, x, y: int, parity: u32) {
 
 	// Fire: chance to extinguish or convert to smoke
 	if mat == .Fire {
-		if rand.float32() < FIRE_LIFETIME_CHANCE {
+		if sand_rng_float(world) < FIRE_LIFETIME_CHANCE {
 			world.cells[idx] = Sand_Cell{}
 			sand_wake_neighbors(world, x, y)
 			sand_chunk_mark_dirty(world, x, y)
@@ -1144,7 +1196,7 @@ sand_update_cell_gas :: proc(world: ^Sand_World, x, y: int, parity: u32) {
 			if chunk != nil && chunk.active_count > 0 do chunk.active_count -= 1
 			return
 		}
-		if rand.float32() < FIRE_SMOKE_CHANCE {
+		if sand_rng_float(world) < FIRE_SMOKE_CHANCE {
 			cell.material = .Smoke
 			cell.color_variant = sand_wang_hash(x, y)
 			cell.sleep_counter = 0
@@ -1155,7 +1207,7 @@ sand_update_cell_gas :: proc(world: ^Sand_World, x, y: int, parity: u32) {
 	}
 
 	// Smoke: chance to decay
-	if mat == .Smoke && rand.float32() < SMOKE_DECAY_CHANCE {
+	if mat == .Smoke && sand_rng_float(world) < SMOKE_DECAY_CHANCE {
 		world.cells[idx] = Sand_Cell{}
 		sand_wake_neighbors(world, x, y)
 		sand_chunk_mark_dirty(world, x, y)
@@ -1167,18 +1219,18 @@ sand_update_cell_gas :: proc(world: ^Sand_World, x, y: int, parity: u32) {
 	// Movement: try up, then diagonal up, then sideways (smoke only)
 	rise_chance: f32 = FIRE_RISE_SPEED if mat == .Fire else SMOKE_RISE_CHANCE
 	moved := false
-	if rand.float32() < rise_chance {
+	if sand_rng_float(world) < rise_chance {
 		if sand_try_move(world, x, y, x, y + 1, parity) do moved = true
 		else {
-			first_dx: int = (rand.int31() & 1) == 0 ? -1 : 1
+			first_dx: int = sand_rng_bool(world) ? -1 : 1
 			if sand_try_move(world, x, y, x + first_dx, y + 1, parity) do moved = true
 			else if sand_try_move(world, x, y, x - first_dx, y + 1, parity) do moved = true
 		}
 	}
 
 	// Smoke dispersion: try sideways
-	if !moved && mat == .Smoke && rand.float32() < SMOKE_DISPERSE_CHANCE {
-		first_dx: int = (rand.int31() & 1) == 0 ? -1 : 1
+	if !moved && mat == .Smoke && sand_rng_float(world) < SMOKE_DISPERSE_CHANCE {
+		first_dx: int = sand_rng_bool(world) ? -1 : 1
 		if sand_try_move(world, x, y, x + first_dx, y, parity) do moved = true
 		else if sand_try_move(world, x, y, x - first_dx, y, parity) do moved = true
 	}
@@ -1254,8 +1306,9 @@ sand_try_rise :: proc(world: ^Sand_World, x, y: int, parity: u32) -> bool {
 	if sand_is_interactor_cell(world, x, y + 1) do return false
 	if world.cells[(y + 1) * world.width + x].material != .Empty do return false
 
+	scan_cap := int(WATER_FLOW_DISTANCE) * 2
 	depth_below := 0
-	for scan_y := y - 1; scan_y >= 0; scan_y -= 1 {
+	for scan_y := y - 1; scan_y >= max(0, y - scan_cap); scan_y -= 1 {
 		if world.cells[scan_y * world.width + x].material != .Water do break
 		depth_below += 1
 	}
@@ -1268,11 +1321,11 @@ sand_try_rise :: proc(world: ^Sand_World, x, y: int, parity: u32) -> bool {
 			nx := x + dist * sign
 			if !sand_in_bounds(world, nx, y) do continue
 			neighbor_height := 0
-			for scan_y := y; scan_y >= 0; scan_y -= 1 {
+			for scan_y := y; scan_y >= max(0, y - scan_cap); scan_y -= 1 {
 				if world.cells[scan_y * world.width + nx].material != .Water do break
 				neighbor_height += 1
 			}
-			for scan_y := y + 1; scan_y < world.height; scan_y += 1 {
+			for scan_y := y + 1; scan_y < min(world.height, y + 1 + scan_cap); scan_y += 1 {
 				if world.cells[scan_y * world.width + nx].material != .Water do break
 				neighbor_height += 1
 			}
@@ -1285,7 +1338,7 @@ sand_try_rise :: proc(world: ^Sand_World, x, y: int, parity: u32) -> bool {
 	}
 	if !found_taller do return false
 
-	if rand.float32() >= WATER_PRESSURE_CHANCE do return false
+	if sand_rng_float(world) >= WATER_PRESSURE_CHANCE do return false
 
 	return sand_try_move(world, x, y, x, y + 1, parity)
 }
@@ -1298,7 +1351,7 @@ sand_try_wet_neighbors :: proc(world: ^Sand_World, x, y: int, chance: f32) {
 		if !sand_in_bounds(world, nx, ny) do continue
 		n_idx := ny * world.width + nx
 		if world.cells[n_idx].material != .Sand do continue
-		if rand.float32() >= chance do continue
+		if sand_rng_float(world) >= chance do continue
 		world.cells[n_idx].material = .Wet_Sand
 		world.cells[n_idx].flags &= ~SAND_FLAG_DRY_MASK
 		world.cells[n_idx].sleep_counter = 0
@@ -1387,7 +1440,7 @@ sand_restore_platforms :: proc(world: ^Sand_World) {
 			ny := py + offset.y
 			if !sand_in_bounds(world, nx, ny) do continue
 			mat := world.cells[ny * world.width + nx].material
-			if mat == .Sand || mat == .Wet_Sand || mat == .Water {
+			if mat in SAND_DISPLACEABLE_MATERIALS {
 				has_adjacent_sand = true
 				break
 			}
@@ -1477,7 +1530,7 @@ sand_projectile_emit :: proc(world: ^Sand_World, gx, gy: int, vel: [2]f32, gener
 	if !sand_in_bounds(world, gx, gy) do return
 	idx := gy * world.width + gx
 	cell := world.cells[idx]
-	if SAND_MAT_PROPS[cell.material].inert do return
+	if cell.material in SAND_INERT_MATERIALS do return
 
 	// Remove from grid
 	world.cells[idx] = Sand_Cell{}
@@ -1533,14 +1586,14 @@ sand_projectile_update :: proc(world: ^Sand_World, dt: f32) {
 		// Fire/smoke decay
 		decayed := false
 		if proj.material == .Fire {
-			if rand.float32() < FIRE_LIFETIME_CHANCE * dt * f32(SAND_SIM_INTERVAL) {
+			if sand_rng_float(world) < FIRE_LIFETIME_CHANCE * dt * f32(SAND_SIM_INTERVAL) {
 				decayed = true
-			} else if rand.float32() < FIRE_SMOKE_CHANCE * dt * f32(SAND_SIM_INTERVAL) {
+			} else if sand_rng_float(world) < FIRE_SMOKE_CHANCE * dt * f32(SAND_SIM_INTERVAL) {
 				proj.material = .Smoke
-				proj.color_variant = u8(rand.uint32() & 3)
+				proj.color_variant = u8(sand_rng_next(world) & 3)
 			}
 		} else if proj.material == .Smoke {
-			if rand.float32() < SMOKE_DECAY_CHANCE * dt * f32(SAND_SIM_INTERVAL) do decayed = true
+			if sand_rng_float(world) < SMOKE_DECAY_CHANCE * dt * f32(SAND_SIM_INTERVAL) do decayed = true
 		}
 		if decayed {
 			unordered_remove_soa(&world.projectiles, i)
@@ -1646,8 +1699,8 @@ sand_projectile_cascade :: proc(
 		nx, ny := cx + off.x, cy + off.y
 		if !sand_in_bounds(world, nx, ny) do continue
 		mat := world.cells[ny * world.width + nx].material
-		if SAND_MAT_PROPS[mat].inert do continue
-		if rand.float32() > 0.5 do continue // 50% chance per neighbor
+		if mat in SAND_INERT_MATERIALS do continue
+		if sand_rng_bool(world) do continue // 50% chance per neighbor
 
 		eject_vel := impact_vel * SAND_PROJ_CASCADE_TRANSFER
 		eject_vel.x += f32(off.x) * math.abs(impact_vel.y) * 0.3
