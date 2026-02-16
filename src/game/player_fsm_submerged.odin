@@ -93,7 +93,7 @@ player_fsm_submerged_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State
 				PLAYER_SIZE / 2,
 				math.PI / 2,
 				math.PI / 3,
-				{0, abs(ctx.transform.vel.y) * 0.15},
+				{0, abs(ctx.transform.vel.y) * SAND_IMPACT_PARTICLE_VEL_BIAS},
 				SAND_COLOR,
 				int(SAND_SWIM_JUMP_PARTICLE_COUNT),
 			)

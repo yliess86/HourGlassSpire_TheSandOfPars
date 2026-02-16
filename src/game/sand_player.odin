@@ -196,10 +196,10 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 		half_spread: f32 = math.PI / 3
 		vel_bias: [2]f32
 		if impact_factor > 0 {
-			half_spread = math.PI / 2.5
-			vel_bias = {0, abs(vel.y) * 0.15}
+			half_spread = SAND_IMPACT_PARTICLE_SPREAD
+			vel_bias = {0, abs(vel.y) * SAND_IMPACT_PARTICLE_VEL_BIAS}
 		} else if abs(vel.x) > 0 {
-			vel_bias = {-vel.x * 0.3, abs(vel.x) * 0.1}
+			vel_bias = {-vel.x * SAND_PARTICLE_VEL_BIAS_X, abs(vel.x) * SAND_PARTICLE_VEL_BIAS_Y}
 		}
 
 		if sand_displaced > 0 {
@@ -296,7 +296,11 @@ sand_player_interact :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 
 		// Quicksand: activity-scaled sinking (horizontal movement makes you sink faster)
 		if player.sensor.sand_immersion > SAND_BURIAL_THRESHOLD && player.transform.vel.y <= 0 {
-			activity := math.clamp(math.abs(player.transform.vel.x) / PLAYER_RUN_SPEED, 0, 2)
+			activity := math.clamp(
+				math.abs(player.transform.vel.x) / PLAYER_RUN_SPEED,
+				0,
+				SAND_QUICKSAND_MAX_ACTIVITY,
+			)
 			base_sink := SAND_QUICKSAND_BASE_SINK * GRAVITY * dt
 			move_sink := SAND_QUICKSAND_MOVE_MULT * activity * GRAVITY * dt
 			player.transform.vel.y -= base_sink + move_sink
@@ -369,7 +373,7 @@ sand_dash_carve :: proc(sand: ^Sand_World, player: ^Player, dt: f32) {
 		spread: f32 = PLAYER_SIZE / 4
 		base_angle: f32 = math.PI / 2
 		half_spread: f32 = math.PI / 3
-		vel_bias := [2]f32{-dash_dir * PLAYER_DASH_SPEED * 0.1, 0}
+		vel_bias := [2]f32{-dash_dir * PLAYER_DASH_SPEED * SAND_DASH_PARTICLE_VEL_BIAS, 0}
 		if sand_carved > 0 {
 			sand_particles_emit(
 				&game.sand_particles,
@@ -551,14 +555,20 @@ sand_particles_emit :: proc(
 	for _ in 0 ..< count {
 		spawn_pos := pos + {rand.float32() * spread_x * 2 - spread_x, 0}
 		angle := base_angle + (rand.float32() * 2 - 1) * half_spread
-		speed := SAND_PARTICLE_SPEED * (0.5 + 0.5 * rand.float32()) * speed_mult
+		speed :=
+			SAND_PARTICLE_SPEED *
+			(SAND_PARTICLE_SPEED_RAND_MIN +
+					(1.0 - SAND_PARTICLE_SPEED_RAND_MIN) * rand.float32()) *
+			speed_mult
 		vel := [2]f32{math.cos(angle) * speed, math.sin(angle) * speed} + vel_bias
 		engine.particle_pool_emit(
 			pool,
 			engine.Particle {
 				pos = spawn_pos,
 				vel = vel,
-				lifetime = SAND_PARTICLE_LIFETIME * (0.7 + 0.3 * rand.float32()),
+				lifetime = SAND_PARTICLE_LIFETIME *
+				(SAND_PARTICLE_LIFETIME_RAND_MIN +
+						(1.0 - SAND_PARTICLE_LIFETIME_RAND_MIN) * rand.float32()),
 				age = 0,
 				size = SAND_PARTICLE_SIZE,
 				color = color,
@@ -583,7 +593,9 @@ sand_dust_tick :: proc(player: ^Player) {
 	emit_x := player.transform.pos.x - math.sign(player.transform.vel.x) * PLAYER_SIZE / 4
 	emit_pos := [2]f32{emit_x, player.transform.pos.y}
 	vel := [2]f32 {
-		-math.sign(player.transform.vel.x) * SAND_DUST_SPEED * (0.5 + 0.5 * rand.float32()),
+		-math.sign(player.transform.vel.x) *
+		SAND_DUST_SPEED *
+		(SAND_DUST_SPEED_RAND_MIN + (1.0 - SAND_DUST_SPEED_RAND_MIN) * rand.float32()),
 		SAND_DUST_LIFT * rand.float32(),
 	}
 	dust_color := [4]u8 {
@@ -597,7 +609,8 @@ sand_dust_tick :: proc(player: ^Player) {
 		engine.Particle {
 			pos = emit_pos,
 			vel = vel,
-			lifetime = SAND_DUST_LIFETIME * (0.7 + 0.3 * rand.float32()),
+			lifetime = SAND_DUST_LIFETIME *
+			(SAND_DUST_LIFETIME_RAND_MIN + (1.0 - SAND_DUST_LIFETIME_RAND_MIN) * rand.float32()),
 			age = 0,
 			size = SAND_DUST_SIZE,
 			color = dust_color,

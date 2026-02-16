@@ -104,6 +104,18 @@ PLAYER_IMPACT_DECAY: f32                     // damping rate of impact bounce sp
 PLAYER_IMPACT_FREQ: f32                      // oscillation frequency of impact bounce (rad/s)
 PLAYER_IMPACT_SCALE: f32                     // max squash/stretch scale from impact bounce
 PLAYER_IMPACT_THRESHOLD: f32                 // min landing velocity to trigger impact bounce
+PLAYER_VEL_DEFORM_Y_H: f32                   // velocity Y → height stretch sensitivity
+PLAYER_VEL_DEFORM_X_H: f32                   // velocity X → height shrink sensitivity
+PLAYER_VEL_DEFORM_Y_W: f32                   // velocity Y → width shrink sensitivity
+PLAYER_VEL_DEFORM_X_W: f32                   // velocity X → width stretch sensitivity
+PLAYER_LOOK_DEFORM_W_Y: f32                  // look Y → width coupling ratio
+PLAYER_LOOK_DEFORM_W_X: f32                  // look X → width coupling ratio
+PLAYER_BOB_DEFORM_W: f32                     // run bob → width coupling ratio
+PLAYER_IMPACT_CUTOFF: f32                    // impact bounce envelope cutoff
+PLAYER_IMPACT_DEFORM_W_Y: f32                // impact Y → width coupling ratio
+PLAYER_IMPACT_DEFORM_H_X: f32                // impact X → height coupling ratio
+PLAYER_DEFORM_MIN: f32                       // min deformation scale clamp
+PLAYER_DEFORM_MAX: f32                       // max deformation scale clamp
 
 // [player_particles]
 PLAYER_PARTICLE_DUST_SIZE: f32               // dust particle radius
@@ -224,6 +236,16 @@ SAND_SWIM_HOP_PARTICLE_COUNT: u8             // particles per hop
 SAND_WALL_MIN_HEIGHT: u8                     // min contiguous cells for wall detection
 SAND_WALL_ERODE_RATE: u8                     // cells displaced per fixed step during wall-run
 SAND_WALL_JUMP_MULT: f32                     // wall jump force multiplier from sand wall
+SAND_IMPACT_PARTICLE_SPREAD: f32             // half-spread angle for impact particles (PI/2.5 radians)
+SAND_IMPACT_PARTICLE_VEL_BIAS: f32           // impact Y velocity bias multiplier
+SAND_PARTICLE_VEL_BIAS_X: f32                // horizontal velocity bias multiplier
+SAND_PARTICLE_VEL_BIAS_Y: f32                // vertical bias from horizontal movement
+SAND_DASH_PARTICLE_VEL_BIAS: f32             // dash carve particle velocity bias multiplier
+SAND_PARTICLE_SPEED_RAND_MIN: f32            // min fraction for speed randomization
+SAND_PARTICLE_LIFETIME_RAND_MIN: f32         // min fraction for lifetime randomization
+SAND_DUST_SPEED_RAND_MIN: f32                // min fraction for dust speed randomization
+SAND_DUST_LIFETIME_RAND_MIN: f32             // min fraction for dust lifetime randomization
+SAND_QUICKSAND_MAX_ACTIVITY: f32             // max activity factor clamp for quicksand
 
 // [sand_debug]
 SAND_DEBUG_COLOR_LOW: [4]u8                  // heatmap color for low pressure (blue)
@@ -233,6 +255,11 @@ SAND_DEBUG_COLOR_CHUNK: [4]u8                // active chunk highlight color
 SAND_DEBUG_COLOR_EMITTER: [4]u8              // emitter marker outline color (cyan)
 SAND_DEBUG_SLEEP_DIM: u8                     // overlay alpha for sleeping particles
 SAND_DEBUG_PRESSURE_MAX: f32                 // heatmap pressure cap (above this = max color)
+SAND_DEBUG_PRESSURE_DECAY: f32               // pressure decay through empty cells
+SAND_DEBUG_HEATMAP_LOW: f32                  // heatmap low→mid threshold
+SAND_DEBUG_HEATMAP_HIGH: f32                 // heatmap mid→high threshold
+SAND_DEBUG_CHUNK_OUTLINE_ALPHA: u8           // chunk boundary outline alpha
+SAND_DEBUG_STATS_LINE_OFFSET: u8             // line count offset for stats Y position
 
 // [water]
 WATER_COLOR: [4]u8                           // base water particle color (translucent cyan)
@@ -307,6 +334,7 @@ DEBUG_TEXT_MARGIN_X: f32                     // debug HUD left margin in pixels
 DEBUG_TEXT_MARGIN_Y: f32                     // debug HUD top margin in pixels
 DEBUG_TEXT_STATE_GAP: f32                    // vertical gap between FSM state labels in pixels
 DEBUG_VEL_SCALE: f32                         // velocity vector display scale (world units per m/s)
+DEBUG_TEXT_TITLE_GAP: f32                    // multiplier on line height after title
 
 config_apply :: proc() {
 	if val, ok := engine.config_get_string(&config_game, "GAME_TITLE"); ok do GAME_TITLE = val
@@ -384,6 +412,18 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "PLAYER_IMPACT_FREQ"); ok do PLAYER_IMPACT_FREQ = val
 	if val, ok := engine.config_get_f32(&config_game, "PLAYER_IMPACT_SCALE"); ok do PLAYER_IMPACT_SCALE = val
 	if val, ok := engine.config_get_f32(&config_game, "PLAYER_IMPACT_THRESHOLD"); ok do PLAYER_IMPACT_THRESHOLD = val
+	if val, ok := engine.config_get_f32(&config_game, "PLAYER_VEL_DEFORM_Y_H"); ok do PLAYER_VEL_DEFORM_Y_H = val
+	if val, ok := engine.config_get_f32(&config_game, "PLAYER_VEL_DEFORM_X_H"); ok do PLAYER_VEL_DEFORM_X_H = val
+	if val, ok := engine.config_get_f32(&config_game, "PLAYER_VEL_DEFORM_Y_W"); ok do PLAYER_VEL_DEFORM_Y_W = val
+	if val, ok := engine.config_get_f32(&config_game, "PLAYER_VEL_DEFORM_X_W"); ok do PLAYER_VEL_DEFORM_X_W = val
+	if val, ok := engine.config_get_f32(&config_game, "PLAYER_LOOK_DEFORM_W_Y"); ok do PLAYER_LOOK_DEFORM_W_Y = val
+	if val, ok := engine.config_get_f32(&config_game, "PLAYER_LOOK_DEFORM_W_X"); ok do PLAYER_LOOK_DEFORM_W_X = val
+	if val, ok := engine.config_get_f32(&config_game, "PLAYER_BOB_DEFORM_W"); ok do PLAYER_BOB_DEFORM_W = val
+	if val, ok := engine.config_get_f32(&config_game, "PLAYER_IMPACT_CUTOFF"); ok do PLAYER_IMPACT_CUTOFF = val
+	if val, ok := engine.config_get_f32(&config_game, "PLAYER_IMPACT_DEFORM_W_Y"); ok do PLAYER_IMPACT_DEFORM_W_Y = val
+	if val, ok := engine.config_get_f32(&config_game, "PLAYER_IMPACT_DEFORM_H_X"); ok do PLAYER_IMPACT_DEFORM_H_X = val
+	if val, ok := engine.config_get_f32(&config_game, "PLAYER_DEFORM_MIN"); ok do PLAYER_DEFORM_MIN = val
+	if val, ok := engine.config_get_f32(&config_game, "PLAYER_DEFORM_MAX"); ok do PLAYER_DEFORM_MAX = val
 	if val, ok := engine.config_get_f32(&config_game, "PLAYER_PARTICLE_DUST_SIZE"); ok do PLAYER_PARTICLE_DUST_SIZE = val
 	if val, ok := engine.config_get_f32(&config_game, "PLAYER_PARTICLE_DUST_GRAVITY"); ok do PLAYER_PARTICLE_DUST_GRAVITY = val
 	if val, ok := engine.config_get_f32(&config_game, "PLAYER_PARTICLE_DUST_LIFETIME_MIN"); ok do PLAYER_PARTICLE_DUST_LIFETIME_MIN = val
@@ -496,6 +536,16 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_u8(&config_game, "SAND_WALL_MIN_HEIGHT"); ok do SAND_WALL_MIN_HEIGHT = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_WALL_ERODE_RATE"); ok do SAND_WALL_ERODE_RATE = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_WALL_JUMP_MULT"); ok do SAND_WALL_JUMP_MULT = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_IMPACT_PARTICLE_SPREAD"); ok do SAND_IMPACT_PARTICLE_SPREAD = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_IMPACT_PARTICLE_VEL_BIAS"); ok do SAND_IMPACT_PARTICLE_VEL_BIAS = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_PARTICLE_VEL_BIAS_X"); ok do SAND_PARTICLE_VEL_BIAS_X = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_PARTICLE_VEL_BIAS_Y"); ok do SAND_PARTICLE_VEL_BIAS_Y = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_DASH_PARTICLE_VEL_BIAS"); ok do SAND_DASH_PARTICLE_VEL_BIAS = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_PARTICLE_SPEED_RAND_MIN"); ok do SAND_PARTICLE_SPEED_RAND_MIN = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_PARTICLE_LIFETIME_RAND_MIN"); ok do SAND_PARTICLE_LIFETIME_RAND_MIN = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_DUST_SPEED_RAND_MIN"); ok do SAND_DUST_SPEED_RAND_MIN = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_DUST_LIFETIME_RAND_MIN"); ok do SAND_DUST_LIFETIME_RAND_MIN = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_QUICKSAND_MAX_ACTIVITY"); ok do SAND_QUICKSAND_MAX_ACTIVITY = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_LOW"); ok do SAND_DEBUG_COLOR_LOW = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_MID"); ok do SAND_DEBUG_COLOR_MID = val
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_HIGH"); ok do SAND_DEBUG_COLOR_HIGH = val
@@ -503,6 +553,11 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_rgba(&config_game, "SAND_DEBUG_COLOR_EMITTER"); ok do SAND_DEBUG_COLOR_EMITTER = val
 	if val, ok := engine.config_get_u8(&config_game, "SAND_DEBUG_SLEEP_DIM"); ok do SAND_DEBUG_SLEEP_DIM = val
 	if val, ok := engine.config_get_f32(&config_game, "SAND_DEBUG_PRESSURE_MAX"); ok do SAND_DEBUG_PRESSURE_MAX = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_DEBUG_PRESSURE_DECAY"); ok do SAND_DEBUG_PRESSURE_DECAY = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_DEBUG_HEATMAP_LOW"); ok do SAND_DEBUG_HEATMAP_LOW = val
+	if val, ok := engine.config_get_f32(&config_game, "SAND_DEBUG_HEATMAP_HIGH"); ok do SAND_DEBUG_HEATMAP_HIGH = val
+	if val, ok := engine.config_get_u8(&config_game, "SAND_DEBUG_CHUNK_OUTLINE_ALPHA"); ok do SAND_DEBUG_CHUNK_OUTLINE_ALPHA = val
+	if val, ok := engine.config_get_u8(&config_game, "SAND_DEBUG_STATS_LINE_OFFSET"); ok do SAND_DEBUG_STATS_LINE_OFFSET = val
 	if val, ok := engine.config_get_rgba(&config_game, "WATER_COLOR"); ok do WATER_COLOR = val
 	if val, ok := engine.config_get_u8(&config_game, "WATER_COLOR_VARIATION"); ok do WATER_COLOR_VARIATION = val
 	if val, ok := engine.config_get_u8(&config_game, "WATER_COLOR_DEPTH_MAX"); ok do WATER_COLOR_DEPTH_MAX = val
@@ -569,6 +624,7 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_f32(&config_game, "DEBUG_TEXT_MARGIN_Y"); ok do DEBUG_TEXT_MARGIN_Y = val
 	if val, ok := engine.config_get_f32(&config_game, "DEBUG_TEXT_STATE_GAP"); ok do DEBUG_TEXT_STATE_GAP = val
 	if val, ok := engine.config_get_f32(&config_game, "DEBUG_VEL_SCALE"); ok do DEBUG_VEL_SCALE = val
+	if val, ok := engine.config_get_f32(&config_game, "DEBUG_TEXT_TITLE_GAP"); ok do DEBUG_TEXT_TITLE_GAP = val
 }
 
 config_game: engine.Config

@@ -84,7 +84,7 @@ debug_controls_render :: proc() {
 	// Title — controller family name
 	family_labels := DEBUG_CONTROLS_FAMILY_LABELS
 	debug_controls_text_right(right_x, y, family_labels[family], DEBUG_COLOR_STATE)
-	y += DEBUG_TEXT_LINE_H * 1.5
+	y += DEBUG_TEXT_LINE_H * DEBUG_TEXT_TITLE_GAP
 
 	// Action rows: label (muted) + key/button (bright), right-aligned
 	Row :: struct {

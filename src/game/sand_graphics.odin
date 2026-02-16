@@ -107,7 +107,11 @@ sand_graphics_render :: proc(sand: ^Sand_World) {
 				if is_surface {
 					phase :=
 						f32(x) * WATER_SHIMMER_PHASE +
-						f32(sand.step_counter) * WATER_SHIMMER_SPEED * 0.016
+						f32(sand.step_counter) *
+							WATER_SHIMMER_SPEED *
+							f32(SAND_SIM_INTERVAL) /
+							f32(FPS) /
+							f32(FIXED_STEPS)
 					shimmer := (math.sin(phase) * 0.5 + 0.5) * f32(WATER_SHIMMER_BRIGHTNESS) / 255
 					fc.r = min(fc.r + shimmer, 1)
 					fc.g = min(fc.g + shimmer, 1)
@@ -219,14 +223,14 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 			cell := sand.cells[y * sand.width + x]
 			if cell.material == .Sand || cell.material == .Wet_Sand || cell.material == .Water do pressure += 1.0
 			else if cell.material == .Solid || cell.material == .Platform do pressure = 0
-			else do pressure = max(pressure - 0.5, 0)
+			else do pressure = max(pressure - SAND_DEBUG_PRESSURE_DECAY, 0)
 
 			if pressure > 0 &&
 			   (cell.material == .Sand || cell.material == .Wet_Sand || cell.material == .Water) {
 				color: [4]u8
 				t := math.clamp(pressure / SAND_DEBUG_PRESSURE_MAX, 0, 1)
-				if t < 0.33 do color = SAND_DEBUG_COLOR_LOW
-				else if t < 0.66 do color = SAND_DEBUG_COLOR_MID
+				if t < SAND_DEBUG_HEATMAP_LOW do color = SAND_DEBUG_COLOR_LOW
+				else if t < SAND_DEBUG_HEATMAP_HIGH do color = SAND_DEBUG_COLOR_MID
 				else do color = SAND_DEBUG_COLOR_HIGH
 
 				world_pos := [2]f32{f32(x) * SAND_CELL_SIZE, f32(y) * SAND_CELL_SIZE}
@@ -289,7 +293,7 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 				SAND_DEBUG_COLOR_CHUNK.r,
 				SAND_DEBUG_COLOR_CHUNK.g,
 				SAND_DEBUG_COLOR_CHUNK.b,
-				128,
+				SAND_DEBUG_CHUNK_OUTLINE_ALPHA,
 			)
 			sdl.RenderRect(game.win.renderer, &rect)
 		}
@@ -342,7 +346,7 @@ sand_graphics_debug :: proc(sand: ^Sand_World) {
 	sleeping_chunks := len(sand.chunks) - active_chunks
 
 	// Render stats below existing debug text (account for 2 extra sensor lines)
-	stats_y := DEBUG_TEXT_MARGIN_Y + 17 * DEBUG_TEXT_LINE_H
+	stats_y := DEBUG_TEXT_MARGIN_Y + f32(SAND_DEBUG_STATS_LINE_OFFSET) * DEBUG_TEXT_LINE_H
 	debug_value_with_label(DEBUG_TEXT_MARGIN_X, stats_y, "Sand:", fmt.ctprintf("%d", sand_count))
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,
