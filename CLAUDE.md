@@ -156,7 +156,7 @@ BMP files (1 px = 1 tile, `TILE_SIZE = 0.5m`). Pixels mapped to `Level_Tile_Kind
 
 **Slope variants:** `Slope_Right` (floor /), `Slope_Left` (floor \), `Slope_Ceil_Left` (ceiling /), `Slope_Ceil_Right` (ceiling \). BMP: red `{255,0,0}`, blue `{0,0,255}`, dark red `{128,0,0}`, dark blue `{0,0,128}`. Render as filled triangles via `sdl.RenderGeometry`.
 
-**Sand/water tile extraction during load:** `Sand_Pile` yellow `{255,255,0}` → `.Back_Wall`. `Sand_Emitter` orange `{255,128,0}` → `.Solid`. `Water_Pile` cyan `{0,255,255}` → `.Back_Wall`. `Water_Emitter` green `{0,255,128}` → `.Solid`. Positions stored, consumed by `sand_init`.
+**Sand/water/fire tile extraction during load:** `Sand_Pile` yellow `{255,255,0}` → `.Back_Wall`. `Sand_Emitter` orange `{255,128,0}` → `.Solid`. `Water_Pile` cyan `{0,255,255}` → `.Back_Wall`. `Water_Emitter` green `{0,255,128}` → `.Solid`. `Torch` orange-red `#ff4500` → `.Back_Wall` (fire emitter). Positions stored, consumed by `sand_init`.
 
 ### Slopes
 
@@ -168,27 +168,27 @@ Downhill: snap-based — resolve snaps player to surface if gap < snap distance.
 
 CA sand/water sim in `src/engine/sand.odin` on level-aligned grid (`SAND_CELLS_PER_TILE` cells per tile, configurable resolution). `Sand_World` stores flat `[]Sand_Cell` (y*w+x, y=0=bottom) + parallel `[]Sand_Slope_Kind` (immutable structural data from level) + chunks + emitters + player footprint cache. Grid dimensions = level dimensions × `SAND_CELLS_PER_TILE`. Cell size = `TILE_SIZE / SAND_CELLS_PER_TILE`. Distance/accumulation constants in `game.ini` auto-scale with CPT via expressions. Data-driven material properties (`Sand_Material_Props`, `Sand_Behavior` enum, `SAND_MAT_PROPS` table) unify sim dispatch.
 
-**Materials:** Empty, Solid (level), Sand (falls), Water (flows horizontally, buoyant), Platform (one-way), Wet_Sand (sand that contacted water: heavier, stickier, darker; dries without water).
+**Materials:** Empty, Solid (level), Sand (falls), Water (flows horizontally, buoyant), Platform (one-way), Wet_Sand (sand that contacted water: heavier, stickier, darker; dries without water), Fire (rises, extinguishes or converts to smoke), Smoke (rises, disperses sideways, decays).
 
-**Sim:** Every `SAND_SIM_INTERVAL` fixed steps. Bottom-to-top, alternating L/R parity. Sand: down → diagonal; sinks through water. Wet sand: same as sand but lower repose chance (stickier), higher water swap chance. Water: down → diagonal → horizontal (up to `WATER_FLOW_DISTANCE` cells); wets adjacent sand on contact (`WATER_CONTACT_WET_CHANCE`); surface tension prevents thin film spreading. On slope cells, sand/water slides only in the slope's downhill diagonal direction. Wet sand dries after `WET_SAND_DRY_STEPS` without adjacent water; spreads wetness to neighbors (`WET_SAND_SPREAD_CHANCE`). Sleep after `SAND_SLEEP_THRESHOLD` idle steps; movement wakes 8 neighbors. Parity flag prevents double-moves. Player footprint blocking: sim and displacement respect cached player bounds (`sand_is_player_cell`), preventing sand/water from moving into the player.
+**Sim:** Every `SAND_SIM_INTERVAL` fixed steps. Bottom-to-top, alternating L/R parity. Sand: down → diagonal; sinks through water. Wet sand: same as sand but lower repose chance (stickier), higher water swap chance. Water: down → diagonal → horizontal (up to `WATER_FLOW_DISTANCE` cells); wets adjacent sand on contact (`WATER_CONTACT_WET_CHANCE`); surface tension prevents thin film spreading. Fire: rises upward with diagonal spread, chance to extinguish (`FIRE_LIFETIME_CHANCE`) or convert to smoke (`FIRE_SMOKE_CHANCE`). Smoke: rises (`SMOKE_RISE_CHANCE`), disperses sideways (`SMOKE_DISPERSE_CHANCE`), decays (`SMOKE_DECAY_CHANCE`). On slope cells, sand/water slides only in the slope's downhill diagonal direction. Wet sand dries after `WET_SAND_DRY_STEPS` without adjacent water; spreads wetness to neighbors (`WET_SAND_SPREAD_CHANCE`). Sleep after `SAND_SLEEP_THRESHOLD` idle steps; movement wakes 8 neighbors. Parity flag prevents double-moves. Player footprint blocking: sim and displacement respect cached player bounds (`sand_is_player_cell`), preventing sand/water from moving into the player.
 
 **Chunks:** 32x32 partitions. Track active_count, dirty/needs_sim. Dirty propagates to 8-neighbors. Skip chunks with needs_sim=false.
 
-**Emitters:** Accumulate fractional particles at `SAND_EMITTER_RATE`/`WATER_EMITTER_RATE`. Spawn one tile below when ready.
+**Emitters:** Accumulate fractional particles at `SAND_EMITTER_RATE`/`WATER_EMITTER_RATE`/`FIRE_EMITTER_RATE`. Sand/water spawn one tile below; fire spawns one tile above.
 
 **Player interaction** (`engine.sand_apply_physics` each fixed step, called directly from `player_fixed_update`):
 1. **Impact craters** — landing speed stored in `abilities.impact_pending`; crater radius + particle count scale with impact factor. Ejects sand upward around footprint
-2. **Displacement** — push sand/wet sand/water out of player footprint. Slope-aware: on slopes, pushes align with surface geometry (downhill diagonals allowed, through-surface blocked). Chaining blocked through slope cells. Flat fallbacks: primary → down → diag → opposite → opposite diag
+2. **Displacement** — push sand/wet sand/water out of player footprint. Fire/smoke displaced upward via `sand_displace_gas` (no drag). Slope-aware: on slopes, pushes align with surface geometry (downhill diagonals allowed, through-surface blocked). Chaining blocked through slope cells. Flat fallbacks: primary → down → diag → opposite → opposite diag
 3. **Drag** — sand: quadratic by immersion. Wet sand: separate higher drag constants. Water: separate drag constants. Dash: reduced drag via `SAND_DASH_DRAG_FACTOR`
 4. **Pressure** — contiguous sand/wet sand above → downward force. Water excluded
 5. **Burial / quicksand** — sand ratio > threshold → extra gravity. Activity-scaled: moving makes you sink faster (`SAND_QUICKSAND_MOVE_MULT`)
 6. **Buoyancy** — water immersion > threshold → upward force
-7. **Dash carving** — dashes tunnel through sand/water, ejecting cells upward/sideways with particles
+7. **Dash carving** — dashes tunnel through sand/water/fire/smoke, ejecting cells upward/sideways with particles
 8. **Footprints** — running on sand surface creates depressions at `SAND_FOOTPRINT_STRIDE` intervals, piling removed sand beside
 
 **Sand walls:** Vertical sand columns (≥ `SAND_WALL_MIN_HEIGHT` cells) detected as walls. Wall states erode sand walls via `sand_wall_erode`. Wall jumps from sand walls use `SAND_WALL_JUMP_MULT`.
 
-**Rendering:** Sand + wet sand = opaque rects (triangles on slope cells), color variants via `SAND_COLOR_VARIATION`/`WET_SAND_COLOR_VARIATION`. Water = alpha-blended, depth-darkened gradient (triangles on slopes), surface shimmer effect. Optional `SAND_SURFACE_SMOOTH` for interpolated surface height. Rendered after player.
+**Rendering:** Sand + wet sand = opaque rects (triangles on slope cells), color variants via `SAND_COLOR_VARIATION`/`WET_SAND_COLOR_VARIATION`. Water = alpha-blended, depth-darkened gradient (triangles on slopes), surface shimmer effect. Fire = opaque with `FIRE_COLOR_VARIATION`. Smoke = alpha-blended with `SMOKE_COLOR_VARIATION`. Optional `SAND_SURFACE_SMOOTH` for interpolated surface height. Rendered after player.
 
 ### Camera
 
@@ -202,7 +202,7 @@ INI with sections, expressions (`+`,`-`,`*`,`/`, parens, variable refs), `#RRGGB
 
 **Workflow:** edit `game.ini` → `odin run build/ -- gen` → update source → `odin run build/ -- check`.
 
-**Sections:** `[game]`, `[version]`, `[engine]`, `[physics]`, `[camera]` (`CAMERA_*`), `[level]` (`LEVEL_COLOR_*`), `[player]`/`[player_run]`/`[player_jump]`/`[player_dash]`/`[player_wall]`/`[player_slopes]`/`[player_graphics]`/`[player_particles]`/`[player_particle_colors]`, `[sand]` (`SAND_*`), `[sand_debug]` (`SAND_DEBUG_*`), `[water]` (`WATER_*`), `[wet_sand]` (`WET_SAND_*`), `[input]` (`INPUT_KB_*`/`INPUT_GP_*`), `[debug_colors]` (`DEBUG_COLOR_*`), `[debug]` (`DEBUG_*`).
+**Sections:** `[game]`, `[version]`, `[engine]`, `[physics]`, `[camera]` (`CAMERA_*`), `[level]` (`LEVEL_COLOR_*`), `[player]`/`[player_run]`/`[player_jump]`/`[player_dash]`/`[player_wall]`/`[player_slopes]`/`[player_graphics]`/`[player_particles]`/`[player_particle_colors]`, `[sand]` (`SAND_*`), `[sand_debug]` (`SAND_DEBUG_*`), `[water]` (`WATER_*`), `[wet_sand]` (`WET_SAND_*`), `[fire]` (`FIRE_*`), `[smoke]` (`SMOKE_*`), `[input]` (`INPUT_KB_*`/`INPUT_GP_*`), `[debug_colors]` (`DEBUG_COLOR_*`), `[debug]` (`DEBUG_*`).
 
 ## Units & Coordinates
 

@@ -51,6 +51,7 @@ LEVEL_PALETTE_SAND_PILE: [4]u8               // BMP palette: pre-placed sand
 LEVEL_PALETTE_SAND_EMITTER: [4]u8            // BMP palette: sand emitter
 LEVEL_PALETTE_WATER_PILE: [4]u8              // BMP palette: pre-placed water
 LEVEL_PALETTE_WATER_EMITTER: [4]u8           // BMP palette: water emitter
+LEVEL_PALETTE_TORCH: [4]u8                   // BMP palette: torch placement (orange red)
 
 // [player]
 PLAYER_COLOR: [4]u8                          // player square color (RGBA)
@@ -233,6 +234,7 @@ config_apply :: proc() {
 	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_PALETTE_SAND_EMITTER"); ok do LEVEL_PALETTE_SAND_EMITTER = val
 	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_PALETTE_WATER_PILE"); ok do LEVEL_PALETTE_WATER_PILE = val
 	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_PALETTE_WATER_EMITTER"); ok do LEVEL_PALETTE_WATER_EMITTER = val
+	if val, ok := engine.config_get_rgba(&config_game, "LEVEL_PALETTE_TORCH"); ok do LEVEL_PALETTE_TORCH = val
 	if val, ok := engine.config_get_rgba(&config_game, "PLAYER_COLOR"); ok do PLAYER_COLOR = val
 	if val, ok := engine.config_get_f32(&config_game, "PLAYER_SIZE"); ok do PLAYER_SIZE = val
 	if val, ok := engine.config_get_f32(&config_game, "PLAYER_CHECK_GROUND_EPS"); ok do PLAYER_CHECK_GROUND_EPS = val

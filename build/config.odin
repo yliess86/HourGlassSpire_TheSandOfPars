@@ -121,7 +121,7 @@ config_extract_comment :: proc(raw_value: string) -> string {
 	return strings.trim_space(first[1:])
 }
 
-SAND_SECTIONS :: [?]string{"sand", "sand_debug", "water", "wet_sand"}
+SAND_SECTIONS :: [?]string{"sand", "sand_debug", "water", "wet_sand", "fire", "smoke"}
 
 config_is_sand_section :: proc(section: string) -> bool {
 	for s in SAND_SECTIONS do if section == s do return true

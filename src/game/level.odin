@@ -20,6 +20,7 @@ Level_Tile_Kind :: enum u8 {
 	Sand_Emitter, // continuous source -> emitter in sand world, .Solid in level
 	Water_Pile, // pre-placed water -> Sand_Material.Water in sand world, .Empty in level
 	Water_Emitter, // continuous water source -> emitter in sand world, .Solid in level
+	Torch, // fire source -> emitter in sand world, .Solid in level
 }
 
 
@@ -41,6 +42,7 @@ Level :: struct {
 	sand_emitters:       [dynamic][2]int,
 	water_piles:         [dynamic][2]int,
 	water_emitters:      [dynamic][2]int,
+	fire_emitters:       [dynamic][2]int,
 }
 
 level_load :: proc(path: cstring) -> (level: Level, ok: bool) {
@@ -108,6 +110,9 @@ level_load :: proc(path: cstring) -> (level: Level, ok: bool) {
 			} else if kind == .Water_Emitter {
 				append(&level.water_emitters, [2]int{x, world_y})
 				level.tiles[idx] = .Solid
+			} else if kind == .Torch {
+				append(&level.fire_emitters, [2]int{x, world_y})
+				level.tiles[idx] = .Back_Wall
 			}
 		}
 	}
@@ -158,6 +163,7 @@ level_color_to_tile :: proc(rgb: [3]u8) -> Level_Tile_Kind {
 		.Sand_Emitter     = LEVEL_PALETTE_SAND_EMITTER,
 		.Water_Pile       = LEVEL_PALETTE_WATER_PILE,
 		.Water_Emitter    = LEVEL_PALETTE_WATER_EMITTER,
+		.Torch            = LEVEL_PALETTE_TORCH,
 	}
 	for color, kind in palette {
 		if rgb[0] == color[0] && rgb[1] == color[1] && rgb[2] == color[2] do return kind
@@ -642,6 +648,7 @@ level_to_sand_data :: proc(level: ^Level) -> engine.Sand_Level_Data {
 		sand_emitters = level.sand_emitters[:],
 		water_piles = level.water_piles[:],
 		water_emitters = level.water_emitters[:],
+		fire_emitters = level.fire_emitters[:],
 	}
 }
 
@@ -660,7 +667,7 @@ level_tile_to_sand :: proc(tile: Level_Tile_Kind) -> engine.Sand_Tile_Kind {
 		return .Slope_Ceil_Right
 	case .Slope_Ceil_Left:
 		return .Slope_Ceil_Left
-	case .Empty, .Back_Wall, .Spawn, .Sand_Pile, .Water_Pile:
+	case .Empty, .Back_Wall, .Spawn, .Sand_Pile, .Water_Pile, .Torch:
 		return .Empty
 	case .Sand_Emitter, .Water_Emitter:
 		return .Solid

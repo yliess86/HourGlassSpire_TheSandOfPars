@@ -115,6 +115,7 @@ game_init :: proc() {
 	delete(game.level.sand_emitters)
 	delete(game.level.water_piles)
 	delete(game.level.water_emitters)
+	delete(game.level.fire_emitters)
 	delete(game.level.original_tiles)
 	game_sand_inject_fields()
 

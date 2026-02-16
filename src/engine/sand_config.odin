@@ -144,6 +144,21 @@ WET_SAND_PLAYER_DRAG_PER_CELL: f32    // much higher drag per cell than dry sand
 WET_SAND_PLAYER_DRAG_MAX: f32         // higher drag cap
 WET_SAND_PLAYER_DRAG_Y_FACTOR: f32    // slightly more vertical drag
 
+// [fire]
+FIRE_COLOR: [4]u8                     // base fire particle color
+FIRE_COLOR_VARIATION: u8              // per-particle brightness offset for fire variety
+FIRE_RISE_SPEED: f32                  // upward movement probability for fire cells
+FIRE_LIFETIME_CHANCE: f32             // probability per step of fire extinguishing
+FIRE_SMOKE_CHANCE: f32                // probability per step of fire turning to smoke
+FIRE_EMITTER_RATE: f32                // fire particles spawned per second per emitter
+
+// [smoke]
+SMOKE_COLOR: [4]u8                    // base smoke particle color (translucent dark gray)
+SMOKE_COLOR_VARIATION: u8             // per-particle brightness offset for smoke variety
+SMOKE_RISE_CHANCE: f32                // probability per step of smoke rising
+SMOKE_DISPERSE_CHANCE: f32            // probability per step of smoke moving sideways
+SMOKE_DECAY_CHANCE: f32               // probability per step of smoke disappearing
+
 sand_config_apply :: proc() {
 	if val, ok := config_get_u8(&sand_config, "SAND_CHUNK_SIZE"); ok do SAND_CHUNK_SIZE = val
 	if val, ok := config_get_u8(&sand_config, "SAND_CELLS_PER_TILE"); ok do SAND_CELLS_PER_TILE = val
@@ -278,6 +293,17 @@ sand_config_apply :: proc() {
 	if val, ok := config_get_f32(&sand_config, "WET_SAND_PLAYER_DRAG_PER_CELL"); ok do WET_SAND_PLAYER_DRAG_PER_CELL = val
 	if val, ok := config_get_f32(&sand_config, "WET_SAND_PLAYER_DRAG_MAX"); ok do WET_SAND_PLAYER_DRAG_MAX = val
 	if val, ok := config_get_f32(&sand_config, "WET_SAND_PLAYER_DRAG_Y_FACTOR"); ok do WET_SAND_PLAYER_DRAG_Y_FACTOR = val
+	if val, ok := config_get_rgba(&sand_config, "FIRE_COLOR"); ok do FIRE_COLOR = val
+	if val, ok := config_get_u8(&sand_config, "FIRE_COLOR_VARIATION"); ok do FIRE_COLOR_VARIATION = val
+	if val, ok := config_get_f32(&sand_config, "FIRE_RISE_SPEED"); ok do FIRE_RISE_SPEED = val
+	if val, ok := config_get_f32(&sand_config, "FIRE_LIFETIME_CHANCE"); ok do FIRE_LIFETIME_CHANCE = val
+	if val, ok := config_get_f32(&sand_config, "FIRE_SMOKE_CHANCE"); ok do FIRE_SMOKE_CHANCE = val
+	if val, ok := config_get_f32(&sand_config, "FIRE_EMITTER_RATE"); ok do FIRE_EMITTER_RATE = val
+	if val, ok := config_get_rgba(&sand_config, "SMOKE_COLOR"); ok do SMOKE_COLOR = val
+	if val, ok := config_get_u8(&sand_config, "SMOKE_COLOR_VARIATION"); ok do SMOKE_COLOR_VARIATION = val
+	if val, ok := config_get_f32(&sand_config, "SMOKE_RISE_CHANCE"); ok do SMOKE_RISE_CHANCE = val
+	if val, ok := config_get_f32(&sand_config, "SMOKE_DISPERSE_CHANCE"); ok do SMOKE_DISPERSE_CHANCE = val
+	if val, ok := config_get_f32(&sand_config, "SMOKE_DECAY_CHANCE"); ok do SMOKE_DECAY_CHANCE = val
 }
 
 sand_config: Config

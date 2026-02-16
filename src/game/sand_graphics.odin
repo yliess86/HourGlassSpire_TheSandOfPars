@@ -15,6 +15,8 @@ Sand_Render_Batch :: struct {
 sand_color_lut: [4]sdl.FColor
 wet_sand_color_lut: [4]sdl.FColor
 water_color_lut: [256]sdl.FColor
+fire_color_lut: [4]sdl.FColor
+smoke_color_lut: [4]sdl.FColor
 
 sand_graphics_init_lut :: proc() {
 	sand_graphics_build_lut(&sand_color_lut, engine.SAND_COLOR, engine.SAND_COLOR_VARIATION)
@@ -23,6 +25,8 @@ sand_graphics_init_lut :: proc() {
 		engine.WET_SAND_COLOR,
 		engine.WET_SAND_COLOR_VARIATION,
 	)
+	sand_graphics_build_lut(&fire_color_lut, engine.FIRE_COLOR, engine.FIRE_COLOR_VARIATION)
+	sand_graphics_build_lut(&smoke_color_lut, engine.SMOKE_COLOR, engine.SMOKE_COLOR_VARIATION)
 	for d in 0 ..< engine.WATER_COLOR_LUT_SIZE {
 		t := math.clamp(f32(d) / f32(engine.WATER_COLOR_DEPTH_MAX), 0, 1)
 		offset := t * f32(engine.WATER_COLOR_VARIATION) / 255
@@ -65,20 +69,28 @@ sand_graphics_render :: proc(world: ^engine.Sand_World) {
 		vertices = make([dynamic]sdl.Vertex, 0, 7000, context.temp_allocator),
 		indices  = make([dynamic]c.int, 0, 10000, context.temp_allocator),
 	}
+	fire_batch := Sand_Render_Batch {
+		vertices = make([dynamic]sdl.Vertex, 0, 2000, context.temp_allocator),
+		indices  = make([dynamic]c.int, 0, 3000, context.temp_allocator),
+	}
+	smoke_batch := Sand_Render_Batch {
+		vertices = make([dynamic]sdl.Vertex, 0, 2000, context.temp_allocator),
+		indices  = make([dynamic]c.int, 0, 3000, context.temp_allocator),
+	}
 
-	// Batch sand + wet sand cells (opaque)
+	// Batch sand + wet sand + fire + smoke cells
 	for y in y0 ..< y1 {
 		for x in x0 ..< x1 {
 			idx := y * world.width + x
 			cell := world.cells[idx]
 			fc: sdl.FColor
-			if cell.material == .Sand do fc = sand_color_lut[cell.color_variant]
-			else if cell.material == .Wet_Sand do fc = wet_sand_color_lut[cell.color_variant]
-			else do continue
+			batch: ^Sand_Render_Batch
+			if cell.material ==
+			   .Sand {fc = sand_color_lut[cell.color_variant]; batch = &sand_batch} else if cell.material == .Wet_Sand {fc = wet_sand_color_lut[cell.color_variant]; batch = &sand_batch} else if cell.material == .Fire {fc = fire_color_lut[cell.color_variant]; batch = &fire_batch} else if cell.material == .Smoke {fc = smoke_color_lut[cell.color_variant]; batch = &smoke_batch} else do continue
 
 			slope := world.slopes[idx]
-			if slope != .None do sand_graphics_batch_slope_tri(&sand_batch, x, y, slope, fc)
-			else do sand_graphics_batch_rect(&sand_batch, x, y, fc)
+			if slope != .None do sand_graphics_batch_slope_tri(batch, x, y, slope, fc)
+			else do sand_graphics_batch_rect(batch, x, y, fc)
 		}
 	}
 
@@ -155,6 +167,34 @@ sand_graphics_render :: proc(world: ^engine.Sand_World) {
 			c.int(len(water_batch.vertices)),
 			raw_data(water_batch.indices[:]),
 			c.int(len(water_batch.indices)),
+		)
+		sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_NONE)
+	}
+
+	// Draw fire batch (additive blending for glow)
+	if len(fire_batch.indices) > 0 {
+		sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_ADD)
+		sdl.RenderGeometry(
+			game.win.renderer,
+			nil,
+			raw_data(fire_batch.vertices[:]),
+			c.int(len(fire_batch.vertices)),
+			raw_data(fire_batch.indices[:]),
+			c.int(len(fire_batch.indices)),
+		)
+		sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_NONE)
+	}
+
+	// Draw smoke batch (alpha-blended)
+	if len(smoke_batch.indices) > 0 {
+		sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
+		sdl.RenderGeometry(
+			game.win.renderer,
+			nil,
+			raw_data(smoke_batch.vertices[:]),
+			c.int(len(smoke_batch.vertices)),
+			raw_data(smoke_batch.indices[:]),
+			c.int(len(smoke_batch.indices)),
 		)
 		sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_NONE)
 	}

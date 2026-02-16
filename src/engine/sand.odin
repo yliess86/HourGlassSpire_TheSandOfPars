@@ -12,6 +12,8 @@ Sand_Material :: enum u8 {
 	Water, // liquid particle: flows horizontally, buoyant
 	Platform, // one-way: blocks sand from above, sand never moves up so pass-through is implicit
 	Wet_Sand, // sand that contacted water: heavier, stickier, darker; dries without water
+	Fire, // rising flame: extinguishes or turns to smoke
+	Smoke, // rising gas: disperses sideways, decays over time
 }
 
 Sand_Slope_Kind :: enum u8 {
@@ -44,6 +46,8 @@ SAND_MAT_PROPS := [Sand_Material]Sand_Material_Props {
 	.Water = {behavior = .Liquid, density = 1, inert = false},
 	.Platform = {behavior = .Static, density = 255, inert = true},
 	.Wet_Sand = {behavior = .Powder, density = 4, inert = false},
+	.Fire = {behavior = .Gas, density = 0, inert = false},
+	.Smoke = {behavior = .Gas, density = 1, inert = false},
 }
 
 // --- Cell & Flag layout ---
@@ -219,6 +223,7 @@ Sand_Level_Data :: struct {
 	sand_emitters:  [][2]int,
 	water_piles:    [][2]int,
 	water_emitters: [][2]int,
+	fire_emitters:  [][2]int,
 }
 
 // --- Grid accessors ---
@@ -300,6 +305,7 @@ sand_init :: proc(world: ^Sand_World, level: ^Sand_Level_Data) {
 
 	for pos in level.sand_emitters do append(&world.emitters, Sand_Emitter{tx = pos.x, ty = pos.y, material = .Sand})
 	for pos in level.water_emitters do append(&world.emitters, Sand_Emitter{tx = pos.x, ty = pos.y, material = .Water})
+	for pos in level.fire_emitters do append(&world.emitters, Sand_Emitter{tx = pos.x, ty = pos.y, material = .Fire})
 
 	sand_chunk_recount(world)
 }
@@ -374,7 +380,7 @@ sand_wake_neighbors :: proc(world: ^Sand_World, x, y: int) {
 			nx, ny := x + dx, y + dy
 			if !sand_in_bounds(world, nx, ny) do continue
 			cell := &world.cells[ny * world.width + nx]
-			if cell.material == .Sand || cell.material == .Wet_Sand || cell.material == .Water do cell.sleep_counter = 0
+			if !SAND_MAT_PROPS[cell.material].inert do cell.sleep_counter = 0
 		}
 	}
 }
@@ -541,7 +547,8 @@ sand_apply_physics :: proc(
 		for tx in cx0 ..= cx1 {
 			if !sand_in_bounds(world, tx, ty) do continue
 			mat := world.cells[ty * world.width + tx].material
-			if mat != .Sand && mat != .Wet_Sand && mat != .Water do continue
+			is_gas := mat == .Fire || mat == .Smoke
+			if !is_gas && mat != .Sand && mat != .Wet_Sand && mat != .Water do continue
 
 			push_dx: int = tx >= center_cx ? 1 : -1
 			in_ring := tx < x0 || tx > x1 || ty < y0
@@ -549,6 +556,8 @@ sand_apply_physics :: proc(
 			displaced := false
 			if in_ring && impact_factor > 0 {
 				displaced = sand_eject_cell_up(world, tx, ty, y1, push_dx)
+			} else if is_gas {
+				displaced = sand_displace_gas(world, tx, ty, push_dx)
 			} else {
 				displaced = sand_displace_cell(world, tx, ty, push_dx)
 			}
@@ -676,7 +685,7 @@ sand_dash_carve :: proc(
 			if !sand_in_bounds(world, gx, gy) do continue
 			idx := gy * world.width + gx
 			mat := world.cells[idx].material
-			if mat != .Sand && mat != .Wet_Sand && mat != .Water do continue
+			if mat != .Sand && mat != .Wet_Sand && mat != .Water && mat != .Fire && mat != .Smoke do continue
 
 			if !sand_eject_cell_up(world, gx, gy, gy_end, push_dx) do continue
 			if mat == .Sand || mat == .Wet_Sand do sand_carved += 1
@@ -761,6 +770,17 @@ sand_displace_cell :: proc(world: ^Sand_World, tx, ty, push_dx: int) -> bool {
 	if slope == .None || (slope == .Right && push_dx > 0) || (slope == .Left && push_dx < 0) {
 		if sand_try_displace_to(world, tx, ty, tx - push_dx, ty - 1) do return true
 	}
+	return false
+}
+
+// Displace a gas cell (fire/smoke) upward — priority: sideways, up, diagonal-up, opposite, opposite-diagonal-up.
+@(private = "file")
+sand_displace_gas :: proc(world: ^Sand_World, tx, ty, push_dx: int) -> bool {
+	if sand_try_displace_to(world, tx, ty, tx + push_dx, ty) do return true
+	if sand_try_displace_to(world, tx, ty, tx, ty + 1) do return true
+	if sand_try_displace_to(world, tx, ty, tx + push_dx, ty + 1) do return true
+	if sand_try_displace_to(world, tx, ty, tx - push_dx, ty) do return true
+	if sand_try_displace_to(world, tx, ty, tx - push_dx, ty + 1) do return true
 	return false
 }
 
@@ -903,7 +923,9 @@ sand_dispatch_cell :: proc(world: ^Sand_World, x, y: int, parity: u32) {
 		sand_update_cell_powder(world, x, y, parity)
 	case .Liquid:
 		sand_update_cell_liquid(world, x, y, parity)
-	case .Static, .Gas:
+	case .Gas:
+		sand_update_cell_gas(world, x, y, parity)
+	case .Static:
 	}
 }
 
@@ -1093,6 +1115,65 @@ sand_update_cell_liquid :: proc(world: ^Sand_World, x, y: int, parity: u32) {
 
 	if !moved && slope == .None do moved = sand_try_rise(world, x, y, parity)
 	if !moved do if world.cells[idx].sleep_counter < 255 do world.cells[idx].sleep_counter += 1
+}
+
+// Gas material update: fire extinguishes/converts to smoke, smoke decays. Both rise upward with dispersion.
+@(private = "file")
+sand_update_cell_gas :: proc(world: ^Sand_World, x, y: int, parity: u32) {
+	idx := y * world.width + x
+	cell := &world.cells[idx]
+	mat := cell.material
+
+	// Fire: chance to extinguish or convert to smoke
+	if mat == .Fire {
+		if rand.float32() < FIRE_LIFETIME_CHANCE {
+			world.cells[idx] = Sand_Cell{}
+			sand_wake_neighbors(world, x, y)
+			sand_chunk_mark_dirty(world, x, y)
+			chunk := sand_chunk_at(world, x, y)
+			if chunk != nil && chunk.active_count > 0 do chunk.active_count -= 1
+			return
+		}
+		if rand.float32() < FIRE_SMOKE_CHANCE {
+			cell.material = .Smoke
+			cell.color_variant = sand_wang_hash(x, y)
+			cell.sleep_counter = 0
+			sand_wake_neighbors(world, x, y)
+			sand_chunk_mark_dirty(world, x, y)
+			return
+		}
+	}
+
+	// Smoke: chance to decay
+	if mat == .Smoke && rand.float32() < SMOKE_DECAY_CHANCE {
+		world.cells[idx] = Sand_Cell{}
+		sand_wake_neighbors(world, x, y)
+		sand_chunk_mark_dirty(world, x, y)
+		chunk := sand_chunk_at(world, x, y)
+		if chunk != nil && chunk.active_count > 0 do chunk.active_count -= 1
+		return
+	}
+
+	// Movement: try up, then diagonal up, then sideways (smoke only)
+	rise_chance: f32 = FIRE_RISE_SPEED if mat == .Fire else SMOKE_RISE_CHANCE
+	moved := false
+	if rand.float32() < rise_chance {
+		if sand_try_move(world, x, y, x, y + 1, parity) do moved = true
+		else {
+			first_dx: int = (rand.int31() & 1) == 0 ? -1 : 1
+			if sand_try_move(world, x, y, x + first_dx, y + 1, parity) do moved = true
+			else if sand_try_move(world, x, y, x - first_dx, y + 1, parity) do moved = true
+		}
+	}
+
+	// Smoke dispersion: try sideways
+	if !moved && mat == .Smoke && rand.float32() < SMOKE_DISPERSE_CHANCE {
+		first_dx: int = (rand.int31() & 1) == 0 ? -1 : 1
+		if sand_try_move(world, x, y, x + first_dx, y, parity) do moved = true
+		else if sand_try_move(world, x, y, x - first_dx, y, parity) do moved = true
+	}
+
+	if !moved do if cell.sleep_counter < 255 do cell.sleep_counter += 1
 }
 
 // Horizontal multi-cell flow with surface tension
@@ -1324,7 +1405,15 @@ sand_emitter_update :: proc(world: ^Sand_World) {
 	dt := world.fixed_dt
 
 	for &emitter in world.emitters {
-		rate := WATER_EMITTER_RATE if emitter.material == .Water else SAND_EMITTER_RATE
+		rate: f32
+		#partial switch emitter.material {
+		case .Water:
+			rate = WATER_EMITTER_RATE
+		case .Fire:
+			rate = FIRE_EMITTER_RATE
+		case:
+			rate = SAND_EMITTER_RATE
+		}
 		cpt := f32(SAND_CELLS_PER_TILE)
 		emitter.accumulator += rate * dt
 
@@ -1332,7 +1421,9 @@ sand_emitter_update :: proc(world: ^Sand_World) {
 			emitter.accumulator -= 1.0
 
 			base_sand_x := emitter.tx * int(SAND_CELLS_PER_TILE)
-			base_sand_y := (emitter.ty - 1) * int(SAND_CELLS_PER_TILE)
+			base_sand_y :=
+				(emitter.ty + 1 if emitter.material == .Fire else emitter.ty - 1) *
+				int(SAND_CELLS_PER_TILE)
 
 			center := cpt / 2 - 0.5
 			radius_sq := (cpt / 2) * (cpt / 2)
