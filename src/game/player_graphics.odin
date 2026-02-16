@@ -215,6 +215,7 @@ player_graphics_spawn_sand_particles :: proc(pool: ^engine.Particle_Pool, player
 	stats := player.graphics.last_sand_stats
 	if stats.sand_displaced <= 0 && stats.wet_sand_displaced <= 0 && stats.water_displaced <= 0 do return
 
+	// Projectile system handles impact/dash visuals; cosmetic particles reduced
 	if player.state == .Dashing {
 		sand_particles_dash(pool, player, stats)
 	} else {
@@ -240,6 +241,7 @@ sand_particles_dash :: proc(
 	half_spread: f32 = math.PI / 3
 	vel_bias := [2]f32{-dash_dir * PLAYER_DASH_SPEED * engine.SAND_DASH_PARTICLE_VEL_BIAS, 0}
 
+	// Halve dash counts — projectile system provides primary visual feedback
 	if stats.sand_displaced > 0 {
 		engine.sand_particles_emit(
 			pool,
@@ -249,7 +251,7 @@ sand_particles_dash :: proc(
 			half_spread,
 			vel_bias,
 			engine.SAND_COLOR,
-			min(stats.sand_displaced, int(engine.SAND_DASH_PARTICLE_MAX)),
+			min(stats.sand_displaced, int(engine.SAND_DASH_PARTICLE_MAX)) / 2,
 			engine.SAND_DASH_PARTICLE_SPEED_MULT,
 		)
 	}
@@ -262,7 +264,7 @@ sand_particles_dash :: proc(
 			half_spread,
 			vel_bias,
 			engine.WATER_COLOR,
-			min(stats.water_displaced, int(engine.SAND_DASH_PARTICLE_MAX)),
+			min(stats.water_displaced, int(engine.SAND_DASH_PARTICLE_MAX)) / 2,
 			engine.SAND_DASH_PARTICLE_SPEED_MULT,
 		)
 	}
@@ -293,8 +295,10 @@ sand_particles_displace :: proc(
 	}
 
 	if stats.sand_displaced > 0 {
-		count :=
+		// Halve impact counts — projectile system provides primary visual feedback
+		raw_count :=
 			impact > 0 ? int(math.lerp(f32(engine.SAND_IMPACT_PARTICLE_MIN), f32(engine.SAND_IMPACT_PARTICLE_MAX), impact)) : min(stats.sand_displaced, int(engine.SAND_DISPLACE_PARTICLE_MAX))
+		count := raw_count / 2 if impact > 0 else raw_count
 		speed_mult := math.lerp(f32(1), engine.SAND_IMPACT_PARTICLE_SPEED_MULT, impact)
 		engine.sand_particles_emit(
 			pool,

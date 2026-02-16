@@ -50,6 +50,16 @@ SAND_MAT_PROPS := [Sand_Material]Sand_Material_Props {
 	.Smoke = {behavior = .Gas, density = 1, inert = false},
 }
 
+// --- Projectile ---
+
+Sand_Projectile :: struct {
+	pos:           [2]f32, // world position (meters)
+	vel:           [2]f32, // velocity (m/s)
+	material:      Sand_Material,
+	color_variant: u8,
+	generation:    u8, // 0 = player-triggered, 1+ = cascade
+}
+
 // --- Cell & Flag layout ---
 
 Sand_Cell :: struct {
@@ -185,6 +195,9 @@ Sand_World :: struct {
 	// Emitters
 	emitters:                                                   [dynamic]Sand_Emitter,
 
+	// Projectiles (cells in flight, updated every fixed step)
+	projectiles:                                                #soa[dynamic]Sand_Projectile,
+
 	// Eroded platforms (tracked for restoration when sand moves away)
 	eroded_platforms:                                           [dynamic][2]int,
 
@@ -316,6 +329,7 @@ sand_destroy :: proc(world: ^Sand_World) {
 	delete(world.chunks)
 	delete(world.emitters)
 	delete(world.eroded_platforms)
+	delete(world.projectiles)
 }
 
 @(private = "file")
@@ -543,6 +557,8 @@ sand_apply_physics :: proc(
 	water_displaced := 0
 	center_cx := int(pos.x / SAND_CELL_SIZE)
 
+	center_cy := int((pos.y + size / 2) / SAND_CELL_SIZE)
+
 	for ty in cy0 ..= y1 {
 		for tx in cx0 ..= cx1 {
 			if !sand_in_bounds(world, tx, ty) do continue
@@ -555,9 +571,30 @@ sand_apply_physics :: proc(
 
 			displaced := false
 			if in_ring && impact_factor > 0 {
-				displaced = sand_eject_cell_up(world, tx, ty, y1, push_dx)
+				// Projectile: radial velocity from player center
+				dx_f := f32(tx - center_cx)
+				dy_f := f32(ty - center_cy)
+				dist := math.sqrt(dx_f * dx_f + dy_f * dy_f)
+				if dist < 0.1 do dist = 1
+				eject_speed := impact_factor * SAND_PROJ_IMPACT_MULT * world.gravity
+				eject_vel := [2]f32{dx_f / dist * eject_speed, dy_f / dist * eject_speed}
+				// Upward bias
+				eject_vel.y = math.abs(eject_vel.y) + eject_speed * 0.5
+				// Water splash: more upward, spread horizontal
+				if mat == .Water {
+					eject_vel.y *= SAND_PROJ_WATER_UP_MULT
+					eject_vel.x += (rand.float32() * 2 - 1) * SAND_PROJ_WATER_SPREAD
+				}
+				sand_projectile_emit(world, tx, ty, eject_vel)
+				displaced = true
 			} else if is_gas {
-				displaced = sand_displace_gas(world, tx, ty, push_dx)
+				// Projectile: push direction + player velocity component
+				gas_vel := [2]f32 {
+					f32(push_dx) * SAND_PROJ_GAS_PUSH + vel.x * SAND_PROJ_GAS_PLAYER_MULT,
+					SAND_PROJ_GAS_PUSH * 0.5 + vel.y * SAND_PROJ_GAS_PLAYER_MULT,
+				}
+				sand_projectile_emit(world, tx, ty, gas_vel)
+				displaced = true
 			} else {
 				displaced = sand_displace_cell(world, tx, ty, push_dx)
 			}
@@ -687,7 +724,12 @@ sand_dash_carve :: proc(
 			mat := world.cells[idx].material
 			if mat != .Sand && mat != .Wet_Sand && mat != .Water && mat != .Fire && mat != .Smoke do continue
 
-			if !sand_eject_cell_up(world, gx, gy, gy_end, push_dx) do continue
+			// Projectile: upward + random horizontal spread perpendicular to dash
+			eject_vel := [2]f32 {
+				(rand.float32() * 2 - 1) * SAND_PROJ_DASH_SPREAD,
+				SAND_PROJ_DASH_SPEED,
+			}
+			sand_projectile_emit(world, gx, gy, eject_vel)
 			if mat == .Sand || mat == .Wet_Sand do sand_carved += 1
 			else do water_carved += 1
 		}
@@ -773,17 +815,6 @@ sand_displace_cell :: proc(world: ^Sand_World, tx, ty, push_dx: int) -> bool {
 	return false
 }
 
-// Displace a gas cell (fire/smoke) upward — priority: sideways, up, diagonal-up, opposite, opposite-diagonal-up.
-@(private = "file")
-sand_displace_gas :: proc(world: ^Sand_World, tx, ty, push_dx: int) -> bool {
-	if sand_try_displace_to(world, tx, ty, tx + push_dx, ty) do return true
-	if sand_try_displace_to(world, tx, ty, tx, ty + 1) do return true
-	if sand_try_displace_to(world, tx, ty, tx + push_dx, ty + 1) do return true
-	if sand_try_displace_to(world, tx, ty, tx - push_dx, ty) do return true
-	if sand_try_displace_to(world, tx, ty, tx - push_dx, ty + 1) do return true
-	return false
-}
-
 // Try to move a cell from (sx,sy) to (dx,dy) for displacement.
 // Chain displacement: if destination is sand or water, recursively push it further.
 @(private = "file")
@@ -809,27 +840,6 @@ sand_try_displace_to :: proc(world: ^Sand_World, sx, sy, dx, dy: int, depth: int
 	sand_finalize_move(world, sx, sy, dx, dy)
 
 	return true
-}
-
-// Eject a sand/water cell upward (for crater rim splash), fallback to sideways
-@(private = "file")
-sand_eject_cell_up :: proc(world: ^Sand_World, tx, ty, ceil_ty, push_dx: int) -> bool {
-	for eject_y := ceil_ty + 1;
-	    eject_y < min(ceil_ty + int(SAND_EJECT_MAX_HEIGHT), world.height);
-	    eject_y += 1 {
-		if !sand_in_bounds(world, tx, eject_y) do continue
-		if world.cells[eject_y * world.width + tx].material != .Empty do continue
-
-		src_idx := ty * world.width + tx
-		dst_idx := eject_y * world.width + tx
-		world.cells[dst_idx] = world.cells[src_idx]
-		world.cells[dst_idx].sleep_counter = 0
-		sand_cell_reset_fall(&world.cells[dst_idx])
-		world.cells[src_idx] = Sand_Cell{}
-		sand_finalize_move(world, tx, ty, tx, eject_y)
-		return true
-	}
-	return sand_displace_cell(world, tx, ty, push_dx)
 }
 
 // --- Particles ---
@@ -1457,5 +1467,193 @@ sand_emitter_update :: proc(world: ^Sand_World) {
 				}
 			}
 		}
+	}
+}
+
+// --- Projectiles ---
+
+// Remove a cell from the grid and launch it as a projectile with given velocity
+sand_projectile_emit :: proc(world: ^Sand_World, gx, gy: int, vel: [2]f32, generation: u8 = 0) {
+	if !sand_in_bounds(world, gx, gy) do return
+	idx := gy * world.width + gx
+	cell := world.cells[idx]
+	if SAND_MAT_PROPS[cell.material].inert do return
+
+	// Remove from grid
+	world.cells[idx] = Sand_Cell{}
+	chunk := sand_chunk_at(world, gx, gy)
+	if chunk != nil && chunk.active_count > 0 do chunk.active_count -= 1
+	sand_wake_neighbors(world, gx, gy)
+	sand_chunk_mark_dirty(world, gx, gy)
+
+	// Create projectile at cell center
+	pos := [2]f32{(f32(gx) + 0.5) * SAND_CELL_SIZE, (f32(gy) + 0.5) * SAND_CELL_SIZE}
+	append_soa(
+		&world.projectiles,
+		Sand_Projectile {
+			pos = pos,
+			vel = vel,
+			material = cell.material,
+			color_variant = cell.color_variant,
+			generation = generation,
+		},
+	)
+}
+
+// Integrate projectiles, deposit when settled or blocked
+sand_projectile_update :: proc(world: ^Sand_World, dt: f32) {
+	// Soft cap: force-deposit oldest if over limit
+	for len(world.projectiles) > int(SAND_PROJ_MAX_COUNT) {
+		sand_projectile_deposit(world, 0, true)
+	}
+
+	i := len(world.projectiles) - 1
+	for i >= 0 {
+		proj := &world.projectiles[i]
+		behavior := SAND_MAT_PROPS[proj.material].behavior
+
+		// Material-based forces
+		switch behavior {
+		case .Powder:
+			proj.vel.y -= world.gravity * dt
+		case .Liquid:
+			proj.vel.y -= world.gravity * SAND_PROJ_WATER_GRAV_MULT * dt
+		case .Gas:
+			proj.vel.y += SAND_PROJ_GAS_RISE * dt
+		case .Static:
+		}
+
+		// Air drag
+		drag := max(f32(0), 1 - SAND_PROJ_DRAG * dt)
+		proj.vel *= drag
+
+		// Integrate position
+		proj.pos += proj.vel * dt
+
+		// Fire/smoke decay
+		decayed := false
+		if proj.material == .Fire {
+			if rand.float32() < FIRE_LIFETIME_CHANCE * dt * f32(SAND_SIM_INTERVAL) {
+				decayed = true
+			} else if rand.float32() < FIRE_SMOKE_CHANCE * dt * f32(SAND_SIM_INTERVAL) {
+				proj.material = .Smoke
+				proj.color_variant = u8(rand.uint32() & 3)
+			}
+		} else if proj.material == .Smoke {
+			if rand.float32() < SMOKE_DECAY_CHANCE * dt * f32(SAND_SIM_INTERVAL) do decayed = true
+		}
+		if decayed {
+			unordered_remove_soa(&world.projectiles, i)
+			i -= 1
+			continue
+		}
+
+		// Convert to grid coords
+		gx := int(proj.pos.x / SAND_CELL_SIZE)
+		gy := int(proj.pos.y / SAND_CELL_SIZE)
+
+		// Out of bounds: force deposit at boundary
+		if !sand_in_bounds(world, gx, gy) {
+			gx = math.clamp(gx, 0, world.width - 1)
+			gy = math.clamp(gy, 0, world.height - 1)
+			proj.pos.x = (f32(gx) + 0.5) * SAND_CELL_SIZE
+			proj.pos.y = (f32(gy) + 0.5) * SAND_CELL_SIZE
+			sand_projectile_deposit(world, i, true)
+			i -= 1
+			continue
+		}
+
+		// Check deposit conditions: target occupied or speed below threshold
+		speed := math.sqrt(proj.vel.x * proj.vel.x + proj.vel.y * proj.vel.y)
+		target_occupied := world.cells[gy * world.width + gx].material != .Empty
+		should_deposit := target_occupied || speed < SAND_PROJ_SETTLE_SPEED
+
+		if should_deposit {
+			sand_projectile_deposit(world, i, false)
+		}
+		i -= 1
+	}
+}
+
+// Deposit a projectile back to the grid via spiral search
+@(private = "file")
+sand_projectile_deposit :: proc(world: ^Sand_World, idx: int, force: bool) {
+	proj := world.projectiles[idx]
+	gx := int(proj.pos.x / SAND_CELL_SIZE)
+	gy := int(proj.pos.y / SAND_CELL_SIZE)
+	gx = math.clamp(gx, 0, world.width - 1)
+	gy = math.clamp(gy, 0, world.height - 1)
+
+	// Spiral search for empty cell
+	radius := int(SAND_PROJ_DEPOSIT_RADIUS)
+	placed := false
+	best_x, best_y := gx, gy
+	best_dist_sq := max(int)
+
+	for dy in -radius ..= radius {
+		for dx in -radius ..= radius {
+			nx, ny := gx + dx, gy + dy
+			if !sand_in_bounds(world, nx, ny) do continue
+			if sand_is_interactor_cell(world, nx, ny) do continue
+			if world.cells[ny * world.width + nx].material != .Empty do continue
+			dist_sq := dx * dx + dy * dy
+			if dist_sq < best_dist_sq {
+				best_dist_sq = dist_sq
+				best_x, best_y = nx, ny
+				placed = true
+			}
+		}
+	}
+
+	if !placed && !force {
+		return // Keep alive for retry
+	}
+
+	if placed {
+		dst_idx := best_y * world.width + best_x
+		world.cells[dst_idx] = Sand_Cell {
+			material      = proj.material,
+			sleep_counter = 0,
+			color_variant = proj.color_variant,
+			flags         = u8(world.step_counter & 1), // set parity
+		}
+		chunk := sand_chunk_at(world, best_x, best_y)
+		if chunk != nil do chunk.active_count += 1
+		sand_wake_neighbors(world, best_x, best_y)
+		sand_chunk_mark_dirty(world, best_x, best_y)
+
+		// Cascade: high-speed deposit ejects neighbors
+		speed := math.sqrt(proj.vel.x * proj.vel.x + proj.vel.y * proj.vel.y)
+		if speed > SAND_PROJ_CASCADE_SPEED && proj.generation < SAND_PROJ_CASCADE_MAX_GEN {
+			sand_projectile_cascade(world, best_x, best_y, proj.vel, proj.generation)
+		}
+	}
+
+	unordered_remove_soa(&world.projectiles, idx)
+}
+
+// Eject 1-4 neighbor cells as cascade projectiles
+@(private = "file")
+sand_projectile_cascade :: proc(
+	world: ^Sand_World,
+	cx, cy: int,
+	impact_vel: [2]f32,
+	parent_gen: u8,
+) {
+	offsets := [4][2]int{{-1, 0}, {1, 0}, {0, 1}, {0, -1}}
+	ejected := 0
+	for off in offsets {
+		nx, ny := cx + off.x, cy + off.y
+		if !sand_in_bounds(world, nx, ny) do continue
+		mat := world.cells[ny * world.width + nx].material
+		if SAND_MAT_PROPS[mat].inert do continue
+		if rand.float32() > 0.5 do continue // 50% chance per neighbor
+
+		eject_vel := impact_vel * SAND_PROJ_CASCADE_TRANSFER
+		eject_vel.x += f32(off.x) * math.abs(impact_vel.y) * 0.3
+		eject_vel.y += f32(off.y) * math.abs(impact_vel.x) * 0.3
+		sand_projectile_emit(world, nx, ny, eject_vel, parent_gen + 1)
+		ejected += 1
+		if ejected >= 4 do break
 	}
 }

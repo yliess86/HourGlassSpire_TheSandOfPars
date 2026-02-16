@@ -200,6 +200,126 @@ sand_graphics_render :: proc(world: ^engine.Sand_World) {
 	}
 }
 
+sand_projectile_render :: proc(world: ^engine.Sand_World) {
+	if len(world.projectiles) == 0 do return
+
+	sand_batch := Sand_Render_Batch {
+		vertices = make([dynamic]sdl.Vertex, 0, 512, context.temp_allocator),
+		indices  = make([dynamic]c.int, 0, 768, context.temp_allocator),
+	}
+	water_batch := Sand_Render_Batch {
+		vertices = make([dynamic]sdl.Vertex, 0, 256, context.temp_allocator),
+		indices  = make([dynamic]c.int, 0, 384, context.temp_allocator),
+	}
+	fire_batch := Sand_Render_Batch {
+		vertices = make([dynamic]sdl.Vertex, 0, 256, context.temp_allocator),
+		indices  = make([dynamic]c.int, 0, 384, context.temp_allocator),
+	}
+	smoke_batch := Sand_Render_Batch {
+		vertices = make([dynamic]sdl.Vertex, 0, 256, context.temp_allocator),
+		indices  = make([dynamic]c.int, 0, 384, context.temp_allocator),
+	}
+
+	for i in 0 ..< len(world.projectiles) {
+		proj_pos := world.projectiles[i].pos
+		mat := world.projectiles[i].material
+		cv := world.projectiles[i].color_variant
+
+		fc: sdl.FColor
+		batch: ^Sand_Render_Batch
+		switch mat {
+		case .Sand:
+			fc = sand_color_lut[cv]
+			batch = &sand_batch
+		case .Wet_Sand:
+			fc = wet_sand_color_lut[cv]
+			batch = &sand_batch
+		case .Water:
+			fc = water_color_lut[0]
+			batch = &water_batch
+		case .Fire:
+			fc = fire_color_lut[cv]
+			batch = &fire_batch
+		case .Smoke:
+			fc = smoke_color_lut[cv]
+			batch = &smoke_batch
+		case .Empty, .Solid, .Platform:
+			continue
+		}
+
+		// Render as cell-sized rect at sub-grid position
+		bl := proj_pos - {engine.SAND_CELL_SIZE / 2, 0}
+		rect := game_world_to_screen(bl, {engine.SAND_CELL_SIZE, engine.SAND_CELL_SIZE})
+		base := c.int(len(batch.vertices))
+		append(
+			&batch.vertices,
+			sdl.Vertex{position = {rect.x, rect.y}, color = fc, tex_coord = {0, 0}},
+			sdl.Vertex{position = {rect.x + rect.w, rect.y}, color = fc, tex_coord = {0, 0}},
+			sdl.Vertex{position = {rect.x, rect.y + rect.h}, color = fc, tex_coord = {0, 0}},
+			sdl.Vertex {
+				position = {rect.x + rect.w, rect.y + rect.h},
+				color = fc,
+				tex_coord = {0, 0},
+			},
+		)
+		append(&batch.indices, base, base + 1, base + 2, base + 1, base + 3, base + 2)
+	}
+
+	// Draw sand batch (opaque)
+	if len(sand_batch.indices) > 0 {
+		sdl.RenderGeometry(
+			game.win.renderer,
+			nil,
+			raw_data(sand_batch.vertices[:]),
+			c.int(len(sand_batch.vertices)),
+			raw_data(sand_batch.indices[:]),
+			c.int(len(sand_batch.indices)),
+		)
+	}
+
+	// Draw water batch (alpha-blended)
+	if len(water_batch.indices) > 0 {
+		sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
+		sdl.RenderGeometry(
+			game.win.renderer,
+			nil,
+			raw_data(water_batch.vertices[:]),
+			c.int(len(water_batch.vertices)),
+			raw_data(water_batch.indices[:]),
+			c.int(len(water_batch.indices)),
+		)
+		sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_NONE)
+	}
+
+	// Draw fire batch (additive blending for glow)
+	if len(fire_batch.indices) > 0 {
+		sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_ADD)
+		sdl.RenderGeometry(
+			game.win.renderer,
+			nil,
+			raw_data(fire_batch.vertices[:]),
+			c.int(len(fire_batch.vertices)),
+			raw_data(fire_batch.indices[:]),
+			c.int(len(fire_batch.indices)),
+		)
+		sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_NONE)
+	}
+
+	// Draw smoke batch (alpha-blended)
+	if len(smoke_batch.indices) > 0 {
+		sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
+		sdl.RenderGeometry(
+			game.win.renderer,
+			nil,
+			raw_data(smoke_batch.vertices[:]),
+			c.int(len(smoke_batch.vertices)),
+			raw_data(smoke_batch.indices[:]),
+			c.int(len(smoke_batch.indices)),
+		)
+		sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_NONE)
+	}
+}
+
 @(private = "file")
 sand_graphics_batch_rect :: proc(batch: ^Sand_Render_Batch, x, y: int, fc: sdl.FColor) {
 	rect := game_world_to_screen(
@@ -390,49 +510,39 @@ sand_graphics_debug :: proc(world: ^engine.Sand_World) {
 	for chunk in world.chunks do if chunk.needs_sim do active_chunks += 1
 	sleeping_chunks := len(world.chunks) - active_chunks
 
-	// Render stats below existing debug text (account for 2 extra sensor lines)
+	// Render stats: [NAME]: [ACTIVE] / [TOTAL]
 	stats_y := DEBUG_TEXT_MARGIN_Y + f32(engine.SAND_DEBUG_STATS_LINE_OFFSET) * DEBUG_TEXT_LINE_H
-	debug_value_with_label(DEBUG_TEXT_MARGIN_X, stats_y, "Sand:", fmt.ctprintf("%d", sand_count))
+	sand_active := sand_count - sand_sleeping
+	wet_active := wet_sand_count - wet_sand_sleeping
+	water_active := water_count - water_sleeping
+	debug_value_with_label(
+		DEBUG_TEXT_MARGIN_X,
+		stats_y,
+		"Sand:",
+		fmt.ctprintf("%d / %d", sand_active, sand_count),
+	)
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,
 		stats_y + DEBUG_TEXT_LINE_H,
 		"Wet Sand:",
-		fmt.ctprintf("%d", wet_sand_count),
+		fmt.ctprintf("%d / %d", wet_active, wet_sand_count),
 	)
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,
 		stats_y + 2 * DEBUG_TEXT_LINE_H,
 		"Water:",
-		fmt.ctprintf("%d", water_count),
+		fmt.ctprintf("%d / %d", water_active, water_count),
 	)
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,
 		stats_y + 3 * DEBUG_TEXT_LINE_H,
 		"Chunks:",
-		fmt.ctprintf("%d/%d", active_chunks, len(world.chunks)),
+		fmt.ctprintf("%d / %d", active_chunks, len(world.chunks)),
 	)
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,
 		stats_y + 4 * DEBUG_TEXT_LINE_H,
-		"Sand Sleep:",
-		fmt.ctprintf("%d/%d", sand_sleeping, sand_count),
-	)
-	debug_value_with_label(
-		DEBUG_TEXT_MARGIN_X,
-		stats_y + 5 * DEBUG_TEXT_LINE_H,
-		"Wet Sleep:",
-		fmt.ctprintf("%d/%d", wet_sand_sleeping, wet_sand_count),
-	)
-	debug_value_with_label(
-		DEBUG_TEXT_MARGIN_X,
-		stats_y + 6 * DEBUG_TEXT_LINE_H,
-		"Water Sleep:",
-		fmt.ctprintf("%d/%d", water_sleeping, water_count),
-	)
-	debug_value_with_label(
-		DEBUG_TEXT_MARGIN_X,
-		stats_y + 7 * DEBUG_TEXT_LINE_H,
-		"Chunk Sleep:",
-		fmt.ctprintf("%d/%d", sleeping_chunks, len(world.chunks)),
+		"Projectiles:",
+		fmt.ctprintf("%d / %d", len(world.projectiles), int(engine.SAND_PROJ_MAX_COUNT)),
 	)
 }

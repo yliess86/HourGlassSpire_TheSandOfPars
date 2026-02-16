@@ -85,6 +85,22 @@ SAND_PARTICLE_LIFETIME_RAND_MIN: f32  // min fraction for lifetime randomization
 SAND_DUST_SPEED_RAND_MIN: f32         // min fraction for dust speed randomization
 SAND_DUST_LIFETIME_RAND_MIN: f32      // min fraction for dust lifetime randomization
 SAND_QUICKSAND_MAX_ACTIVITY: f32      // max activity factor clamp for quicksand
+SAND_PROJ_DRAG: f32                   // air drag factor (per second)
+SAND_PROJ_SETTLE_SPEED: f32           // below this speed, attempt deposit
+SAND_PROJ_DEPOSIT_RADIUS: u8          // spiral search radius (cells)
+SAND_PROJ_MAX_COUNT: f32              // soft cap on active projectiles
+SAND_PROJ_CASCADE_SPEED: f32          // min deposit speed to cascade
+SAND_PROJ_CASCADE_TRANSFER: f32       // velocity fraction to cascaded cells
+SAND_PROJ_CASCADE_MAX_GEN: u8         // max cascade generations
+SAND_PROJ_IMPACT_MULT: f32            // impact eject velocity multiplier
+SAND_PROJ_DASH_SPEED: f32             // dash eject upward velocity
+SAND_PROJ_DASH_SPREAD: f32            // dash eject random horizontal spread
+SAND_PROJ_GAS_PUSH: f32               // base push speed for fire/smoke
+SAND_PROJ_GAS_PLAYER_MULT: f32        // player velocity transfer to gas
+SAND_PROJ_WATER_GRAV_MULT: f32        // water projectile gravity multiplier
+SAND_PROJ_GAS_RISE: f32               // gas projectile upward accel
+SAND_PROJ_WATER_UP_MULT: f32          // water splash upward velocity multiplier
+SAND_PROJ_WATER_SPREAD: f32           // water splash horizontal spread
 
 // [sand_debug]
 SAND_DEBUG_COLOR_LOW: [4]u8           // heatmap color for low pressure (blue)
@@ -241,6 +257,22 @@ sand_config_apply :: proc() {
 	if val, ok := config_get_f32(&sand_config, "SAND_DUST_SPEED_RAND_MIN"); ok do SAND_DUST_SPEED_RAND_MIN = val
 	if val, ok := config_get_f32(&sand_config, "SAND_DUST_LIFETIME_RAND_MIN"); ok do SAND_DUST_LIFETIME_RAND_MIN = val
 	if val, ok := config_get_f32(&sand_config, "SAND_QUICKSAND_MAX_ACTIVITY"); ok do SAND_QUICKSAND_MAX_ACTIVITY = val
+	if val, ok := config_get_f32(&sand_config, "SAND_PROJ_DRAG"); ok do SAND_PROJ_DRAG = val
+	if val, ok := config_get_f32(&sand_config, "SAND_PROJ_SETTLE_SPEED"); ok do SAND_PROJ_SETTLE_SPEED = val
+	if val, ok := config_get_u8(&sand_config, "SAND_PROJ_DEPOSIT_RADIUS"); ok do SAND_PROJ_DEPOSIT_RADIUS = val
+	if val, ok := config_get_f32(&sand_config, "SAND_PROJ_MAX_COUNT"); ok do SAND_PROJ_MAX_COUNT = val
+	if val, ok := config_get_f32(&sand_config, "SAND_PROJ_CASCADE_SPEED"); ok do SAND_PROJ_CASCADE_SPEED = val
+	if val, ok := config_get_f32(&sand_config, "SAND_PROJ_CASCADE_TRANSFER"); ok do SAND_PROJ_CASCADE_TRANSFER = val
+	if val, ok := config_get_u8(&sand_config, "SAND_PROJ_CASCADE_MAX_GEN"); ok do SAND_PROJ_CASCADE_MAX_GEN = val
+	if val, ok := config_get_f32(&sand_config, "SAND_PROJ_IMPACT_MULT"); ok do SAND_PROJ_IMPACT_MULT = val
+	if val, ok := config_get_f32(&sand_config, "SAND_PROJ_DASH_SPEED"); ok do SAND_PROJ_DASH_SPEED = val
+	if val, ok := config_get_f32(&sand_config, "SAND_PROJ_DASH_SPREAD"); ok do SAND_PROJ_DASH_SPREAD = val
+	if val, ok := config_get_f32(&sand_config, "SAND_PROJ_GAS_PUSH"); ok do SAND_PROJ_GAS_PUSH = val
+	if val, ok := config_get_f32(&sand_config, "SAND_PROJ_GAS_PLAYER_MULT"); ok do SAND_PROJ_GAS_PLAYER_MULT = val
+	if val, ok := config_get_f32(&sand_config, "SAND_PROJ_WATER_GRAV_MULT"); ok do SAND_PROJ_WATER_GRAV_MULT = val
+	if val, ok := config_get_f32(&sand_config, "SAND_PROJ_GAS_RISE"); ok do SAND_PROJ_GAS_RISE = val
+	if val, ok := config_get_f32(&sand_config, "SAND_PROJ_WATER_UP_MULT"); ok do SAND_PROJ_WATER_UP_MULT = val
+	if val, ok := config_get_f32(&sand_config, "SAND_PROJ_WATER_SPREAD"); ok do SAND_PROJ_WATER_SPREAD = val
 	if val, ok := config_get_rgba(&sand_config, "SAND_DEBUG_COLOR_LOW"); ok do SAND_DEBUG_COLOR_LOW = val
 	if val, ok := config_get_rgba(&sand_config, "SAND_DEBUG_COLOR_MID"); ok do SAND_DEBUG_COLOR_MID = val
 	if val, ok := config_get_rgba(&sand_config, "SAND_DEBUG_COLOR_HIGH"); ok do SAND_DEBUG_COLOR_HIGH = val

@@ -59,14 +59,14 @@ Odin, SDL3 (`vendor:sdl3`). Main package `src/game/`, engine `src/engine/` (`"..
 | `src/game/level.odin` | BMP loading, tile classification by exposed face, greedy collider merging, slope merging, window zone detection, rendering |
 | `src/game/input.odin` | `Input_Action` enum, `INPUT_DEFAULT_BINDINGS`, `input_binding_apply` |
 | `src/game/atmosphere.odin` | `Atmosphere` struct, window-zone dust motes: spawn/update/render with sway + fade |
-| `src/game/sand_graphics.odin` | Camera-culled rendering: sand opaque with color variants, water alpha-blended with depth gradient + shimmer, surface smoothing |
+| `src/game/sand_graphics.odin` | Camera-culled rendering: sand opaque with color variants, water alpha-blended with depth gradient + shimmer, surface smoothing, projectile rendering |
 
 ### Game loop
 
 Fixed-timestep: `game_update(dt)` → N × `game_fixed_update(fixed_dt)` → `game_render()`.
 - `game_update` — SDL events → input system
-- `game_fixed_update` — player → sand interaction → sand sim → emitters → particles → atmosphere → camera
-- `game_render` — level tiles → atmosphere → particles → player → sand (back-to-front)
+- `game_fixed_update` — player → sand interaction → projectile update → sand sim → emitters → particles → atmosphere → camera
+- `game_render` — level tiles → atmosphere → particles → player → sand grid → sand projectiles (back-to-front)
 
 Global `game: Game_State`. Player nested as `game.player: Player` with sub-structs: `body` (Physics_Body), `abilities`, `graphics`, `state`/`previous_state`, `sensor`. Sand state: `game.sand_world: engine.Sand_World`. All player procs take `player: ^Player`; call sites pass `&game.player`.
 
@@ -178,18 +178,20 @@ CA sand/water sim in `src/engine/sand.odin` on level-aligned grid (`SAND_CELLS_P
 **Emitters:** Accumulate fractional particles at `SAND_EMITTER_RATE`/`WATER_EMITTER_RATE`/`FIRE_EMITTER_RATE`. Sand/water spawn one tile below; fire spawns one tile above.
 
 **Player interaction** (`engine.sand_apply_physics` each fixed step, called directly from `player_fixed_update`):
-1. **Impact craters** — landing speed stored in `abilities.impact_pending`; crater radius + particle count scale with impact factor. Ejects sand upward around footprint
-2. **Displacement** — push sand/wet sand/water out of player footprint. Fire/smoke displaced upward via `sand_displace_gas` (no drag). Slope-aware: on slopes, pushes align with surface geometry (downhill diagonals allowed, through-surface blocked). Chaining blocked through slope cells. Flat fallbacks: primary → down → diag → opposite → opposite diag
+1. **Impact craters** — landing speed stored in `abilities.impact_pending`; crater radius scales with impact factor. Ring cells emitted as projectiles with radial velocity (water gets splash spread via `SAND_PROJ_WATER_UP_MULT`/`_SPREAD`)
+2. **Displacement** — push sand/wet sand/water out of player footprint (CA, gentle). Fire/smoke emitted as projectiles with push direction + player velocity component (`SAND_PROJ_GAS_PUSH`/`_PLAYER_MULT`). Slope-aware: on slopes, pushes align with surface geometry (downhill diagonals allowed, through-surface blocked). Chaining blocked through slope cells. Flat fallbacks: primary → down → diag → opposite → opposite diag
 3. **Drag** — sand: quadratic by immersion. Wet sand: separate higher drag constants. Water: separate drag constants. Dash: reduced drag via `SAND_DASH_DRAG_FACTOR`
 4. **Pressure** — contiguous sand/wet sand above → downward force. Water excluded
 5. **Burial / quicksand** — sand ratio > threshold → extra gravity. Activity-scaled: moving makes you sink faster (`SAND_QUICKSAND_MOVE_MULT`)
 6. **Buoyancy** — water immersion > threshold → upward force
-7. **Dash carving** — dashes tunnel through sand/water/fire/smoke, ejecting cells upward/sideways with particles
+7. **Dash carving** — dashes tunnel through sand/water/fire/smoke, ejecting cells as projectiles with upward velocity + random horizontal spread (`SAND_PROJ_DASH_SPEED`/`_SPREAD`)
 8. **Footprints** — running on sand surface creates depressions at `SAND_FOOTPRINT_STRIDE` intervals, piling removed sand beside
 
 **Sand walls:** Vertical sand columns (≥ `SAND_WALL_MIN_HEIGHT` cells) detected as walls. Wall states erode sand walls via `sand_wall_erode`. Wall jumps from sand walls use `SAND_WALL_JUMP_MULT`.
 
-**Rendering:** Sand + wet sand = opaque rects (triangles on slope cells), color variants via `SAND_COLOR_VARIATION`/`WET_SAND_COLOR_VARIATION`. Water = alpha-blended, depth-darkened gradient (triangles on slopes), surface shimmer effect. Fire = opaque with `FIRE_COLOR_VARIATION`. Smoke = alpha-blended with `SMOKE_COLOR_VARIATION`. Optional `SAND_SURFACE_SMOOTH` for interpolated surface height. Rendered after player.
+**Projectiles:** Hybrid CA + projectile system. Cells forcefully ejected (impacts, dashes, gas displacement) become `Sand_Projectile` in a `#soa[dynamic]` pool on `Sand_World`. Updated every fixed step (not gated by `SAND_SIM_INTERVAL`): material-based gravity (powder down, liquid lighter via `SAND_PROJ_WATER_GRAV_MULT`, gas up via `SAND_PROJ_GAS_RISE`), air drag (`SAND_PROJ_DRAG`), fire/smoke decay. Deposit via spiral search (`SAND_PROJ_DEPOSIT_RADIUS`) when speed < `SAND_PROJ_SETTLE_SPEED` or target occupied. High-speed deposits cascade: eject 1-4 neighbors as gen+1 projectiles (`SAND_PROJ_CASCADE_SPEED`/`_TRANSFER`/`_MAX_GEN`). Soft cap `SAND_PROJ_MAX_COUNT` force-deposits oldest. Conservation: emit removes from grid, deposit places back.
+
+**Rendering:** Sand + wet sand = opaque rects (triangles on slope cells), color variants via `SAND_COLOR_VARIATION`/`WET_SAND_COLOR_VARIATION`. Water = alpha-blended, depth-darkened gradient (triangles on slopes), surface shimmer effect. Fire = opaque with `FIRE_COLOR_VARIATION`. Smoke = alpha-blended with `SMOKE_COLOR_VARIATION`. Optional `SAND_SURFACE_SMOOTH` for interpolated surface height. Rendered after player. Projectiles rendered on top of grid cells with same material-based batching and blend modes.
 
 ### Camera
 
@@ -203,7 +205,7 @@ INI with sections, expressions (`+`,`-`,`*`,`/`, parens, variable refs), `#RRGGB
 
 **Workflow:** edit `game.ini` → `odin run build/ -- gen` → update source → `odin run build/ -- check`.
 
-**Sections:** `[game]`, `[version]`, `[engine]`, `[physics]`, `[camera]` (`CAMERA_*`), `[level]` (`LEVEL_COLOR_*`), `[player]`/`[player_run]`/`[player_jump]`/`[player_dash]`/`[player_wall]`/`[player_slopes]`/`[player_graphics]`/`[player_particles]`/`[player_particle_colors]`, `[sand]` (`SAND_*`), `[sand_debug]` (`SAND_DEBUG_*`), `[water]` (`WATER_*`), `[wet_sand]` (`WET_SAND_*`), `[fire]` (`FIRE_*`), `[smoke]` (`SMOKE_*`), `[atmosphere]` (`ATMOSPHERE_*`), `[input]` (`INPUT_KB_*`/`INPUT_GP_*`), `[debug_colors]` (`DEBUG_COLOR_*`), `[debug]` (`DEBUG_*`).
+**Sections:** `[game]`, `[version]`, `[engine]`, `[physics]`, `[camera]` (`CAMERA_*`), `[level]` (`LEVEL_COLOR_*`), `[player]`/`[player_run]`/`[player_jump]`/`[player_dash]`/`[player_wall]`/`[player_slopes]`/`[player_graphics]`/`[player_particles]`/`[player_particle_colors]`, `[sand]` (`SAND_*`, `SAND_PROJ_*`), `[sand_debug]` (`SAND_DEBUG_*`), `[water]` (`WATER_*`), `[wet_sand]` (`WET_SAND_*`), `[fire]` (`FIRE_*`), `[smoke]` (`SMOKE_*`), `[atmosphere]` (`ATMOSPHERE_*`), `[input]` (`INPUT_KB_*`/`INPUT_GP_*`), `[debug_colors]` (`DEBUG_COLOR_*`), `[debug]` (`DEBUG_*`).
 
 ## Units & Coordinates
 

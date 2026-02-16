@@ -146,6 +146,7 @@ game_fixed_update :: proc(dt: f32) {
 	player_graphics_spawn_sand_particles(&game.sand_particles, &game.player)
 	player_sand_footprint_update(&game.sand_world, &game.player)
 	player_graphics_sand_dust_tick(&game.player)
+	engine.sand_projectile_update(&game.sand_world, dt)
 	engine.sand_sub_step_tick(&game.sand_world)
 	engine.sand_emitter_update(&game.sand_world)
 	engine.sand_particles_update(&game.sand_particles, dt)
@@ -171,6 +172,7 @@ game_render :: proc() {
 	player_graphics_render(&game.player)
 	player_graphics_sand_particle_render(&game.sand_particles)
 	sand_graphics_render(&game.sand_world)
+	sand_projectile_render(&game.sand_world)
 }
 
 game_render_debug :: proc() {
