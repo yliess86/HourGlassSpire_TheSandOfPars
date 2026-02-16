@@ -1,6 +1,6 @@
 package game
 
-import engine "../engine"
+import physics "../physics"
 import "core:fmt"
 import sdl "vendor:sdl3"
 
@@ -28,12 +28,12 @@ Level :: struct {
 	tiles:               []Level_Tile_Kind, // [y * width + x], y=0 = world bottom
 	world_w, world_h:    f32, // meters
 	player_spawn:        [2]f32, // bottom-center, meters
-	ground_colliders:    [dynamic]engine.Collider_Rect,
-	ceiling_colliders:   [dynamic]engine.Collider_Rect,
-	side_wall_colliders: [dynamic]engine.Collider_Rect,
-	platform_colliders:  [dynamic]engine.Collider_Rect,
-	back_wall_colliders: [dynamic]engine.Collider_Rect,
-	slope_colliders:     [dynamic]engine.Collider_Slope,
+	ground_colliders:    [dynamic]physics.Rect,
+	ceiling_colliders:   [dynamic]physics.Rect,
+	side_wall_colliders: [dynamic]physics.Rect,
+	platform_colliders:  [dynamic]physics.Rect,
+	back_wall_colliders: [dynamic]physics.Rect,
+	slope_colliders:     [dynamic]physics.Slope,
 
 	// Temp fields: populated during level_load, consumed by sand_init
 	original_tiles:      []Level_Tile_Kind, // pre-reclassification, consumed by sand_init
@@ -343,11 +343,7 @@ level_merge_colliders :: proc(level: ^Level) {
 }
 
 @(private = "file")
-level_merge_mask :: proc(
-	width, height: int,
-	mask: []bool,
-	target: ^[dynamic]engine.Collider_Rect,
-) {
+level_merge_mask :: proc(width, height: int, mask: []bool, target: ^[dynamic]physics.Rect) {
 	active: [dynamic]Level_Merge_Run
 	defer delete(active)
 
@@ -394,16 +390,16 @@ level_merge_mask :: proc(
 }
 
 @(private = "file")
-level_emit_rect :: proc(target: ^[dynamic]engine.Collider_Rect, run: Level_Merge_Run) {
+level_emit_rect :: proc(target: ^[dynamic]physics.Rect, run: Level_Merge_Run) {
 	w := f32(run.x1 - run.x0) * TILE_SIZE
 	h := f32(run.y1 - run.y0) * TILE_SIZE
 	cx := f32(run.x0) * TILE_SIZE + w / 2
 	cy := f32(run.y0) * TILE_SIZE + h / 2
-	append(target, engine.Collider_Rect{pos = {cx, cy}, size = {w, h}})
+	append(target, physics.Rect{pos = {cx, cy}, size = {w, h}})
 }
 
 @(private = "file")
-level_tile_to_slope_kind :: proc(kind: Level_Tile_Kind) -> engine.Collider_Slope_Kind {
+level_tile_to_slope_kind :: proc(kind: Level_Tile_Kind) -> physics.Slope_Kind {
 	#partial switch kind {
 	case .Slope_Right:
 		return .Right
@@ -467,7 +463,7 @@ level_merge_slopes :: proc(level: ^Level) {
 
 			append(
 				&level.slope_colliders,
-				engine.Collider_Slope {
+				physics.Slope {
 					kind = level_tile_to_slope_kind(kind),
 					base_x = base_x,
 					base_y = base_y,

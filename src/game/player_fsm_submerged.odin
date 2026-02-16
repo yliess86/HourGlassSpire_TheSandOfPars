@@ -44,35 +44,35 @@ player_fsm_submerged_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State
 
 	// Horizontal movement
 	move_factor := max(1.0 - immersion * move_penalty, 0)
-	ctx.transform.vel.x = math.lerp(
-		ctx.transform.vel.x,
+	ctx.body.vel.x = math.lerp(
+		ctx.body.vel.x,
 		game.input.axis.x * PLAYER_RUN_SPEED * move_factor,
 		lerp_speed * dt,
 	)
 
 	// Vertical: up input, down input, or passive float/sink
 	if game.input.axis.y > PLAYER_INPUT_AXIS_THRESHOLD {
-		ctx.transform.vel.y = math.lerp(ctx.transform.vel.y, up_speed, lerp_speed * dt)
+		ctx.body.vel.y = math.lerp(ctx.body.vel.y, up_speed, lerp_speed * dt)
 	} else if game.input.axis.y < -PLAYER_INPUT_AXIS_THRESHOLD {
-		ctx.transform.vel.y = math.lerp(ctx.transform.vel.y, -down_speed, lerp_speed * dt)
+		ctx.body.vel.y = math.lerp(ctx.body.vel.y, -down_speed, lerp_speed * dt)
 	} else {
-		ctx.transform.vel.y = math.lerp(ctx.transform.vel.y, idle_speed, lerp_speed * dt)
+		ctx.body.vel.y = math.lerp(ctx.body.vel.y, idle_speed, lerp_speed * dt)
 	}
 
 	// Reduced gravity + velocity damping
-	ctx.transform.vel.y -= grav_mult * GRAVITY * dt
-	ctx.transform.vel *= math.exp(-damping_k * dt)
+	ctx.body.vel.y -= grav_mult * GRAVITY * dt
+	ctx.body.vel *= math.exp(-damping_k * dt)
 
 	// Sand hop — spam jump when deep to boil upward (sand only)
 	if in_sand &&
 	   game.input.is_pressed[.JUMP] &&
 	   ctx.sensor.sand_immersion >= SAND_SWIM_SURFACE_THRESHOLD &&
 	   ctx.abilities.sand_hop_cooldown_timer <= 0 {
-		ctx.transform.vel.y = SAND_SWIM_HOP_FORCE
+		ctx.body.vel.y = SAND_SWIM_HOP_FORCE
 		ctx.abilities.sand_hop_cooldown_timer = SAND_SWIM_HOP_COOLDOWN
 		sand_particles_emit(
 			&game.sand_particles,
-			ctx.transform.pos + {0, PLAYER_SIZE},
+			ctx.body.pos + {0, PLAYER_SIZE},
 			PLAYER_SIZE / 2,
 			math.PI / 2,
 			math.PI / 3,
@@ -84,16 +84,16 @@ player_fsm_submerged_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State
 
 	// Jump out near surface
 	if ctx.abilities.jump_buffer_timer > 0 && immersion < surface_threshold {
-		ctx.transform.vel.y = jump_force
+		ctx.body.vel.y = jump_force
 		ctx.abilities.jump_buffer_timer = 0
 		if in_sand {
 			sand_particles_emit(
 				&game.sand_particles,
-				ctx.transform.pos + {0, PLAYER_SIZE},
+				ctx.body.pos + {0, PLAYER_SIZE},
 				PLAYER_SIZE / 2,
 				math.PI / 2,
 				math.PI / 3,
-				{0, abs(ctx.transform.vel.y) * SAND_IMPACT_PARTICLE_VEL_BIAS},
+				{0, abs(ctx.body.vel.y) * SAND_IMPACT_PARTICLE_VEL_BIAS},
 				SAND_COLOR,
 				int(SAND_SWIM_JUMP_PARTICLE_COUNT),
 			)

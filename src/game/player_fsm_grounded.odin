@@ -10,16 +10,15 @@ player_fsm_grounded_init :: proc(player: ^Player) {
 }
 
 player_fsm_grounded_enter :: proc(ctx: ^Player) {
-	ctx.transform.impact_pending = math.abs(ctx.transform.vel.y)
+	ctx.impact_pending = math.abs(ctx.body.vel.y)
 	ctx.abilities.wall_run_cooldown_timer = 0
 	ctx.abilities.wall_run_used = false
 	if ctx.sensor.on_ground {
-		ctx.transform.pos.y = ctx.sensor.on_ground_snap_y
-		player_sync_collider(ctx)
+		ctx.body.pos.y = ctx.sensor.on_ground_snap_y
 	}
 	player_particles_dust_emit(
 		&game.dust,
-		ctx.transform.pos,
+		ctx.body.pos,
 		{0, 0},
 		int(PLAYER_PARTICLE_DUST_LAND_COUNT),
 	)
@@ -41,7 +40,7 @@ player_fsm_grounded_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 		if math.floor(prev / math.PI) != math.floor(ctx.graphics.run_anim_timer / math.PI) {
 			player_particles_dust_emit(
 				&game.dust,
-				ctx.transform.pos,
+				ctx.body.pos,
 				{0, 0},
 				int(PLAYER_PARTICLE_DUST_STEP_COUNT),
 			)
@@ -53,15 +52,15 @@ player_fsm_grounded_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 		uphill := math.sign(game.input.axis.x) == ctx.sensor.on_slope_dir
 		speed_factor = PLAYER_SLOPE_UPHILL_FACTOR if uphill else PLAYER_SLOPE_DOWNHILL_FACTOR
 	}
-	ctx.transform.vel.x = math.lerp(
-		ctx.transform.vel.x,
+	ctx.body.vel.x = math.lerp(
+		ctx.body.vel.x,
 		game.input.axis.x *
 		PLAYER_RUN_SPEED *
 		speed_factor *
 		player_move_factor(ctx, SAND_MOVE_PENALTY, WATER_MOVE_PENALTY),
 		PLAYER_MOVE_LERP_SPEED * dt,
 	)
-	ctx.transform.vel.y = -SAND_SINK_SPEED if ctx.sensor.on_sand else 0
+	ctx.body.vel.y = -SAND_SINK_SPEED if ctx.sensor.on_sand else 0
 	ctx.abilities.coyote_timer = PLAYER_COYOTE_TIME_DURATION
 
 	if ctx.sensor.sand_immersion > SAND_SWIM_ENTER_THRESHOLD do return .Sand_Swim
@@ -70,7 +69,7 @@ player_fsm_grounded_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 	if ctx.sensor.on_platform &&
 	   game.input.axis.y < -PLAYER_INPUT_AXIS_THRESHOLD &&
 	   ctx.abilities.jump_buffer_timer > 0 {
-		ctx.transform.pos.y -= PLAYER_DROP_NUDGE
+		ctx.body.pos.y -= PLAYER_DROP_NUDGE
 		ctx.abilities.jump_buffer_timer = 0
 		ctx.abilities.coyote_timer = 0
 		return .Dropping
@@ -81,12 +80,12 @@ player_fsm_grounded_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State)
 		water_jump := 1.0 - ctx.sensor.water_immersion * WATER_JUMP_PENALTY
 		jump_factor := max(sand_jump * water_jump, 0)
 		if jump_factor > 0 {
-			ctx.transform.vel.y = PLAYER_JUMP_FORCE * jump_factor
+			ctx.body.vel.y = PLAYER_JUMP_FORCE * jump_factor
 			ctx.abilities.jump_buffer_timer = 0
 			ctx.abilities.coyote_timer = 0
 			player_particles_dust_emit(
 				&game.dust,
-				ctx.transform.pos,
+				ctx.body.pos,
 				{0, -PLAYER_PARTICLE_DUST_SPEED_MAX},
 				int(PLAYER_PARTICLE_DUST_JUMP_COUNT),
 			)

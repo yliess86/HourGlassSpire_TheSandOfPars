@@ -1,6 +1,7 @@
 package game
 
 import engine "../engine"
+import physics "../physics"
 import "core:fmt"
 import "core:math"
 
@@ -14,12 +15,6 @@ Player_State :: enum u8 {
 	Wall_Run_Horizontal,
 	Wall_Run_Vertical,
 	Wall_Slide,
-}
-
-Player_Transform :: struct {
-	pos:            [2]f32,
-	vel:            [2]f32,
-	impact_pending: f32, // landing speed, consumed by sand_player_interact
 }
 
 Player_Abilities :: struct {
@@ -47,28 +42,28 @@ Player_Graphics :: struct {
 }
 
 Player :: struct {
-	transform: Player_Transform,
-	collider:  engine.Collider_Rect,
-	abilities: Player_Abilities,
-	graphics:  Player_Graphics,
-	fsm:       engine.FSM(Player, Player_State),
-	sensor:    Player_Sensor,
+	body:           physics.Body,
+	impact_pending: f32, // landing speed, consumed by sand_player_interact
+	abilities:      Player_Abilities,
+	graphics:       Player_Graphics,
+	fsm:            engine.FSM(Player, Player_State),
+	sensor:         Player_Sensor,
 }
 
 // Perform a wall jump from a side wall. Returns true if jump executed.
 player_wall_jump :: proc(ctx: ^Player) -> bool {
 	if ctx.abilities.jump_buffer_timer <= 0 || !ctx.sensor.on_side_wall do return false
-	ctx.transform.pos.x -= ctx.sensor.on_side_wall_dir * EPS
-	ctx.transform.vel.y = PLAYER_WALL_JUMP_VERTICAL_MULT * PLAYER_JUMP_FORCE
-	ctx.transform.vel.x = -ctx.sensor.on_side_wall_dir * PLAYER_WALL_JUMP_FORCE
+	ctx.body.pos.x -= ctx.sensor.on_side_wall_dir * EPS
+	ctx.body.vel.y = PLAYER_WALL_JUMP_VERTICAL_MULT * PLAYER_JUMP_FORCE
+	ctx.body.vel.x = -ctx.sensor.on_side_wall_dir * PLAYER_WALL_JUMP_FORCE
 	if ctx.sensor.on_sand_wall {
-		ctx.transform.vel.y *= SAND_WALL_JUMP_MULT
-		ctx.transform.vel.x *= SAND_WALL_JUMP_MULT
+		ctx.body.vel.y *= SAND_WALL_JUMP_MULT
+		ctx.body.vel.x *= SAND_WALL_JUMP_MULT
 	}
 	ctx.abilities.jump_buffer_timer = 0
 	wall_pos := [2]f32 {
-		ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2,
-		ctx.transform.pos.y + PLAYER_SIZE / 2,
+		ctx.body.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2,
+		ctx.body.pos.y + PLAYER_SIZE / 2,
 	}
 	player_particles_dust_emit(
 		&game.dust,
@@ -86,13 +81,10 @@ player_move_factor :: proc(ctx: ^Player, sand_penalty, water_penalty: f32) -> f3
 	return max(sand * water, 0)
 }
 
-player_sync_collider :: proc(player: ^Player) {
-	player.collider.pos.x = player.transform.pos.x
-	player.collider.pos.y = player.transform.pos.y + PLAYER_SIZE / 2
-	player.collider.size = {PLAYER_SIZE, PLAYER_SIZE}
-}
-
 player_init :: proc(player: ^Player) {
+	player.body.size = {PLAYER_SIZE, PLAYER_SIZE}
+	player.body.offset = {0, PLAYER_SIZE / 2}
+
 	player_fsm_airborne_init(player)
 	player_fsm_dashing_init(player)
 	player_fsm_dropping_init(player)
@@ -103,7 +95,6 @@ player_init :: proc(player: ^Player) {
 	player_fsm_wall_slide_init(player)
 	engine.fsm_init(&player.fsm, player, Player_State.Grounded)
 
-	player_sync_collider(player)
 	player_sensor_update(player)
 }
 
@@ -131,9 +122,7 @@ player_fixed_update :: proc(player: ^Player, dt: f32) {
 }
 
 player_debug :: proc(player: ^Player) {
-	player_top := game_world_to_screen_point(
-		{player.transform.pos.x, player.transform.pos.y + PLAYER_SIZE},
-	)
+	player_top := game_world_to_screen_point({player.body.pos.x, player.body.pos.y + PLAYER_SIZE})
 	player_subti := player_top - {0, DEBUG_TEXT_STATE_GAP}
 	player_title := player_subti - {0, DEBUG_TEXT_LINE_H}
 	debug_text_center(player_title.x, player_title.y, fmt.ctprintf("%v", player.fsm.current))

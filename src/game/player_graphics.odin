@@ -4,7 +4,7 @@ import "core:math"
 import sdl "vendor:sdl3"
 
 player_graphics_render :: proc(player: ^Player) {
-	vel_px := player.transform.vel * PPM
+	vel_px := player.body.vel * PPM
 	size_px: f32 = PLAYER_SIZE * PPM
 
 	// -- Visual Deformation (layered) --
@@ -52,7 +52,7 @@ player_graphics_render :: proc(player: ^Player) {
 	// Convert deformed pixel size back to world units for game_world_to_screen
 	w_world := w / PPM
 	h_world := h / PPM
-	player_bl := [2]f32{player.transform.pos.x - w_world / 2, player.transform.pos.y}
+	player_bl := [2]f32{player.body.pos.x - w_world / 2, player.body.pos.y}
 	rect_p := game_world_to_screen(player_bl, {w_world, h_world})
 
 	sdl.SetRenderDrawColor(

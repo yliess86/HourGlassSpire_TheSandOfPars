@@ -20,12 +20,12 @@ player_fsm_wall_slide_init :: proc(player: ^Player) {
 player_fsm_wall_slide_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) {
 	player_physics_apply_movement(ctx, dt)
 
-	if ctx.transform.vel.y < 0 do ctx.transform.vel.y = math.max(ctx.transform.vel.y, -PLAYER_WALL_SLIDE_SPEED)
-	ctx.transform.vel.x = math.lerp(ctx.transform.vel.x, 0, PLAYER_MOVE_LERP_SPEED * dt)
+	if ctx.body.vel.y < 0 do ctx.body.vel.y = math.max(ctx.body.vel.y, -PLAYER_WALL_SLIDE_SPEED)
+	ctx.body.vel.x = math.lerp(ctx.body.vel.x, 0, PLAYER_MOVE_LERP_SPEED * dt)
 
 	if ctx.sensor.on_side_wall {
-		ctx.transform.pos.x = ctx.sensor.on_side_wall_snap_x
-		ctx.transform.vel.x = 0
+		ctx.body.pos.x = ctx.sensor.on_side_wall_snap_x
+		ctx.body.vel.x = 0
 	}
 
 	if ctx.sensor.on_sand_wall do sand_wall_erode(&game.sand, ctx)
@@ -41,8 +41,8 @@ player_fsm_wall_slide_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_Stat
 	if rand.float32() < PLAYER_PARTICLE_DUST_WALL_SLIDE_CHANCE {
 		if ctx.sensor.on_side_wall {
 			hand_pos := [2]f32 {
-				ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2,
-				ctx.transform.pos.y + PLAYER_SIZE,
+				ctx.body.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2,
+				ctx.body.pos.y + PLAYER_SIZE,
 			}
 			player_particles_dust_emit(
 				&game.dust,
@@ -51,10 +51,7 @@ player_fsm_wall_slide_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_Stat
 				int(PLAYER_PARTICLE_DUST_WALL_SLIDE_COUNT),
 			)
 		} else if ctx.sensor.on_back_wall {
-			hand_pos := [2]f32 {
-				ctx.transform.pos.x - PLAYER_SIZE / 2,
-				ctx.transform.pos.y + PLAYER_SIZE,
-			}
+			hand_pos := [2]f32{ctx.body.pos.x - PLAYER_SIZE / 2, ctx.body.pos.y + PLAYER_SIZE}
 			player_particles_dust_emit(
 				&game.dust,
 				hand_pos,

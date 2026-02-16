@@ -65,3 +65,8 @@ Solve_Config :: struct {
 body_rect :: proc(body: ^Body) -> Rect {
 	return {pos = body.pos + body.offset, size = body.size}
 }
+
+// Compute the AABB center from a Body.
+body_center :: proc(body: ^Body) -> [2]f32 {
+	return body.pos + body.offset
+}

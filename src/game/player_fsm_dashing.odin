@@ -14,7 +14,7 @@ player_fsm_dashing_enter :: proc(ctx: ^Player) {
 	ctx.abilities.dash_cooldown_timer = PLAYER_DASH_COOLDOWN
 	player_particles_dust_emit(
 		&game.dust,
-		ctx.transform.pos + {0, PLAYER_SIZE / 2},
+		ctx.body.pos + {0, PLAYER_SIZE / 2},
 		{-ctx.abilities.dash_dir * PLAYER_PARTICLE_DUST_SPEED_MAX, 0},
 		int(PLAYER_PARTICLE_DUST_DASH_COUNT),
 	)
@@ -35,8 +35,8 @@ player_fsm_dashing_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) 
 		if ctx.sensor.water_immersion > WATER_SWIM_ENTER_THRESHOLD do return .Swimming
 		if ctx.sensor.on_ground do return .Grounded
 		if ctx.sensor.on_side_wall {
-			if math.abs(ctx.transform.vel.x) > PLAYER_IMPACT_THRESHOLD do player_graphics_trigger_impact(ctx, math.abs(ctx.transform.vel.x), {1, 0})
-			if game.input.is_down[.WALL_RUN] && ctx.abilities.wall_run_cooldown_timer <= 0 && !ctx.abilities.wall_run_used && ctx.transform.vel.y > 0 do return .Wall_Run_Vertical
+			if math.abs(ctx.body.vel.x) > PLAYER_IMPACT_THRESHOLD do player_graphics_trigger_impact(ctx, math.abs(ctx.body.vel.x), {1, 0})
+			if game.input.is_down[.WALL_RUN] && ctx.abilities.wall_run_cooldown_timer <= 0 && !ctx.abilities.wall_run_used && ctx.body.vel.y > 0 do return .Wall_Run_Vertical
 			if game.input.is_down[.SLIDE] do return .Wall_Slide
 		}
 		return .Airborne
@@ -48,15 +48,15 @@ player_fsm_dashing_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Player_State) 
 		if uphill {
 			speed *= PLAYER_SLOPE_UPHILL_FACTOR
 			SLOPE_45 :: 0.70710678
-			ctx.transform.vel.x = ctx.abilities.dash_dir * speed * SLOPE_45
-			ctx.transform.vel.y = speed * SLOPE_45
+			ctx.body.vel.x = ctx.abilities.dash_dir * speed * SLOPE_45
+			ctx.body.vel.y = speed * SLOPE_45
 		} else {
-			ctx.transform.vel.x = ctx.abilities.dash_dir * speed
-			ctx.transform.vel.y = EPS // positive prevents slope snap
+			ctx.body.vel.x = ctx.abilities.dash_dir * speed
+			ctx.body.vel.y = EPS // positive prevents slope snap
 		}
 	} else {
-		ctx.transform.vel.x = ctx.abilities.dash_dir * speed
-		if ctx.transform.vel.y <= 0 do ctx.transform.vel.y = 0
+		ctx.body.vel.x = ctx.abilities.dash_dir * speed
+		if ctx.body.vel.y <= 0 do ctx.body.vel.y = 0
 	}
 	return nil
 }

@@ -33,16 +33,16 @@ player_fsm_wall_run_vertical_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Play
 	speed := PLAYER_WALL_RUN_VERTICAL_SPEED
 	decay := PLAYER_WALL_RUN_VERTICAL_DECAY
 	combined := player_move_factor(ctx, SAND_WALL_RUN_PENALTY, WATER_MOVE_PENALTY)
-	ctx.transform.vel.y = speed * combined * math.exp(-decay * ctx.abilities.wall_run_timer)
-	ctx.transform.vel.x = 0
+	ctx.body.vel.y = speed * combined * math.exp(-decay * ctx.abilities.wall_run_timer)
+	ctx.body.vel.x = 0
 
 	if ctx.sensor.on_side_wall {
-		ctx.transform.vel.x = math.lerp(
-			ctx.transform.vel.x,
+		ctx.body.vel.x = math.lerp(
+			ctx.body.vel.x,
 			game.input.axis.x * PLAYER_RUN_SPEED,
 			PLAYER_MOVE_LERP_SPEED * dt,
 		)
-		ctx.transform.pos.x = ctx.sensor.on_side_wall_snap_x
+		ctx.body.pos.x = ctx.sensor.on_side_wall_snap_x
 	}
 
 	if ctx.sensor.on_sand_wall do sand_wall_erode(&game.sand, ctx)
@@ -50,22 +50,22 @@ player_fsm_wall_run_vertical_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Play
 	if player_wall_jump(ctx) do return .Airborne
 	if ctx.abilities.jump_buffer_timer > 0 {
 		// Back wall: straight-up jump
-		ctx.transform.vel.y = PLAYER_JUMP_FORCE
-		if ctx.sensor.on_sand_wall do ctx.transform.vel.y *= SAND_WALL_JUMP_MULT
+		ctx.body.vel.y = PLAYER_JUMP_FORCE
+		if ctx.sensor.on_sand_wall do ctx.body.vel.y *= SAND_WALL_JUMP_MULT
 		ctx.abilities.jump_buffer_timer = 0
 		player_particles_dust_emit(
 			&game.dust,
-			ctx.transform.pos,
+			ctx.body.pos,
 			{0, -PLAYER_PARTICLE_DUST_SPEED_MAX},
 			int(PLAYER_PARTICLE_DUST_WALL_JUMP_COUNT),
 		)
-		player_particles_step_emit(&game.steps, ctx.transform.pos)
+		player_particles_step_emit(&game.steps, ctx.body.pos)
 		return .Airborne
 	}
 
 	if game.input.is_pressed[.DASH] && ctx.abilities.dash_cooldown_timer <= 0 do return .Dashing
 
-	if ctx.transform.vel.y <= PLAYER_WALL_SLIDE_SPEED {
+	if ctx.body.vel.y <= PLAYER_WALL_SLIDE_SPEED {
 		if game.input.is_down[.SLIDE] do return .Wall_Slide
 		if ctx.sensor.on_side_wall do ctx.abilities.coyote_timer = PLAYER_COYOTE_TIME_DURATION
 		return .Airborne
@@ -78,7 +78,7 @@ player_fsm_wall_run_vertical_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Play
 	}
 
 	if !ctx.sensor.on_side_wall && !ctx.sensor.on_back_wall do return .Airborne
-	if ctx.sensor.on_ground && ctx.transform.vel.y <= 0 do return .Grounded
+	if ctx.sensor.on_ground && ctx.body.vel.y <= 0 do return .Grounded
 
 	// Footstep-synced dust while running on wall
 	prev := ctx.graphics.run_anim_timer
@@ -86,8 +86,8 @@ player_fsm_wall_run_vertical_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Play
 	if math.floor(prev / math.PI) != math.floor(ctx.graphics.run_anim_timer / math.PI) {
 		if ctx.sensor.on_side_wall {
 			wall_pos := [2]f32 {
-				ctx.transform.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2,
-				ctx.transform.pos.y,
+				ctx.body.pos.x + ctx.sensor.on_side_wall_dir * PLAYER_SIZE / 2,
+				ctx.body.pos.y,
 			}
 			player_particles_dust_emit(
 				&game.dust,
@@ -99,11 +99,11 @@ player_fsm_wall_run_vertical_update :: proc(ctx: ^Player, dt: f32) -> Maybe(Play
 		} else {
 			player_particles_dust_emit(
 				&game.dust,
-				ctx.transform.pos,
+				ctx.body.pos,
 				{0, -PLAYER_PARTICLE_DUST_SPEED_MIN},
 				int(PLAYER_PARTICLE_DUST_WALL_RUN_COUNT),
 			)
-			player_particles_step_emit(&game.steps, ctx.transform.pos)
+			player_particles_step_emit(&game.steps, ctx.body.pos)
 		}
 	}
 
