@@ -1,6 +1,6 @@
 package game
 
-import sand "../sand"
+import engine "../engine"
 import "core:c"
 import "core:fmt"
 import "core:math"
@@ -18,20 +18,20 @@ wet_sand_color_lut: [4]sdl.FColor
 water_color_lut: [WATER_COLOR_LUT_SIZE]sdl.FColor
 
 sand_graphics_init_lut :: proc() {
-	sand_graphics_build_lut(&sand_color_lut, sand.SAND_COLOR, sand.SAND_COLOR_VARIATION)
+	sand_graphics_build_lut(&sand_color_lut, engine.SAND_COLOR, engine.SAND_COLOR_VARIATION)
 	sand_graphics_build_lut(
 		&wet_sand_color_lut,
-		sand.WET_SAND_COLOR,
-		sand.WET_SAND_COLOR_VARIATION,
+		engine.WET_SAND_COLOR,
+		engine.WET_SAND_COLOR_VARIATION,
 	)
 	for d in 0 ..< WATER_COLOR_LUT_SIZE {
-		t := math.clamp(f32(d) / f32(sand.WATER_COLOR_DEPTH_MAX), 0, 1)
-		offset := t * f32(sand.WATER_COLOR_VARIATION) / 255
+		t := math.clamp(f32(d) / f32(engine.WATER_COLOR_DEPTH_MAX), 0, 1)
+		offset := t * f32(engine.WATER_COLOR_VARIATION) / 255
 		water_color_lut[d] = {
-			f32(sand.WATER_COLOR.r) / 255 - min(offset, f32(sand.WATER_COLOR.r) / 255),
-			f32(sand.WATER_COLOR.g) / 255 - min(offset, f32(sand.WATER_COLOR.g) / 255),
-			f32(sand.WATER_COLOR.b) / 255 - min(offset, f32(sand.WATER_COLOR.b) / 255),
-			f32(sand.WATER_COLOR.a) / 255,
+			f32(engine.WATER_COLOR.r) / 255 - min(offset, f32(engine.WATER_COLOR.r) / 255),
+			f32(engine.WATER_COLOR.g) / 255 - min(offset, f32(engine.WATER_COLOR.g) / 255),
+			f32(engine.WATER_COLOR.b) / 255 - min(offset, f32(engine.WATER_COLOR.b) / 255),
+			f32(engine.WATER_COLOR.a) / 255,
 		}
 	}
 }
@@ -49,14 +49,14 @@ sand_graphics_build_lut :: proc(lut: ^[4]sdl.FColor, base: [4]u8, variation: u8)
 	}
 }
 
-sand_graphics_render :: proc(world: ^sand.World) {
+sand_graphics_render :: proc(world: ^engine.Sand_World) {
 	cam_bl := game.camera.pos - game.camera.size / 2
 	cam_tr := game.camera.pos + game.camera.size / 2
 
-	x0 := max(int(cam_bl.x / sand.SAND_CELL_SIZE), 0)
-	y0 := max(int(cam_bl.y / sand.SAND_CELL_SIZE), 0)
-	x1 := min(int(cam_tr.x / sand.SAND_CELL_SIZE) + 1, world.width)
-	y1 := min(int(cam_tr.y / sand.SAND_CELL_SIZE) + 1, world.height)
+	x0 := max(int(cam_bl.x / engine.SAND_CELL_SIZE), 0)
+	y0 := max(int(cam_bl.y / engine.SAND_CELL_SIZE), 0)
+	x1 := min(int(cam_tr.x / engine.SAND_CELL_SIZE) + 1, world.width)
+	y1 := min(int(cam_tr.y / engine.SAND_CELL_SIZE) + 1, world.height)
 
 	sand_batch := Sand_Render_Batch {
 		vertices = make([dynamic]sdl.Vertex, 0, 7000, context.temp_allocator),
@@ -84,7 +84,7 @@ sand_graphics_render :: proc(world: ^sand.World) {
 	}
 
 	// Batch water cells (top-down depth gradient)
-	depth_max := int(sand.WATER_COLOR_DEPTH_MAX)
+	depth_max := int(engine.WATER_COLOR_DEPTH_MAX)
 	for x in x0 ..< x1 {
 		dist := 0
 		above_is_water := false
@@ -111,14 +111,14 @@ sand_graphics_render :: proc(world: ^sand.World) {
 				fc := water_color_lut[min(dist, WATER_COLOR_LUT_SIZE - 1)]
 				if is_surface {
 					phase :=
-						f32(x) * sand.WATER_SHIMMER_PHASE +
+						f32(x) * engine.WATER_SHIMMER_PHASE +
 						f32(world.step_counter) *
-							sand.WATER_SHIMMER_SPEED *
-							f32(sand.SAND_SIM_INTERVAL) /
+							engine.WATER_SHIMMER_SPEED *
+							f32(engine.SAND_SIM_INTERVAL) /
 							f32(FPS) /
 							f32(FIXED_STEPS)
 					shimmer :=
-						(math.sin(phase) * 0.5 + 0.5) * f32(sand.WATER_SHIMMER_BRIGHTNESS) / 255
+						(math.sin(phase) * 0.5 + 0.5) * f32(engine.WATER_SHIMMER_BRIGHTNESS) / 255
 					fc.r = min(fc.r + shimmer, 1)
 					fc.g = min(fc.g + shimmer, 1)
 					fc.b = min(fc.b + shimmer, 1)
@@ -164,8 +164,8 @@ sand_graphics_render :: proc(world: ^sand.World) {
 @(private = "file")
 sand_graphics_batch_rect :: proc(batch: ^Sand_Render_Batch, x, y: int, fc: sdl.FColor) {
 	rect := game_world_to_screen(
-		{f32(x) * sand.SAND_CELL_SIZE, f32(y) * sand.SAND_CELL_SIZE},
-		{sand.SAND_CELL_SIZE, sand.SAND_CELL_SIZE},
+		{f32(x) * engine.SAND_CELL_SIZE, f32(y) * engine.SAND_CELL_SIZE},
+		{engine.SAND_CELL_SIZE, engine.SAND_CELL_SIZE},
 	)
 	base := c.int(len(batch.vertices))
 	append(
@@ -182,20 +182,20 @@ sand_graphics_batch_rect :: proc(batch: ^Sand_Render_Batch, x, y: int, fc: sdl.F
 sand_graphics_batch_slope_tri :: proc(
 	batch: ^Sand_Render_Batch,
 	x, y: int,
-	slope: sand.Slope_Kind,
+	slope: engine.Sand_Slope_Kind,
 	fc: sdl.FColor,
 ) {
-	wx := f32(x) * sand.SAND_CELL_SIZE
-	wy := f32(y) * sand.SAND_CELL_SIZE
+	wx := f32(x) * engine.SAND_CELL_SIZE
+	wy := f32(y) * engine.SAND_CELL_SIZE
 	v0, v1, v2: [2]f32
 	if slope == .Right {
 		v0 = {wx, wy}
-		v1 = {wx, wy + sand.SAND_CELL_SIZE}
-		v2 = {wx + sand.SAND_CELL_SIZE, wy + sand.SAND_CELL_SIZE}
+		v1 = {wx, wy + engine.SAND_CELL_SIZE}
+		v2 = {wx + engine.SAND_CELL_SIZE, wy + engine.SAND_CELL_SIZE}
 	} else {
-		v0 = {wx + sand.SAND_CELL_SIZE, wy}
-		v1 = {wx, wy + sand.SAND_CELL_SIZE}
-		v2 = {wx + sand.SAND_CELL_SIZE, wy + sand.SAND_CELL_SIZE}
+		v0 = {wx + engine.SAND_CELL_SIZE, wy}
+		v1 = {wx, wy + engine.SAND_CELL_SIZE}
+		v2 = {wx + engine.SAND_CELL_SIZE, wy + engine.SAND_CELL_SIZE}
 	}
 	sp0 := game_world_to_screen_point(v0)
 	sp1 := game_world_to_screen_point(v1)
@@ -210,16 +210,16 @@ sand_graphics_batch_slope_tri :: proc(
 	append(&batch.indices, base, base + 1, base + 2)
 }
 
-sand_graphics_debug :: proc(world: ^sand.World) {
+sand_graphics_debug :: proc(world: ^engine.Sand_World) {
 	if game.debug != .SAND && game.debug != .ALL do return
 
 	cam_bl := game.camera.pos - game.camera.size / 2
 	cam_tr := game.camera.pos + game.camera.size / 2
 
-	x0 := max(int(cam_bl.x / sand.SAND_CELL_SIZE), 0)
-	y0 := max(int(cam_bl.y / sand.SAND_CELL_SIZE), 0)
-	x1 := min(int(cam_tr.x / sand.SAND_CELL_SIZE) + 1, world.width)
-	y1 := min(int(cam_tr.y / sand.SAND_CELL_SIZE) + 1, world.height)
+	x0 := max(int(cam_bl.x / engine.SAND_CELL_SIZE), 0)
+	y0 := max(int(cam_bl.y / engine.SAND_CELL_SIZE), 0)
+	x1 := min(int(cam_tr.x / engine.SAND_CELL_SIZE) + 1, world.width)
+	y1 := min(int(cam_tr.y / engine.SAND_CELL_SIZE) + 1, world.height)
 
 	// Stress heatmap: compute pressure per visible column (top-down)
 	sdl.SetRenderDrawBlendMode(game.win.renderer, sdl.BLENDMODE_BLEND)
@@ -229,18 +229,18 @@ sand_graphics_debug :: proc(world: ^sand.World) {
 			cell := world.cells[y * world.width + x]
 			if cell.material == .Sand || cell.material == .Wet_Sand || cell.material == .Water do pressure += 1.0
 			else if cell.material == .Solid || cell.material == .Platform do pressure = 0
-			else do pressure = max(pressure - sand.SAND_DEBUG_PRESSURE_DECAY, 0)
+			else do pressure = max(pressure - engine.SAND_DEBUG_PRESSURE_DECAY, 0)
 
 			if pressure > 0 &&
 			   (cell.material == .Sand || cell.material == .Wet_Sand || cell.material == .Water) {
 				color: [4]u8
-				t := math.clamp(pressure / sand.SAND_DEBUG_PRESSURE_MAX, 0, 1)
-				if t < sand.SAND_DEBUG_HEATMAP_LOW do color = sand.SAND_DEBUG_COLOR_LOW
-				else if t < sand.SAND_DEBUG_HEATMAP_HIGH do color = sand.SAND_DEBUG_COLOR_MID
-				else do color = sand.SAND_DEBUG_COLOR_HIGH
+				t := math.clamp(pressure / engine.SAND_DEBUG_PRESSURE_MAX, 0, 1)
+				if t < engine.SAND_DEBUG_HEATMAP_LOW do color = engine.SAND_DEBUG_COLOR_LOW
+				else if t < engine.SAND_DEBUG_HEATMAP_HIGH do color = engine.SAND_DEBUG_COLOR_MID
+				else do color = engine.SAND_DEBUG_COLOR_HIGH
 
-				world_pos := [2]f32{f32(x) * sand.SAND_CELL_SIZE, f32(y) * sand.SAND_CELL_SIZE}
-				world_size := [2]f32{sand.SAND_CELL_SIZE, sand.SAND_CELL_SIZE}
+				world_pos := [2]f32{f32(x) * engine.SAND_CELL_SIZE, f32(y) * engine.SAND_CELL_SIZE}
+				world_size := [2]f32{engine.SAND_CELL_SIZE, engine.SAND_CELL_SIZE}
 				rect := game_world_to_screen(world_pos, world_size)
 				sdl.SetRenderDrawColor(game.win.renderer, color.r, color.g, color.b, color.a)
 				sdl.RenderFillRect(game.win.renderer, &rect)
@@ -254,17 +254,17 @@ sand_graphics_debug :: proc(world: ^sand.World) {
 			cell := world.cells[y * world.width + x]
 			if cell.material != .Sand && cell.material != .Wet_Sand && cell.material != .Water do continue
 
-			is_sleeping := cell.sleep_counter >= sand.SAND_SLEEP_THRESHOLD
+			is_sleeping := cell.sleep_counter >= engine.SAND_SLEEP_THRESHOLD
 			if !is_sleeping {
-				chunk := sand.chunk_at(world, x, y)
+				chunk := engine.sand_chunk_at(world, x, y)
 				is_sleeping = chunk != nil && !chunk.needs_sim
 				continue
 			}
 
-			world_pos := [2]f32{f32(x) * sand.SAND_CELL_SIZE, f32(y) * sand.SAND_CELL_SIZE}
-			world_size := [2]f32{sand.SAND_CELL_SIZE, sand.SAND_CELL_SIZE}
+			world_pos := [2]f32{f32(x) * engine.SAND_CELL_SIZE, f32(y) * engine.SAND_CELL_SIZE}
+			world_size := [2]f32{engine.SAND_CELL_SIZE, engine.SAND_CELL_SIZE}
 			rect := game_world_to_screen(world_pos, world_size)
-			sdl.SetRenderDrawColor(game.win.renderer, 0, 0, 0, sand.SAND_DEBUG_SLEEP_DIM)
+			sdl.SetRenderDrawColor(game.win.renderer, 0, 0, 0, engine.SAND_DEBUG_SLEEP_DIM)
 			sdl.RenderFillRect(game.win.renderer, &rect)
 		}
 	}
@@ -272,11 +272,11 @@ sand_graphics_debug :: proc(world: ^sand.World) {
 	// Chunk boundaries and active chunk highlighting
 	for cy in 0 ..< world.chunks_h {
 		for cx in 0 ..< world.chunks_w {
-			cs := int(sand.SAND_CHUNK_SIZE)
-			chunk_x0 := f32(cx * cs) * sand.SAND_CELL_SIZE
-			chunk_y0 := f32(cy * cs) * sand.SAND_CELL_SIZE
-			chunk_w := f32(min((cx + 1) * cs, world.width) - cx * cs) * sand.SAND_CELL_SIZE
-			chunk_h := f32(min((cy + 1) * cs, world.height) - cy * cs) * sand.SAND_CELL_SIZE
+			cs := int(engine.SAND_CHUNK_SIZE)
+			chunk_x0 := f32(cx * cs) * engine.SAND_CELL_SIZE
+			chunk_y0 := f32(cy * cs) * engine.SAND_CELL_SIZE
+			chunk_w := f32(min((cx + 1) * cs, world.width) - cx * cs) * engine.SAND_CELL_SIZE
+			chunk_h := f32(min((cy + 1) * cs, world.height) - cy * cs) * engine.SAND_CELL_SIZE
 
 			world_pos := [2]f32{chunk_x0, chunk_y0}
 			world_size := [2]f32{chunk_w, chunk_h}
@@ -286,20 +286,20 @@ sand_graphics_debug :: proc(world: ^sand.World) {
 			if chunk.needs_sim {
 				sdl.SetRenderDrawColor(
 					game.win.renderer,
-					sand.SAND_DEBUG_COLOR_CHUNK.r,
-					sand.SAND_DEBUG_COLOR_CHUNK.g,
-					sand.SAND_DEBUG_COLOR_CHUNK.b,
-					sand.SAND_DEBUG_COLOR_CHUNK.a,
+					engine.SAND_DEBUG_COLOR_CHUNK.r,
+					engine.SAND_DEBUG_COLOR_CHUNK.g,
+					engine.SAND_DEBUG_COLOR_CHUNK.b,
+					engine.SAND_DEBUG_COLOR_CHUNK.a,
 				)
 				sdl.RenderFillRect(game.win.renderer, &rect)
 			}
 
 			sdl.SetRenderDrawColor(
 				game.win.renderer,
-				sand.SAND_DEBUG_COLOR_CHUNK.r,
-				sand.SAND_DEBUG_COLOR_CHUNK.g,
-				sand.SAND_DEBUG_COLOR_CHUNK.b,
-				sand.SAND_DEBUG_CHUNK_OUTLINE_ALPHA,
+				engine.SAND_DEBUG_COLOR_CHUNK.r,
+				engine.SAND_DEBUG_COLOR_CHUNK.g,
+				engine.SAND_DEBUG_COLOR_CHUNK.b,
+				engine.SAND_DEBUG_CHUNK_OUTLINE_ALPHA,
 			)
 			sdl.RenderRect(game.win.renderer, &rect)
 		}
@@ -312,10 +312,10 @@ sand_graphics_debug :: proc(world: ^sand.World) {
 		rect := game_world_to_screen(world_pos, world_size)
 		sdl.SetRenderDrawColor(
 			game.win.renderer,
-			sand.SAND_DEBUG_COLOR_EMITTER.r,
-			sand.SAND_DEBUG_COLOR_EMITTER.g,
-			sand.SAND_DEBUG_COLOR_EMITTER.b,
-			sand.SAND_DEBUG_COLOR_EMITTER.a,
+			engine.SAND_DEBUG_COLOR_EMITTER.r,
+			engine.SAND_DEBUG_COLOR_EMITTER.g,
+			engine.SAND_DEBUG_COLOR_EMITTER.b,
+			engine.SAND_DEBUG_COLOR_EMITTER.a,
 		)
 		sdl.RenderRect(game.win.renderer, &rect)
 	}
@@ -330,9 +330,9 @@ sand_graphics_debug :: proc(world: ^sand.World) {
 	for y in 0 ..< world.height {
 		for x in 0 ..< world.width {
 			cell := world.cells[y * world.width + x]
-			is_sleeping := cell.sleep_counter >= sand.SAND_SLEEP_THRESHOLD
+			is_sleeping := cell.sleep_counter >= engine.SAND_SLEEP_THRESHOLD
 			if !is_sleeping {
-				chunk := sand.chunk_at(world, x, y)
+				chunk := engine.sand_chunk_at(world, x, y)
 				if chunk != nil && !chunk.needs_sim do is_sleeping = true
 			}
 			if cell.material == .Sand {
@@ -352,7 +352,7 @@ sand_graphics_debug :: proc(world: ^sand.World) {
 	sleeping_chunks := len(world.chunks) - active_chunks
 
 	// Render stats below existing debug text (account for 2 extra sensor lines)
-	stats_y := DEBUG_TEXT_MARGIN_Y + f32(sand.SAND_DEBUG_STATS_LINE_OFFSET) * DEBUG_TEXT_LINE_H
+	stats_y := DEBUG_TEXT_MARGIN_Y + f32(engine.SAND_DEBUG_STATS_LINE_OFFSET) * DEBUG_TEXT_LINE_H
 	debug_value_with_label(DEBUG_TEXT_MARGIN_X, stats_y, "Sand:", fmt.ctprintf("%d", sand_count))
 	debug_value_with_label(
 		DEBUG_TEXT_MARGIN_X,

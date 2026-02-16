@@ -1,6 +1,6 @@
 package game
 
-import sand "../sand"
+import engine "../engine"
 import "core:math"
 import "core:math/rand"
 
@@ -126,14 +126,14 @@ player_state_update_grounded :: proc(p: ^Player, dt: f32) -> Maybe(Player_State)
 		game.input.axis.x *
 		PLAYER_RUN_SPEED *
 		speed_factor *
-		player_move_factor(p, sand.SAND_MOVE_PENALTY, sand.WATER_MOVE_PENALTY),
+		player_move_factor(p, engine.SAND_MOVE_PENALTY, engine.WATER_MOVE_PENALTY),
 		PLAYER_MOVE_LERP_SPEED * dt,
 	)
-	p.body.vel.y = -sand.SAND_SINK_SPEED if p.sensor.on_sand else 0
+	p.body.vel.y = -engine.SAND_SINK_SPEED if p.sensor.on_sand else 0
 	p.abilities.coyote_timer = PLAYER_COYOTE_TIME_DURATION
 
-	if p.sensor.sand_immersion > sand.SAND_SWIM_ENTER_THRESHOLD do return .Sand_Swim
-	if p.sensor.water_immersion > sand.WATER_SWIM_ENTER_THRESHOLD do return .Swimming
+	if p.sensor.sand_immersion > engine.SAND_SWIM_ENTER_THRESHOLD do return .Sand_Swim
+	if p.sensor.water_immersion > engine.WATER_SWIM_ENTER_THRESHOLD do return .Swimming
 
 	if p.sensor.on_platform &&
 	   game.input.axis.y < -PLAYER_INPUT_AXIS_THRESHOLD &&
@@ -145,8 +145,8 @@ player_state_update_grounded :: proc(p: ^Player, dt: f32) -> Maybe(Player_State)
 	}
 
 	if p.abilities.jump_buffer_timer > 0 {
-		sand_jump := 1.0 - p.sensor.sand_immersion * sand.SAND_JUMP_PENALTY
-		water_jump := 1.0 - p.sensor.water_immersion * sand.WATER_JUMP_PENALTY
+		sand_jump := 1.0 - p.sensor.sand_immersion * engine.SAND_JUMP_PENALTY
+		water_jump := 1.0 - p.sensor.water_immersion * engine.WATER_JUMP_PENALTY
 		jump_factor := max(sand_jump * water_jump, 0)
 		if jump_factor > 0 {
 			p.body.vel.y = PLAYER_JUMP_FORCE * jump_factor
@@ -188,8 +188,8 @@ player_state_update_airborne :: proc(p: ^Player, dt: f32) -> Maybe(Player_State)
 		p.body.vel.y = 0
 		return .Grounded
 	}
-	if p.sensor.sand_immersion > sand.SAND_SWIM_ENTER_THRESHOLD do return .Sand_Swim
-	if p.sensor.water_immersion > sand.WATER_SWIM_ENTER_THRESHOLD do return .Swimming
+	if p.sensor.sand_immersion > engine.SAND_SWIM_ENTER_THRESHOLD do return .Sand_Swim
+	if p.sensor.water_immersion > engine.WATER_SWIM_ENTER_THRESHOLD do return .Swimming
 
 	if p.sensor.on_back_wall {
 		if game.input.is_down[.WALL_RUN] && math.abs(game.input.axis.x) > PLAYER_INPUT_AXIS_THRESHOLD && !(p.sensor.on_slope && math.sign(game.input.axis.x) == p.sensor.on_slope_dir) && !p.abilities.wall_run_used && p.abilities.wall_run_cooldown_timer <= 0 do return .Wall_Run_Horizontal
@@ -231,8 +231,8 @@ player_state_update_airborne :: proc(p: ^Player, dt: f32) -> Maybe(Player_State)
 player_state_update_dashing :: proc(p: ^Player, dt: f32) -> Maybe(Player_State) {
 	if p.abilities.dash_active_timer <= 0 {
 		player_physics_apply_movement(p, dt)
-		if p.sensor.sand_immersion > sand.SAND_SWIM_ENTER_THRESHOLD do return .Sand_Swim
-		if p.sensor.water_immersion > sand.WATER_SWIM_ENTER_THRESHOLD do return .Swimming
+		if p.sensor.sand_immersion > engine.SAND_SWIM_ENTER_THRESHOLD do return .Sand_Swim
+		if p.sensor.water_immersion > engine.WATER_SWIM_ENTER_THRESHOLD do return .Swimming
 		if p.sensor.on_ground do return .Grounded
 		if p.sensor.on_side_wall {
 			if math.abs(p.body.vel.x) > PLAYER_IMPACT_THRESHOLD do player_graphics_trigger_impact(p, math.abs(p.body.vel.x), {1, 0})
@@ -243,7 +243,8 @@ player_state_update_dashing :: proc(p: ^Player, dt: f32) -> Maybe(Player_State) 
 	}
 
 	speed :=
-		PLAYER_DASH_SPEED * player_move_factor(p, sand.SAND_MOVE_PENALTY, sand.WATER_MOVE_PENALTY)
+		PLAYER_DASH_SPEED *
+		player_move_factor(p, engine.SAND_MOVE_PENALTY, engine.WATER_MOVE_PENALTY)
 	if p.sensor.on_slope {
 		uphill := p.abilities.dash_dir == p.sensor.on_slope_dir
 		if uphill {
@@ -275,17 +276,18 @@ player_state_update_dropping :: proc(p: ^Player, dt: f32) -> Maybe(Player_State)
 player_state_update_submerged :: proc(p: ^Player, dt: f32) -> Maybe(Player_State) {
 	in_sand := p.state == .Sand_Swim
 
-	move_penalty := sand.SAND_SWIM_MOVE_PENALTY if in_sand else sand.WATER_MOVE_PENALTY
-	lerp_speed := sand.SAND_SWIM_LERP_SPEED if in_sand else PLAYER_MOVE_LERP_SPEED
-	up_speed := sand.SAND_SWIM_UP_SPEED if in_sand else sand.WATER_SWIM_UP_SPEED
-	down_speed := sand.SAND_SWIM_DOWN_SPEED if in_sand else sand.WATER_SWIM_DOWN_SPEED
-	idle_speed := -sand.SAND_SWIM_SINK_SPEED if in_sand else sand.WATER_SWIM_FLOAT_SPEED
-	grav_mult := sand.SAND_SWIM_GRAVITY_MULT if in_sand else sand.WATER_SWIM_GRAVITY_MULT
-	damping_k := sand.SAND_SWIM_DAMPING if in_sand else sand.WATER_SWIM_DAMPING
+	move_penalty := engine.SAND_SWIM_MOVE_PENALTY if in_sand else engine.WATER_MOVE_PENALTY
+	lerp_speed := engine.SAND_SWIM_LERP_SPEED if in_sand else PLAYER_MOVE_LERP_SPEED
+	up_speed := engine.SAND_SWIM_UP_SPEED if in_sand else engine.WATER_SWIM_UP_SPEED
+	down_speed := engine.SAND_SWIM_DOWN_SPEED if in_sand else engine.WATER_SWIM_DOWN_SPEED
+	idle_speed := -engine.SAND_SWIM_SINK_SPEED if in_sand else engine.WATER_SWIM_FLOAT_SPEED
+	grav_mult := engine.SAND_SWIM_GRAVITY_MULT if in_sand else engine.WATER_SWIM_GRAVITY_MULT
+	damping_k := engine.SAND_SWIM_DAMPING if in_sand else engine.WATER_SWIM_DAMPING
 	surface_threshold :=
-		sand.SAND_SWIM_SURFACE_THRESHOLD if in_sand else sand.WATER_SWIM_SURFACE_THRESHOLD
-	exit_threshold := sand.SAND_SWIM_EXIT_THRESHOLD if in_sand else sand.WATER_SWIM_EXIT_THRESHOLD
-	jump_force := sand.SAND_SWIM_JUMP_FORCE if in_sand else sand.WATER_SWIM_JUMP_FORCE
+		engine.SAND_SWIM_SURFACE_THRESHOLD if in_sand else engine.WATER_SWIM_SURFACE_THRESHOLD
+	exit_threshold :=
+		engine.SAND_SWIM_EXIT_THRESHOLD if in_sand else engine.WATER_SWIM_EXIT_THRESHOLD
+	jump_force := engine.SAND_SWIM_JUMP_FORCE if in_sand else engine.WATER_SWIM_JUMP_FORCE
 	immersion := p.sensor.sand_immersion if in_sand else p.sensor.water_immersion
 
 	// Horizontal movement
@@ -312,19 +314,19 @@ player_state_update_submerged :: proc(p: ^Player, dt: f32) -> Maybe(Player_State
 	// Sand hop — spam jump when deep to boil upward (sand only)
 	if in_sand &&
 	   game.input.is_pressed[.JUMP] &&
-	   p.sensor.sand_immersion >= sand.SAND_SWIM_SURFACE_THRESHOLD &&
+	   p.sensor.sand_immersion >= engine.SAND_SWIM_SURFACE_THRESHOLD &&
 	   p.abilities.sand_hop_cooldown_timer <= 0 {
-		p.body.vel.y = sand.SAND_SWIM_HOP_FORCE
-		p.abilities.sand_hop_cooldown_timer = sand.SAND_SWIM_HOP_COOLDOWN
-		sand.particles_emit(
+		p.body.vel.y = engine.SAND_SWIM_HOP_FORCE
+		p.abilities.sand_hop_cooldown_timer = engine.SAND_SWIM_HOP_COOLDOWN
+		engine.sand_particles_emit(
 			&game.sand_particles,
 			p.body.pos + {0, PLAYER_SIZE},
 			PLAYER_SIZE / 2,
 			math.PI / 2,
 			math.PI / 3,
 			{0, 0},
-			sand.SAND_COLOR,
-			int(sand.SAND_SWIM_HOP_PARTICLE_COUNT),
+			engine.SAND_COLOR,
+			int(engine.SAND_SWIM_HOP_PARTICLE_COUNT),
 		)
 	}
 
@@ -333,15 +335,15 @@ player_state_update_submerged :: proc(p: ^Player, dt: f32) -> Maybe(Player_State
 		p.body.vel.y = jump_force
 		p.abilities.jump_buffer_timer = 0
 		if in_sand {
-			sand.particles_emit(
+			engine.sand_particles_emit(
 				&game.sand_particles,
 				p.body.pos + {0, PLAYER_SIZE},
 				PLAYER_SIZE / 2,
 				math.PI / 2,
 				math.PI / 3,
-				{0, abs(p.body.vel.y) * sand.SAND_IMPACT_PARTICLE_VEL_BIAS},
-				sand.SAND_COLOR,
-				int(sand.SAND_SWIM_JUMP_PARTICLE_COUNT),
+				{0, abs(p.body.vel.y) * engine.SAND_IMPACT_PARTICLE_VEL_BIAS},
+				engine.SAND_COLOR,
+				int(engine.SAND_SWIM_JUMP_PARTICLE_COUNT),
 			)
 		}
 		return .Airborne
@@ -367,7 +369,7 @@ player_state_update_wall_slide :: proc(p: ^Player, dt: f32) -> Maybe(Player_Stat
 		p.body.vel.x = 0
 	}
 
-	if p.sensor.on_sand_wall do sand.wall_erode(&game.sand_world, p.body.pos, PLAYER_SIZE, p.sensor.on_side_wall_dir)
+	if p.sensor.on_sand_wall do engine.sand_wall_erode(&game.sand_world, p.body.pos, PLAYER_SIZE, p.sensor.on_side_wall_dir)
 
 	if player_wall_jump(p) do return .Airborne
 
@@ -410,7 +412,7 @@ player_state_update_wall_run_vertical :: proc(p: ^Player, dt: f32) -> Maybe(Play
 
 	speed := PLAYER_WALL_RUN_VERTICAL_SPEED
 	decay := PLAYER_WALL_RUN_VERTICAL_DECAY
-	combined := player_move_factor(p, sand.SAND_WALL_RUN_PENALTY, sand.WATER_MOVE_PENALTY)
+	combined := player_move_factor(p, engine.SAND_WALL_RUN_PENALTY, engine.WATER_MOVE_PENALTY)
 	p.body.vel.y = speed * combined * math.exp(-decay * p.abilities.wall_run_timer)
 	p.body.vel.x = 0
 
@@ -423,13 +425,13 @@ player_state_update_wall_run_vertical :: proc(p: ^Player, dt: f32) -> Maybe(Play
 		p.body.pos.x = p.sensor.on_side_wall_snap_x
 	}
 
-	if p.sensor.on_sand_wall do sand.wall_erode(&game.sand_world, p.body.pos, PLAYER_SIZE, p.sensor.on_side_wall_dir)
+	if p.sensor.on_sand_wall do engine.sand_wall_erode(&game.sand_world, p.body.pos, PLAYER_SIZE, p.sensor.on_side_wall_dir)
 
 	if player_wall_jump(p) do return .Airborne
 	if p.abilities.jump_buffer_timer > 0 {
 		// Back wall: straight-up jump
 		p.body.vel.y = PLAYER_JUMP_FORCE
-		if p.sensor.on_sand_wall do p.body.vel.y *= sand.SAND_WALL_JUMP_MULT
+		if p.sensor.on_sand_wall do p.body.vel.y *= engine.SAND_WALL_JUMP_MULT
 		p.abilities.jump_buffer_timer = 0
 		player_particles_dust_emit(
 			&game.dust,
@@ -492,17 +494,17 @@ player_state_update_wall_run_vertical :: proc(p: ^Player, dt: f32) -> Maybe(Play
 @(private = "file")
 player_state_update_wall_run_horizontal :: proc(p: ^Player, dt: f32) -> Maybe(Player_State) {
 	p.abilities.wall_run_timer += dt
-	combined := player_move_factor(p, sand.SAND_WALL_RUN_PENALTY, sand.WATER_MOVE_PENALTY)
+	combined := player_move_factor(p, engine.SAND_WALL_RUN_PENALTY, engine.WATER_MOVE_PENALTY)
 	p.body.vel.x = PLAYER_WALL_RUN_HORIZONTAL_SPEED * p.abilities.wall_run_dir * combined
 	p.body.vel.y =
 		PLAYER_WALL_RUN_HORIZONTAL_LIFT * combined -
 		GRAVITY * PLAYER_WALL_RUN_HORIZONTAL_GRAV_MULT * p.abilities.wall_run_timer
 
-	if p.sensor.on_sand_wall do sand.wall_erode(&game.sand_world, p.body.pos, PLAYER_SIZE, p.sensor.on_side_wall_dir)
+	if p.sensor.on_sand_wall do engine.sand_wall_erode(&game.sand_world, p.body.pos, PLAYER_SIZE, p.sensor.on_side_wall_dir)
 
 	if p.abilities.jump_buffer_timer > 0 {
 		p.body.vel.y = PLAYER_JUMP_FORCE
-		if p.sensor.on_sand_wall do p.body.vel.y *= sand.SAND_WALL_JUMP_MULT
+		if p.sensor.on_sand_wall do p.body.vel.y *= engine.SAND_WALL_JUMP_MULT
 		p.abilities.jump_buffer_timer = 0
 		player_particles_step_emit(&game.steps, p.body.pos)
 		return .Airborne

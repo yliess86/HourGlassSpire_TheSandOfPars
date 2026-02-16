@@ -16,9 +16,9 @@ Level_Tile_Kind :: enum u8 {
 	Slope_Left, // floor, rises right→left \
 	Slope_Ceil_Right, // ceiling, solid top-right \
 	Slope_Ceil_Left, // ceiling, solid top-left /
-	Sand_Pile, // pre-placed sand -> sand.Material.Sand in sand world, .Empty in level
+	Sand_Pile, // pre-placed sand -> Sand_Material.Sand in sand world, .Empty in level
 	Sand_Emitter, // continuous source -> emitter in sand world, .Solid in level
-	Water_Pile, // pre-placed water -> sand.Material.Water in sand world, .Empty in level
+	Water_Pile, // pre-placed water -> Sand_Material.Water in sand world, .Empty in level
 	Water_Emitter, // continuous water source -> emitter in sand world, .Solid in level
 }
 
@@ -35,8 +35,8 @@ Level :: struct {
 	back_wall_colliders: [dynamic]engine.Physics_Rect,
 	slope_colliders:     [dynamic]engine.Physics_Slope,
 
-	// Temp fields: populated during level_load, consumed by sand.init
-	original_tiles:      []Level_Tile_Kind, // pre-reclassification, consumed by sand.init
+	// Temp fields: populated during level_load, consumed by sand_init
+	original_tiles:      []Level_Tile_Kind, // pre-reclassification, consumed by sand_init
 	sand_piles:          [dynamic][2]int,
 	sand_emitters:       [dynamic][2]int,
 	water_piles:         [dynamic][2]int,

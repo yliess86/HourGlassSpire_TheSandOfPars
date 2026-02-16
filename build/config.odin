@@ -145,8 +145,9 @@ type_str_len :: proc(t: Config_Entry_Type) -> int {
 Config_File :: struct {
 	pkg:         string,
 	path:        string,
-	import_path: string,
+	import_path: string, // empty = same package (no import)
 	config_var:  string,
+	proc_prefix: string, // prefix for generated procs (e.g. "sand_")
 }
 
 config_write_file :: proc(file: Config_File, entries: []Config_Entry) -> bool {
@@ -158,7 +159,8 @@ config_write_file :: proc(file: Config_File, entries: []Config_Entry) -> bool {
 		"// AUTO-GENERATED from assets/game.ini \xe2\x80\x94 do not edit manually\n",
 	)
 	fmt.sbprintf(&b, "package %s\n\n", file.pkg)
-	fmt.sbprintf(&b, "import engine \"%s\"\n", file.import_path)
+	same_pkg := len(file.import_path) == 0
+	if !same_pkg do fmt.sbprintf(&b, "import engine \"%s\"\n", file.import_path)
 	strings.write_string(&b, "import \"core:fmt\"\n")
 
 	// Compute max declaration length for comment alignment
@@ -199,10 +201,14 @@ config_write_file :: proc(file: Config_File, entries: []Config_Entry) -> bool {
 		strings.write_byte(&b, '\n')
 	}
 
+	// Resolve engine prefix: "engine." for cross-package, "" for same-package
+	engine_prefix := "" if same_pkg else "engine."
+	prefix := file.proc_prefix
+
 	// config_apply proc
-	strings.write_string(&b, "\nconfig_apply :: proc() {\n")
+	fmt.sbprintf(&b, "\n%sconfig_apply :: proc() {{\n", prefix)
 	for entry in entries {
-		strings.write_string(&b, "\tif val, ok := engine.config_get_")
+		fmt.sbprintf(&b, "\tif val, ok := %sconfig_get_", engine_prefix)
 		switch entry.type {
 		case .F32:
 			strings.write_string(&b, "f32")
@@ -222,31 +228,31 @@ config_write_file :: proc(file: Config_File, entries: []Config_Entry) -> bool {
 	strings.write_string(&b, "}\n")
 
 	// config global
-	fmt.sbprintf(&b, "\n%s: engine.Config\n", file.config_var)
+	fmt.sbprintf(&b, "\n%s: %sConfig\n", file.config_var, engine_prefix)
 
 	// config_load_and_apply proc
-	strings.write_string(&b, "\nconfig_load_and_apply :: proc() {\n")
-	strings.write_string(&b, "\tconfig, ok := engine.config_load(\"assets/game.ini\")\n")
+	fmt.sbprintf(&b, "\n%sconfig_load_and_apply :: proc() {{\n", prefix)
+	fmt.sbprintf(&b, "\tconfig, ok := %sconfig_load(\"assets/game.ini\")\n", engine_prefix)
 	strings.write_string(&b, "\tif !ok {\n")
 	fmt.sbprintf(&b, "\t\tfmt.eprintf(\"[%s config] Failed to load config\\n\")\n", file.pkg)
 	strings.write_string(&b, "\t\treturn\n")
 	strings.write_string(&b, "\t}\n")
 	fmt.sbprintf(&b, "\t%s = config\n", file.config_var)
-	strings.write_string(&b, "\tconfig_apply()\n")
+	fmt.sbprintf(&b, "\t%sconfig_apply()\n", prefix)
 	strings.write_string(&b, "}\n")
 
 	// config_reload proc
-	strings.write_string(&b, "\nconfig_reload :: proc() -> bool {\n")
+	fmt.sbprintf(&b, "\n%sconfig_reload :: proc() -> bool {{\n", prefix)
 	strings.write_string(&b, "\tif len(")
 	strings.write_string(&b, file.config_var)
 	strings.write_string(&b, ".path) == 0 {\n")
-	strings.write_string(&b, "\t\tconfig_load_and_apply()\n")
+	fmt.sbprintf(&b, "\t\t%sconfig_load_and_apply()\n", prefix)
 	strings.write_string(&b, "\t\treturn true\n")
 	strings.write_string(&b, "\t}\n")
-	strings.write_string(&b, "\tif engine.config_reload(&")
+	fmt.sbprintf(&b, "\tif %sconfig_reload(&", engine_prefix)
 	strings.write_string(&b, file.config_var)
 	strings.write_string(&b, ") {\n")
-	strings.write_string(&b, "\t\tconfig_apply()\n")
+	fmt.sbprintf(&b, "\t\t%sconfig_apply()\n", prefix)
 	strings.write_string(&b, "\t\treturn true\n")
 	strings.write_string(&b, "\t}\n")
 	strings.write_string(&b, "\treturn false\n")
@@ -351,18 +357,20 @@ config_gen :: proc() -> bool {
 			path = "src/game/config.odin",
 			import_path = "../engine",
 			config_var = "config_game",
+			proc_prefix = "",
 		},
 		game_entries[:],
 	)
 	if !game_ok do return false
 
-	// Generate sand config
+	// Generate sand config (inside engine package)
 	sand_ok := config_write_file(
 		{
-			pkg = "sand",
-			path = "src/sand/config.odin",
-			import_path = "../engine",
-			config_var = "config_sand",
+			pkg = "engine",
+			path = "src/engine/sand_config.odin",
+			import_path = "",
+			config_var = "sand_config",
+			proc_prefix = "sand_",
 		},
 		sand_entries[:],
 	)

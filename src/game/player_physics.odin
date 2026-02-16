@@ -1,7 +1,6 @@
 package game
 
 import engine "../engine"
-import sand "../sand"
 import "core:math"
 
 player_physics_apply_movement :: proc(player: ^Player, dt: f32) {
@@ -9,7 +8,7 @@ player_physics_apply_movement :: proc(player: ^Player, dt: f32) {
 		player.body.vel.x,
 		game.input.axis.x *
 		PLAYER_RUN_SPEED *
-		player_move_factor(player, sand.SAND_MOVE_PENALTY, 0),
+		player_move_factor(player, engine.SAND_MOVE_PENALTY, 0),
 		PLAYER_MOVE_LERP_SPEED * dt,
 	)
 	gravity_mult: f32 =

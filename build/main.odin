@@ -98,7 +98,7 @@ main :: proc() {
 	if mode == "release" {
 		tag := fmt.tprintf("release-%s", ver_hash)
 		msg := fmt.tprintf("%s: %s", ver_name, tag)
-		if !sys_run("git add assets/game.ini src/game/config.odin") do os.exit(1)
+		if !sys_run("git add assets/game.ini src/game/config.odin src/engine/sand_config.odin") do os.exit(1)
 		if !sys_run(fmt.tprintf("git commit -m \"%s\"", msg)) do os.exit(1)
 		if !sys_run(fmt.tprintf("git tag %s", tag)) do os.exit(1)
 		if !sys_run(fmt.tprintf("git push origin HEAD %s", tag)) do os.exit(1)
