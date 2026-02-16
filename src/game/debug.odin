@@ -1,6 +1,7 @@
 package game
 
 import engine "../engine"
+import "core:fmt"
 import sdl "vendor:sdl3"
 
 Debug_State :: enum u8 {
@@ -141,4 +142,80 @@ debug_camera :: proc() {
 	sdl.RenderLine(r, left, bottom, right, bottom) // bottom
 	sdl.RenderLine(r, left, top, left, bottom) // left
 	sdl.RenderLine(r, right, top, right, bottom) // right
+}
+
+@(private = "file")
+debug_text_right :: proc(x, y: f32, text: cstring, color: [4]u8 = DEBUG_COLOR_STATE) {
+	text_w := debug_text_width(text)
+	debug_text(x - text_w, y, text, color)
+}
+
+@(private = "file")
+debug_key_name :: proc(action: Input_Action) -> cstring {
+	return sdl.GetScancodeName(game.input.bindings[action].keyboard)
+}
+
+@(private = "file")
+debug_move_label :: proc() -> cstring {
+	u := debug_key_name(.MOVE_UP)
+	d := debug_key_name(.MOVE_DOWN)
+	l := debug_key_name(.MOVE_LEFT)
+	r := debug_key_name(.MOVE_RIGHT)
+	if len(u) == 1 && len(d) == 1 && len(l) == 1 && len(r) == 1 {
+		return fmt.ctprintf("%s%s%s%s", u, l, d, r)
+	}
+	return fmt.ctprintf("%s/%s/%s/%s", u, l, d, r)
+}
+
+debug_render_controls :: proc() {
+	family := engine.input_family(game.input.type, game.input.gamepad)
+	is_keyboard := family == .Keyboard
+
+	right_x := f32(game.win.logical_w) - DEBUG_TEXT_MARGIN_X
+	y := DEBUG_TEXT_MARGIN_Y
+
+	family_labels := engine.INPUT_FAMILY_LABELS
+	debug_text_right(right_x, y, family_labels[family], DEBUG_COLOR_STATE)
+	y += DEBUG_TEXT_LINE_H * DEBUG_TEXT_TITLE_GAP
+
+	Row :: struct {
+		label: cstring,
+		key:   cstring,
+	}
+
+	button_names := engine.INPUT_BUTTON_NAMES
+	names := button_names[family]
+	rows: [5]Row
+	if is_keyboard {
+		rows = {
+			{"Move", debug_move_label()},
+			{"Jump", debug_key_name(.JUMP)},
+			{"Dash", debug_key_name(.DASH)},
+			{"Wall Run", debug_key_name(.WALL_RUN)},
+			{"Slide", debug_key_name(.SLIDE)},
+		}
+	} else {
+		rows = {
+			{"Move", "D-Pad / Stick"},
+			{"Jump", names.south},
+			{"Dash", names.north},
+			{"Wall Run", names.right_shoulder},
+			{"Slide", names.left_shoulder},
+		}
+	}
+
+	max_label_w: f32
+	max_key_w: f32
+	for row in rows {
+		max_label_w = max(max_label_w, debug_text_width(row.label))
+		max_key_w = max(max_key_w, debug_text_width(row.key))
+	}
+	gap := debug_text_width("  ")
+	label_x := right_x - max_label_w - gap - max_key_w
+	key_x := right_x - max_key_w
+	for row in rows {
+		debug_text(label_x, y, row.label, DEBUG_COLOR_STATE_MUTED)
+		debug_text(key_x, y, row.key, DEBUG_COLOR_STATE)
+		y += DEBUG_TEXT_LINE_H
+	}
 }

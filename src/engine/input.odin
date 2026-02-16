@@ -33,6 +33,34 @@ Input :: struct($Action: typeid) {
 	deadzone:   f32,
 }
 
+Input_Family :: enum u8 {
+	Keyboard,
+	Xbox,
+	PlayStation,
+	Switch,
+	Generic,
+}
+
+Input_Button_Names :: struct {
+	south, north, right_shoulder, left_shoulder, back: cstring,
+}
+
+INPUT_BUTTON_NAMES :: [Input_Family]Input_Button_Names {
+	.Keyboard    = {},
+	.Xbox        = {"A", "Y", "RB", "LB", "Back"},
+	.PlayStation = {"Cross", "Triangle", "R1", "L1", "Share"},
+	.Switch      = {"B", "X", "R", "L", "−"},
+	.Generic     = {"A", "Y", "RB", "LB", "Back"},
+}
+
+INPUT_FAMILY_LABELS :: [Input_Family]cstring {
+	.Keyboard    = "Keyboard",
+	.Xbox        = "Xbox",
+	.PlayStation = "PlayStation",
+	.Switch      = "Switch",
+	.Generic     = "Gamepad",
+}
+
 input_init :: proc(input: ^Input($Action), deadzone: f32 = 0.1) {
 	input^ = {}
 	input.deadzone = deadzone
@@ -115,10 +143,31 @@ input_update_gamepad :: proc(input: ^Input($Action), event: ^sdl.Event) {
 	}
 
 	if input.type == .GAMEPAD {
-		dpad_x := f32(int(input.is_down[input.axis_map.pos_x]) - int(input.is_down[input.axis_map.neg_x]))
-		dpad_y := f32(int(input.is_down[input.axis_map.pos_y]) - int(input.is_down[input.axis_map.neg_y]))
+		dpad_x := f32(
+			int(input.is_down[input.axis_map.pos_x]) - int(input.is_down[input.axis_map.neg_x]),
+		)
+		dpad_y := f32(
+			int(input.is_down[input.axis_map.pos_y]) - int(input.is_down[input.axis_map.neg_y]),
+		)
 		input.axis.x = input.axis.x * (1.0 - math.abs(dpad_x)) + dpad_x
 		input.axis.y = input.axis.y * (1.0 - math.abs(dpad_y)) + dpad_y
 		input.axis = linalg.normalize0(input.axis) if dpad_x != 0 || dpad_y != 0 else input.axis
+	}
+}
+
+input_family :: proc(type: Input_Type, gamepad: ^sdl.Gamepad) -> Input_Family {
+	if type == .KEYBOARD || gamepad == nil do return .Keyboard
+	#partial switch sdl.GetGamepadType(gamepad) {
+	case .PS3, .PS4, .PS5:
+		return .PlayStation
+	case .XBOX360, .XBOXONE:
+		return .Xbox
+	case .NINTENDO_SWITCH_PRO,
+	     .NINTENDO_SWITCH_JOYCON_LEFT,
+	     .NINTENDO_SWITCH_JOYCON_RIGHT,
+	     .NINTENDO_SWITCH_JOYCON_PAIR:
+		return .Switch
+	case:
+		return .Generic
 	}
 }

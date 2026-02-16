@@ -180,12 +180,12 @@ game_render_debug :: proc() {
 		fmt.ctprintf("%v", game.debug),
 		DEBUG_COLOR_STATE,
 	)
-	family := debug_controls_family()
+	family := engine.input_family(game.input.type, game.input.gamepad)
 	hint: cstring
 	if family == .Keyboard {
 		hint = sdl.GetScancodeName(game.input.bindings[.DEBUG].keyboard)
 	} else {
-		names := DEBUG_CONTROLS_NAMES
+		names := engine.INPUT_BUTTON_NAMES
 		hint = names[family].back
 	}
 	debug_text_center(
@@ -196,7 +196,7 @@ game_render_debug :: proc() {
 	)
 
 	if game.debug == .CONTROLS {
-		debug_controls_render()
+		debug_render_controls()
 		return
 	}
 
