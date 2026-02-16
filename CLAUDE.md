@@ -38,30 +38,26 @@ Odin, SDL3 (`vendor:sdl3`). Main package `src/game/`, engine `src/engine/` (`"..
 | `src/game/config.odin` | **AUTO-GENERATED** from `game.ini` by `build/`. Do not edit manually |
 | `build/main.odin` | Build entry: CLI parsing, dev build + run, `clean` |
 | `build/sys.odin` | OS helpers: `sys_run`, `sys_make_dir`, `sys_copy`, `sys_download` |
-| `build/config.odin` | Config codegen: parses `game.ini`, generates `config.odin` |
+| `build/config.odin` | Config codegen: parses `game.ini`, generates `config.odin`. Supports `proc_prefix` and same-package generation |
 | `build/version.odin` | Version stamping: `VERSION_NAME`, UTC date/time + MD5 hash |
 | `build/dist.odin` | Distribution: dist targets, SDL3 download/setup, release bundle |
 | `src/engine/config.odin` | INI parser, expression evaluator, config load/reload/get API |
 | `src/engine/camera.odin` | `Camera` struct, `camera_world_to_screen`/`_point`, dead-zone follow + boundary decel + clamp |
 | `src/engine/window.odin` | SDL3 window/renderer init, VSync, logical presentation |
 | `src/engine/clock.odin` | Frame timing, fixed timestep accumulator, dt capped at 0.1s |
-| `src/engine/input.odin` | Generic `Input($Action)` with bindings, deadzone; `is_down`/`is_pressed`/`axis` |
+| `src/engine/input.odin` | Generic `Input($Action)` with bindings, deadzone; `is_down`/`is_pressed`/`axis`. `Input_Family` enum, `INPUT_BUTTON_NAMES`, `input_family` |
+| `src/engine/particle.odin` | `Particle`, `Particle_Pool` (#soa dynamic), emit/update/destroy |
 | `src/engine/physics.odin` | `Physics_Body`, `Physics_Static_Geometry`, separated-axis collision solver, raycasts, slope helpers |
+| `src/engine/sand.odin` | `Sand_Material`, `Sand_Cell`/`Sand_World`/`Sand_Interactor`, grid accessors, sim, interaction, emitters, chunks |
+| `src/engine/sand_config.odin` | **AUTO-GENERATED** sand constants from `game.ini`. Do not edit manually |
 | `src/game/main.odin` | Entry point: game loop (fixed-timestep update, render, present) |
 | `src/game/game.odin` | `Game_State` struct, `game` global, lifecycle, update/render, `game_world_to_screen` wrappers |
-| `src/game/player.odin` | `Player_State` enum, `Player` struct (body/abilities/graphics/state/sensor), `player_init`/`player_fixed_update`/`player_debug` |
-| `src/game/player_graphics.odin` | `player_color`, 4-layer visual deformation (velocity/look/bob/impact), `player_graphics_trigger_impact` |
-| `src/game/player_sensor.odin` | `Player_Sensor` struct, per-frame environment queries (ground/slope/platform/sand/water/wall) |
-| `src/game/player_physics.odin` | Separated-axis solver: sweep, resolve X/Y, slope resolve. `player_physics_debug` |
-| `src/game/player_state.odin` | `player_state_update` (switch dispatch), `player_state_transition` (enter/exit), all 9 state handlers in one file |
-| `src/game/debug.odin` | `Debug_State` enum, drawing helpers, `debug_camera` |
+| `src/game/player.odin` | `Player_State` enum, `Player`/`Player_Sensor` structs, `player_init`/`player_fixed_update`, state machine, physics solver, sensor queries, footprints |
+| `src/game/player_graphics.odin` | `player_color`, 4-layer visual deformation, particle emit/update/render, debug overlays |
+| `src/game/debug.odin` | `Debug_State` enum, drawing helpers, `debug_camera`, controls overlay |
 | `src/game/level.odin` | BMP loading, tile classification by exposed face, greedy collider merging, slope merging, rendering |
 | `src/game/input.odin` | `Input_Action` enum, `INPUT_DEFAULT_BINDINGS`, `input_binding_apply` |
-| `src/game/sand.odin` | `Sand_Material` enum, `Sand_Cell`/`Sand_Emitter`/`Sand_World`, grid accessors, `sand_init`/`sand_destroy` |
-| `src/game/sand_chunk.odin` | 32x32 spatial chunks, dirty propagation, sleep optimization |
-| `src/game/sand_sim.odin` | CA step: bottom-to-top, alternating parity. Sand (down/diagonal), water (down/diagonal/horizontal flow). Sleep/wake system |
-| `src/game/sand_emitter.odin` | Accumulates fractional particles, spawns below emitter at material-specific rate |
-| `src/game/sand_player.odin` | Player-sand/water coupling: impact craters → displacement → drag → pressure → quicksand → buoyancy → dash carving → footprints |
+| `src/game/sand_bridge.odin` | Bridge between `Player` and `engine.Sand_Interactor`: conversion, apply-back, displacement/carve particles |
 | `src/game/sand_graphics.odin` | Camera-culled rendering: sand opaque with color variants, water alpha-blended with depth gradient + shimmer, surface smoothing |
 
 ### Game loop
@@ -71,13 +67,13 @@ Fixed-timestep: `game_update(dt)` → N × `game_fixed_update(fixed_dt)` → `ga
 - `game_fixed_update` — player → sand interaction → sand sim → emitters → particles → camera
 - `game_render` — level tiles → particles → player → sand (back-to-front)
 
-Global `game: Game_State`. Player nested as `game.player: Player` with sub-structs: `body` (Physics_Body), `abilities`, `graphics`, `state`/`previous_state`, `sensor`. Sand state: `game.sand: Sand_World`. All player procs take `player: ^Player`; call sites pass `&game.player`.
+Global `game: Game_State`. Player nested as `game.player: Player` with sub-structs: `body` (Physics_Body), `abilities`, `graphics`, `state`/`previous_state`, `sensor`. Sand state: `game.sand_world: engine.Sand_World`. All player procs take `player: ^Player`; call sites pass `&game.player`.
 
 ### Player State Machine
 
 States: `Grounded`, `Airborne`, `Dashing`, `Dropping`, `Sand_Swim`, `Swimming`, `Wall_Run_Horizontal`, `Wall_Slide`, `Wall_Run_Vertical`.
 
-Plain `switch player.state` dispatch in `player_state_update`. Each case calls a private `player_state_update_<state>` proc returning `Maybe(Player_State)` for transitions (nil = stay). `player_state_transition` prevents self-transitions, runs exit/enter logic. `Sand_Swim` + `Swimming` share `player_state_update_submerged`.
+Plain `switch player.state` dispatch in file-private `state_update` (in `player.odin`). Each case calls a private `state_update_<state>` proc returning `Maybe(Player_State)` for transitions (nil = stay). `state_transition` prevents self-transitions, runs exit/enter logic. `Sand_Swim` + `Swimming` share `state_update_submerged`.
 
 **Keep each state's doc comment in sync with implementation. Update `PLAYER.md` on state/transition changes.**
 
@@ -170,7 +166,7 @@ Downhill: snap-based — resolve snaps player to surface if gap < snap distance.
 
 ### Sand System
 
-CA sand/water sim on level-aligned grid (`SAND_CELLS_PER_TILE` cells per tile, configurable resolution). `Sand_World` stores flat `[]Sand_Cell` (y*w+x, y=0=bottom) + parallel `[]Sand_Slope_Kind` (immutable structural data from level) + chunks + emitters + player footprint cache. Grid dimensions = level dimensions × `SAND_CELLS_PER_TILE`. Cell size = `TILE_SIZE / SAND_CELLS_PER_TILE`. Distance/accumulation constants in `game.ini` auto-scale with CPT via expressions.
+CA sand/water sim in `src/engine/sand.odin` on level-aligned grid (`SAND_CELLS_PER_TILE` cells per tile, configurable resolution). `Sand_World` stores flat `[]Sand_Cell` (y*w+x, y=0=bottom) + parallel `[]Sand_Slope_Kind` (immutable structural data from level) + chunks + emitters + player footprint cache. Grid dimensions = level dimensions × `SAND_CELLS_PER_TILE`. Cell size = `TILE_SIZE / SAND_CELLS_PER_TILE`. Distance/accumulation constants in `game.ini` auto-scale with CPT via expressions. Data-driven material properties (`Sand_Material_Props`, `Sand_Behavior` enum, `SAND_MAT_PROPS` table) unify sim dispatch.
 
 **Materials:** Empty, Solid (level), Sand (falls), Water (flows horizontally, buoyant), Platform (one-way), Wet_Sand (sand that contacted water: heavier, stickier, darker; dries without water).
 
@@ -180,8 +176,8 @@ CA sand/water sim on level-aligned grid (`SAND_CELLS_PER_TILE` cells per tile, c
 
 **Emitters:** Accumulate fractional particles at `SAND_EMITTER_RATE`/`WATER_EMITTER_RATE`. Spawn one tile below when ready.
 
-**Player interaction** (`sand_player_interact` each fixed step):
-1. **Impact craters** — landing speed stored in `impact_pending`; crater radius + particle count scale with impact factor. Ejects sand upward around footprint
+**Player interaction** (`engine.sand_interact` each fixed step, via `Sand_Interactor` bridge in `sand_bridge.odin`):
+1. **Impact craters** — landing speed stored in `abilities.impact_pending`; crater radius + particle count scale with impact factor. Ejects sand upward around footprint
 2. **Displacement** — push sand/wet sand/water out of player footprint. Slope-aware: on slopes, pushes align with surface geometry (downhill diagonals allowed, through-surface blocked). Chaining blocked through slope cells. Flat fallbacks: primary → down → diag → opposite → opposite diag
 3. **Drag** — sand: quadratic by immersion. Wet sand: separate higher drag constants. Water: separate drag constants. Dash: reduced drag via `SAND_DASH_DRAG_FACTOR`
 4. **Pressure** — contiguous sand/wet sand above → downward force. Water excluded
