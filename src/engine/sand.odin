@@ -148,32 +148,15 @@ sand_chunk_recount :: proc(world: ^Sand_World) {
 	for &chunk in world.chunks do if chunk.active_count > 0 do chunk.dirty = true
 }
 
-// --- Interactor ---
+// --- Interaction Stats ---
 
-Sand_Interactor :: struct {
-	// Inputs (game -> sand)
-	pos:                    [2]f32, // reference point (bottom-center)
-	vel:                    [2]f32, // current velocity (modified in place by drag/pressure/buoyancy)
-	size:                   f32, // collider width/height (square)
-	impact_pending:         f32, // landing speed for craters (consumed -> 0)
-	sand_immersion:         f32, // previous frame immersion (for drag scaling)
-	is_dashing:             bool, // triggers dash-carve path
-	is_submerged:           bool, // Sand_Swim: lighter drag, skip heavy forces
-	// Outputs (sand -> game)
-	out_sand_immersion:     f32, // computed sand+wet_sand immersion (0..1)
-	out_water_immersion:    f32, // computed water immersion (0..1)
-	out_on_sand:            bool, // standing on sand surface
-	out_on_ground:          bool, // sand provides ground
-	out_ground_snap_y:      f32, // sand surface Y for ground snapping
-	out_wall_found:         bool, // sand wall detected
-	out_wall_dir:           f32, // wall direction (+1/-1)
-	out_wall_snap_x:        f32, // wall snap X
-	out_sand_displaced:     int, // count of sand cells displaced (for particles)
-	out_wet_sand_displaced: int, // count of wet_sand cells displaced
-	out_water_displaced:    int, // count of water cells displaced
-	out_impact_factor:      f32, // 0..1 impact strength (for particle scaling)
-	out_surface_y:          f32, // interpolated surface Y (for particle emit pos)
-	out_surface_found:      bool, // whether surface was found
+Sand_Interaction_Stats :: struct {
+	sand_displaced:     int, // count of sand cells displaced (for particles)
+	wet_sand_displaced: int, // count of wet_sand cells displaced
+	water_displaced:    int, // count of water cells displaced
+	impact_factor:      f32, // 0..1 impact strength (for particle scaling)
+	surface_y:          f32, // interpolated surface Y (for particle emit pos)
+	surface_found:      bool, // whether surface was found
 }
 
 // --- Emitter ---
@@ -510,30 +493,39 @@ sand_wall_erode :: proc(world: ^Sand_World, pos: [2]f32, size, dir: f32) {
 	}
 }
 
-// Interactor-sand/water coupling: displacement, drag, pressure, burial, buoyancy
-sand_interact :: proc(world: ^Sand_World, it: ^Sand_Interactor, dt: f32) {
-	if world.width == 0 || world.height == 0 do return
+// Displacement, drag, pressure, burial, buoyancy — modifies vel in place, returns stats for particles
+sand_apply_physics :: proc(
+	world: ^Sand_World,
+	pos: [2]f32,
+	vel: ^[2]f32,
+	size: f32,
+	impact_pending: ^f32,
+	sand_immersion: f32,
+	is_dashing: bool,
+	is_submerged: bool,
+	dt: f32,
+) -> Sand_Interaction_Stats {
+	if world.width == 0 || world.height == 0 do return {}
 
-	x0, y0, x1, y1 := sand_footprint_cells(world, it.pos, it.size)
+	x0, y0, x1, y1 := sand_footprint_cells(world, pos, size)
 	world.interactor_x0 = x0
 	world.interactor_y0 = y0
 	world.interactor_x1 = x1
 	world.interactor_y1 = y1
 	world.interactor_blocking = true
 
-	if it.is_dashing {
-		sand_dash_carve(world, it, dt)
-		return
+	if is_dashing {
+		sand_carved, water_carved := sand_dash_carve(world, pos, vel, size, dt)
+		return {sand_displaced = sand_carved, water_displaced = water_carved}
 	}
 
 	impact_factor: f32 = 0
-	if it.impact_pending > 0 {
-		speed := it.impact_pending
-		it.impact_pending = 0
+	if impact_pending^ > 0 {
+		speed := impact_pending^
+		impact_pending^ = 0
 		range := SAND_IMPACT_MAX_SPEED - SAND_IMPACT_MIN_SPEED
 		if range > 0 do impact_factor = math.clamp((speed - SAND_IMPACT_MIN_SPEED) / range, 0, 1)
 	}
-	it.out_impact_factor = impact_factor
 
 	extra := int(impact_factor * f32(SAND_IMPACT_RADIUS))
 	cx0 := max(x0 - extra, 0)
@@ -543,7 +535,7 @@ sand_interact :: proc(world: ^Sand_World, it: ^Sand_Interactor, dt: f32) {
 	sand_displaced := 0
 	wet_sand_displaced := 0
 	water_displaced := 0
-	center_cx := int(it.pos.x / SAND_CELL_SIZE)
+	center_cx := int(pos.x / SAND_CELL_SIZE)
 
 	for ty in cy0 ..= y1 {
 		for tx in cx0 ..= cx1 {
@@ -569,24 +561,17 @@ sand_interact :: proc(world: ^Sand_World, it: ^Sand_Interactor, dt: f32) {
 		}
 	}
 
-	it.out_sand_displaced = sand_displaced
-	it.out_wet_sand_displaced = wet_sand_displaced
-	it.out_water_displaced = water_displaced
+	surf_y, surf_ok := sand_surface_query(world, pos.x, pos.y)
 
-	surf_y, surf_ok := sand_surface_query(world, it.pos.x, it.pos.y)
-	it.out_surface_y = surf_y
-	it.out_surface_found = surf_ok
-
-	if it.is_submerged {
-		if sand_displaced > 0 do sand_apply_drag(&it.vel, SAND_SWIM_DRAG_FACTOR * SAND_PLAYER_DRAG_MAX, SAND_PLAYER_DRAG_Y_FACTOR, false)
-		if wet_sand_displaced > 0 do sand_apply_drag(&it.vel, SAND_SWIM_DRAG_FACTOR * WET_SAND_PLAYER_DRAG_MAX, WET_SAND_PLAYER_DRAG_Y_FACTOR, false)
-		if water_displaced > 0 do sand_apply_drag(&it.vel, min(f32(water_displaced) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX), WATER_PLAYER_DRAG_Y_FACTOR, false)
+	if is_submerged {
+		if sand_displaced > 0 do sand_apply_drag(vel, SAND_SWIM_DRAG_FACTOR * SAND_PLAYER_DRAG_MAX, SAND_PLAYER_DRAG_Y_FACTOR, false)
+		if wet_sand_displaced > 0 do sand_apply_drag(vel, SAND_SWIM_DRAG_FACTOR * WET_SAND_PLAYER_DRAG_MAX, WET_SAND_PLAYER_DRAG_Y_FACTOR, false)
+		if water_displaced > 0 do sand_apply_drag(vel, min(f32(water_displaced) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX), WATER_PLAYER_DRAG_Y_FACTOR, false)
 	} else {
 		if sand_displaced > 0 {
-			immersion := it.sand_immersion
 			sand_apply_drag(
-				&it.vel,
-				immersion * immersion * SAND_PLAYER_DRAG_MAX,
+				vel,
+				sand_immersion * sand_immersion * SAND_PLAYER_DRAG_MAX,
 				SAND_PLAYER_DRAG_Y_FACTOR,
 				true,
 			)
@@ -596,9 +581,9 @@ sand_interact :: proc(world: ^Sand_World, it: ^Sand_Interactor, dt: f32) {
 				f32(wet_sand_displaced) * WET_SAND_PLAYER_DRAG_PER_CELL,
 				WET_SAND_PLAYER_DRAG_MAX,
 			)
-			sand_apply_drag(&it.vel, drag, WET_SAND_PLAYER_DRAG_Y_FACTOR, true)
+			sand_apply_drag(vel, drag, WET_SAND_PLAYER_DRAG_Y_FACTOR, true)
 		}
-		if water_displaced > 0 do sand_apply_drag(&it.vel, min(f32(water_displaced) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX), WATER_PLAYER_DRAG_Y_FACTOR, false)
+		if water_displaced > 0 do sand_apply_drag(vel, min(f32(water_displaced) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX), WATER_PLAYER_DRAG_Y_FACTOR, false)
 
 		above_count := 0
 		for tx in x0 ..= x1 {
@@ -617,25 +602,25 @@ sand_interact :: proc(world: ^Sand_World, it: ^Sand_Interactor, dt: f32) {
 
 		if above_count > 0 {
 			capped := math.sqrt(f32(above_count))
-			it.vel.y -= capped * SAND_PRESSURE_FORCE * dt
+			vel.y -= capped * SAND_PRESSURE_FORCE * dt
 		}
 
-		if it.sand_immersion > SAND_BURIAL_THRESHOLD && it.vel.y <= 0 {
+		if sand_immersion > SAND_BURIAL_THRESHOLD && vel.y <= 0 {
 			activity := math.clamp(
-				math.abs(it.vel.x) / world.run_speed,
+				math.abs(vel.x) / world.run_speed,
 				0,
 				SAND_QUICKSAND_MAX_ACTIVITY,
 			)
 			base_sink := SAND_QUICKSAND_BASE_SINK * world.gravity * dt
 			move_sink := SAND_QUICKSAND_MOVE_MULT * activity * world.gravity * dt
-			it.vel.y -= base_sink + move_sink
+			vel.y -= base_sink + move_sink
 		}
 	}
 
-	water_immersion := sand_compute_immersion(world, it.pos, it.size, {.Water})
+	water_immersion := sand_compute_immersion(world, pos, size, {.Water})
 	if water_immersion > WATER_BUOYANCY_THRESHOLD {
 		buoyancy := water_immersion * WATER_BUOYANCY_FORCE
-		it.vel.y += buoyancy * dt
+		vel.y += buoyancy * dt
 	}
 
 	flow_sum: f32 = 0
@@ -652,24 +637,39 @@ sand_interact :: proc(world: ^Sand_World, it: ^Sand_Interactor, dt: f32) {
 	}
 	if flow_count > 0 {
 		current_avg := flow_sum / f32(flow_count)
-		it.vel.x += current_avg * WATER_CURRENT_FORCE * dt
+		vel.x += current_avg * WATER_CURRENT_FORCE * dt
+	}
+
+	return {
+		sand_displaced = sand_displaced,
+		wet_sand_displaced = wet_sand_displaced,
+		water_displaced = water_displaced,
+		impact_factor = impact_factor,
+		surface_y = surf_y,
+		surface_found = surf_ok,
 	}
 }
 
 // Carve tunnel through sand during dash
 @(private = "file")
-sand_dash_carve :: proc(world: ^Sand_World, it: ^Sand_Interactor, dt: f32) {
-	prev_x := it.pos.x - it.vel.x * dt
-	curr_x := it.pos.x
+sand_dash_carve :: proc(
+	world: ^Sand_World,
+	pos: [2]f32,
+	vel: ^[2]f32,
+	size: f32,
+	dt: f32,
+) -> (
+	sand_carved, water_carved: int,
+) {
+	prev_x := pos.x - vel.x * dt
+	curr_x := pos.x
 
 	gx_start := max(int(math.min(prev_x, curr_x) / SAND_CELL_SIZE) - 1, 0)
 	gx_end := min(int(math.max(prev_x, curr_x) / SAND_CELL_SIZE) + 1, world.width - 1)
-	gy_start := max(int(it.pos.y / SAND_CELL_SIZE), 0)
-	gy_end := min(int((it.pos.y + it.size) / SAND_CELL_SIZE), world.height - 1)
+	gy_start := max(int(pos.y / SAND_CELL_SIZE), 0)
+	gy_end := min(int((pos.y + size) / SAND_CELL_SIZE), world.height - 1)
 
-	sand_carved := 0
-	water_carved := 0
-	push_dx: int = it.vel.x > 0 ? 1 : -1
+	push_dx: int = vel.x > 0 ? 1 : -1
 
 	for gx in gx_start ..= gx_end {
 		for gy in gy_start ..= gy_end {
@@ -684,10 +684,7 @@ sand_dash_carve :: proc(world: ^Sand_World, it: ^Sand_Interactor, dt: f32) {
 		}
 	}
 
-	it.out_sand_displaced = sand_carved
-	it.out_water_displaced = water_carved
-
-	fx0, fy0, fx1, fy1 := sand_footprint_cells(world, it.pos, it.size)
+	fx0, fy0, fx1, fy1 := sand_footprint_cells(world, pos, size)
 	sand_count := 0
 	wet_sand_count := 0
 	water_count := 0
@@ -700,9 +697,10 @@ sand_dash_carve :: proc(world: ^Sand_World, it: ^Sand_Interactor, dt: f32) {
 			else if mat == .Water do water_count += 1
 		}
 	}
-	if sand_count > 0 do sand_apply_drag(&it.vel, min(f32(sand_count) * SAND_PLAYER_DRAG_PER_CELL, SAND_PLAYER_DRAG_MAX) * SAND_DASH_DRAG_FACTOR, SAND_PLAYER_DRAG_Y_FACTOR, false)
-	if wet_sand_count > 0 do sand_apply_drag(&it.vel, min(f32(wet_sand_count) * WET_SAND_PLAYER_DRAG_PER_CELL, WET_SAND_PLAYER_DRAG_MAX) * SAND_DASH_DRAG_FACTOR, WET_SAND_PLAYER_DRAG_Y_FACTOR, false)
-	if water_count > 0 do sand_apply_drag(&it.vel, min(f32(water_count) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX) * SAND_DASH_DRAG_FACTOR, WATER_PLAYER_DRAG_Y_FACTOR, false)
+	if sand_count > 0 do sand_apply_drag(vel, min(f32(sand_count) * SAND_PLAYER_DRAG_PER_CELL, SAND_PLAYER_DRAG_MAX) * SAND_DASH_DRAG_FACTOR, SAND_PLAYER_DRAG_Y_FACTOR, false)
+	if wet_sand_count > 0 do sand_apply_drag(vel, min(f32(wet_sand_count) * WET_SAND_PLAYER_DRAG_PER_CELL, WET_SAND_PLAYER_DRAG_MAX) * SAND_DASH_DRAG_FACTOR, WET_SAND_PLAYER_DRAG_Y_FACTOR, false)
+	if water_count > 0 do sand_apply_drag(vel, min(f32(water_count) * WATER_PLAYER_DRAG_PER_CELL, WATER_PLAYER_DRAG_MAX) * SAND_DASH_DRAG_FACTOR, WATER_PLAYER_DRAG_Y_FACTOR, false)
+	return
 }
 
 @(private = "file")

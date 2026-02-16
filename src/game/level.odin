@@ -623,3 +623,47 @@ level_debug_grid :: proc(level: ^Level) {
 		sdl.RenderLine(game.win.renderer, sp0.x, sp0.y, sp1.x, sp1.y)
 	}
 }
+
+// Construct engine.Sand_Level_Data from game Level (caller must delete .tiles and .original_tiles)
+level_to_sand_data :: proc(level: ^Level) -> engine.Sand_Level_Data {
+	n := level.width * level.height
+	tiles := make([]engine.Sand_Tile_Kind, n)
+	original_tiles := make([]engine.Sand_Tile_Kind, n)
+	for i in 0 ..< n {
+		tiles[i] = level_tile_to_sand(level.tiles[i])
+		original_tiles[i] = level_tile_to_sand(level.original_tiles[i])
+	}
+	return engine.Sand_Level_Data {
+		width = level.width,
+		height = level.height,
+		tiles = tiles,
+		original_tiles = original_tiles,
+		sand_piles = level.sand_piles[:],
+		sand_emitters = level.sand_emitters[:],
+		water_piles = level.water_piles[:],
+		water_emitters = level.water_emitters[:],
+	}
+}
+
+@(private = "file")
+level_tile_to_sand :: proc(tile: Level_Tile_Kind) -> engine.Sand_Tile_Kind {
+	switch tile {
+	case .Solid:
+		return .Solid
+	case .Platform:
+		return .Platform
+	case .Slope_Right:
+		return .Slope_Right
+	case .Slope_Left:
+		return .Slope_Left
+	case .Slope_Ceil_Right:
+		return .Slope_Ceil_Right
+	case .Slope_Ceil_Left:
+		return .Slope_Ceil_Left
+	case .Empty, .Back_Wall, .Spawn, .Sand_Pile, .Water_Pile:
+		return .Empty
+	case .Sand_Emitter, .Water_Emitter:
+		return .Solid
+	}
+	return .Empty
+}

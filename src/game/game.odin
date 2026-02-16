@@ -107,7 +107,7 @@ game_init :: proc() {
 	player_init(&game.player)
 
 	// Sand
-	level_data := sand_level_data_from_level(&game.level)
+	level_data := level_to_sand_data(&game.level)
 	engine.sand_init(&game.sand_world, &level_data)
 	delete(level_data.tiles)
 	delete(level_data.original_tiles)
@@ -138,10 +138,7 @@ game_update :: proc(dt: f32) {
 
 game_fixed_update :: proc(dt: f32) {
 	player_fixed_update(&game.player, dt)
-	interactor := sand_interactor_from_player(&game.player)
-	engine.sand_interact(&game.sand_world, &interactor, dt)
-	sand_interactor_apply(&game.player, &interactor)
-	sand_interact_particles(&game.sand_particles, &interactor)
+	player_graphics_spawn_sand_particles(&game.sand_particles, &game.player)
 	player_sand_footprint_update(&game.sand_world, &game.player)
 	player_graphics_sand_dust_tick(&game.player)
 	engine.sand_sub_step_tick(&game.sand_world)

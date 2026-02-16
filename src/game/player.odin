@@ -41,6 +41,7 @@ Player_Graphics :: struct {
 	impact_timer:    f32,
 	impact_strength: f32,
 	impact_axis:     [2]f32,
+	last_sand_stats: engine.Sand_Interaction_Stats,
 }
 
 Player_Sensor :: struct {
@@ -107,6 +108,18 @@ player_fixed_update :: proc(player: ^Player, dt: f32) {
 	state_update(player, dt)
 	physics_update(player, dt)
 	sensor_update(player)
+
+	player.graphics.last_sand_stats = engine.sand_apply_physics(
+		&game.sand_world,
+		player.body.pos,
+		&player.body.vel,
+		PLAYER_SIZE,
+		&player.abilities.impact_pending,
+		player.sensor.sand_immersion,
+		player.state == .Dashing,
+		player.state == .Sand_Swim,
+		dt,
+	)
 }
 
 player_sand_footprint_update :: proc(world: ^engine.Sand_World, player: ^Player) {
