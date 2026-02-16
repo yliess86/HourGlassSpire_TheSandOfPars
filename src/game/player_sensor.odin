@@ -1,6 +1,6 @@
 package game
 
-import physics "../physics"
+import engine "../engine"
 import "core:fmt"
 
 Player_Sensor :: struct {
@@ -21,11 +21,11 @@ Player_Sensor :: struct {
 	on_slope_dir:         f32, // +1 uphill, -1 downhill, 0 flat
 
 	// Debug: cached raycast hits for visualization
-	debug_ground_hit:     physics.Raycast_Hit,
-	debug_slope_hit:      physics.Raycast_Hit,
-	debug_platform_hit:   physics.Raycast_Hit,
-	debug_wall_left_hit:  physics.Raycast_Hit,
-	debug_wall_right_hit: physics.Raycast_Hit,
+	debug_ground_hit:     engine.Physics_Raycast_Hit,
+	debug_slope_hit:      engine.Physics_Raycast_Hit,
+	debug_platform_hit:   engine.Physics_Raycast_Hit,
+	debug_wall_left_hit:  engine.Physics_Raycast_Hit,
+	debug_wall_right_hit: engine.Physics_Raycast_Hit,
 }
 
 player_sensor_update :: proc(player: ^Player) {
@@ -42,18 +42,18 @@ player_sensor_update :: proc(player: ^Player) {
 	on_slope: bool
 	on_slope_dir: f32
 
-	debug_ground_hit: physics.Raycast_Hit
-	debug_slope_hit: physics.Raycast_Hit
-	debug_platform_hit: physics.Raycast_Hit
-	debug_wall_left_hit: physics.Raycast_Hit
-	debug_wall_right_hit: physics.Raycast_Hit
+	debug_ground_hit: engine.Physics_Raycast_Hit
+	debug_slope_hit: engine.Physics_Raycast_Hit
+	debug_platform_hit: engine.Physics_Raycast_Hit
+	debug_wall_left_hit: engine.Physics_Raycast_Hit
+	debug_wall_right_hit: engine.Physics_Raycast_Hit
 
 	for c in game.level.ground_colliders {
 		if on_ground do break
 		origin := player.body.pos + {0, EPS}
 		max_dist := PLAYER_CHECK_GROUND_EPS + EPS
 		cross_half_size := PLAYER_SIZE / 2
-		hit := physics.raycast_rect(origin, 1, -1, max_dist, c, cross_half_size)
+		hit := engine.physics_raycast_rect(origin, 1, -1, max_dist, c, cross_half_size)
 		if hit.hit {
 			on_ground = true
 			debug_ground_hit = hit
@@ -64,12 +64,12 @@ player_sensor_update :: proc(player: ^Player) {
 	for c in game.level.side_wall_colliders {
 		if on_side_wall do break
 
-		hit_l := physics.Raycast_Hit{}
+		hit_l := engine.Physics_Raycast_Hit{}
 		{
 			origin := player.body.pos + {-PLAYER_SIZE / 2 + EPS, PLAYER_SIZE / 2 + PLAYER_SIZE / 4}
 			max_dist := PLAYER_CHECK_SIDE_WALL_EPS + EPS
 			cross_half_size := PLAYER_SIZE / 4
-			hit_l = physics.raycast_rect(origin, 0, -1, max_dist, c, cross_half_size)
+			hit_l = engine.physics_raycast_rect(origin, 0, -1, max_dist, c, cross_half_size)
 		}
 		if hit_l.hit {
 			on_side_wall = true
@@ -78,12 +78,12 @@ player_sensor_update :: proc(player: ^Player) {
 			debug_wall_left_hit = hit_l
 		}
 
-		hit_r := physics.Raycast_Hit{}
+		hit_r := engine.Physics_Raycast_Hit{}
 		{
 			origin := player.body.pos + {PLAYER_SIZE / 2 - EPS, PLAYER_SIZE / 2 + PLAYER_SIZE / 4}
 			max_dist := PLAYER_CHECK_SIDE_WALL_EPS + EPS
 			cross_half_size := PLAYER_SIZE / 4
-			hit_r = physics.raycast_rect(origin, 0, 1, max_dist, c, cross_half_size)
+			hit_r = engine.physics_raycast_rect(origin, 0, 1, max_dist, c, cross_half_size)
 		}
 		if hit_r.hit {
 			on_side_wall = true
@@ -108,7 +108,7 @@ player_sensor_update :: proc(player: ^Player) {
 		origin := player.body.pos + {0, PLAYER_STEP_HEIGHT}
 		max_dist := PLAYER_STEP_HEIGHT + PLAYER_CHECK_GROUND_EPS + EPS
 		cross_half_size := PLAYER_SIZE / 2
-		hit := physics.raycast_slope(origin, 1, -1, max_dist, c, cross_half_size)
+		hit := engine.physics_raycast_slope(origin, 1, -1, max_dist, c, cross_half_size)
 		if hit.hit {
 			on_ground = true
 			on_slope = true
@@ -119,18 +119,18 @@ player_sensor_update :: proc(player: ^Player) {
 		}
 	}
 
-	rect := physics.body_rect(&player.body)
+	rect := engine.physics_body_rect(&player.body)
 
 	for c in game.level.platform_colliders {
 		if in_platform && on_platform do break
-		if !in_platform && physics.rect_overlap(c, rect) {
+		if !in_platform && engine.physics_rect_overlap(c, rect) {
 			in_platform = true
 		}
 		if !on_platform && player.body.vel.y <= 0 {
 			origin := player.body.pos + {0, EPS}
 			max_dist := PLAYER_CHECK_GROUND_EPS + EPS
 			cross_half_size := PLAYER_SIZE / 2
-			hit := physics.raycast_rect(origin, 1, -1, max_dist, c, cross_half_size)
+			hit := engine.physics_raycast_rect(origin, 1, -1, max_dist, c, cross_half_size)
 			if hit.hit {
 				on_ground = true
 				on_platform = true
@@ -141,7 +141,7 @@ player_sensor_update :: proc(player: ^Player) {
 	}
 
 	for c in game.level.back_wall_colliders {
-		overlap := physics.rect_overlap(c, rect)
+		overlap := engine.physics_rect_overlap(c, rect)
 		if overlap {
 			on_back_wall = true
 			break
@@ -244,7 +244,10 @@ player_sensor_debug :: proc(player: ^Player, screen_pos: [2]f32) {
 		}
 		// Back wall indicator (dark cyan outline when overlapping)
 		if player.sensor.on_back_wall {
-			debug_collider_rect(physics.body_rect(&player.body), DEBUG_COLOR_COLLIDER_BACK_WALL)
+			debug_collider_rect(
+				engine.physics_body_rect(&player.body),
+				DEBUG_COLOR_COLLIDER_BACK_WALL,
+			)
 		}
 	}
 

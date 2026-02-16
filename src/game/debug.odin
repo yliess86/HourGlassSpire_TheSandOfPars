@@ -1,6 +1,6 @@
 package game
 
-import physics "../physics"
+import engine "../engine"
 import sdl "vendor:sdl3"
 
 Debug_State :: enum u8 {
@@ -57,7 +57,10 @@ debug_vector :: proc(pos: [2]f32, dir: [2]f32, color: [4]u8) {
 	sdl.RenderLine(game.win.renderer, sp.x, sp.y, sd.x, sd.y)
 }
 
-debug_collider_rect :: proc(collider_rect: physics.Rect, color: [4]u8 = DEBUG_COLOR_COLLIDER) {
+debug_collider_rect :: proc(
+	collider_rect: engine.Physics_Rect,
+	color: [4]u8 = DEBUG_COLOR_COLLIDER,
+) {
 	bottom_left := collider_rect.pos - collider_rect.size / 2
 	rect := game_world_to_screen(bottom_left, collider_rect.size)
 	debug_set_color(color)
@@ -66,7 +69,7 @@ debug_collider_rect :: proc(collider_rect: physics.Rect, color: [4]u8 = DEBUG_CO
 
 debug_ray :: proc(
 	origin, endpoint: [2]f32,
-	hit: physics.Raycast_Hit,
+	hit: engine.Physics_Raycast_Hit,
 	hit_color: [4]u8 = DEBUG_COLOR_RAY_GROUND,
 ) {
 	sp := game_world_to_screen_point(origin)
@@ -84,15 +87,15 @@ debug_ray :: proc(
 	}
 }
 
-debug_collider_platform :: proc(collider_rect: physics.Rect) {
+debug_collider_platform :: proc(collider_rect: engine.Physics_Rect) {
 	debug_collider_rect(collider_rect, DEBUG_COLOR_COLLIDER_PLATFORM)
 }
 
-debug_collider_back_wall :: proc(collider_rect: physics.Rect) {
+debug_collider_back_wall :: proc(collider_rect: engine.Physics_Rect) {
 	debug_collider_rect(collider_rect, DEBUG_COLOR_COLLIDER_BACK_WALL)
 }
 
-debug_collider_slope :: proc(collider_slope: physics.Slope) {
+debug_collider_slope :: proc(collider_slope: engine.Physics_Slope) {
 	base_x, base_y, span := collider_slope.base_x, collider_slope.base_y, collider_slope.span
 	p0, p1, p2: [2]f32
 	switch collider_slope.kind {

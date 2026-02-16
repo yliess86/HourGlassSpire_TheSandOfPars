@@ -1,7 +1,6 @@
 package game
 
 import engine "../engine"
-import physics "../physics"
 import "core:fmt"
 import sdl "vendor:sdl3"
 
@@ -99,7 +98,7 @@ game_init :: proc() {
 
 	// Apply post-config (input bindings + camera params) and snap camera to player spawn
 	game_config_post_apply()
-	game.camera.pos = physics.body_center(&game.player.body)
+	game.camera.pos = engine.physics_body_center(&game.player.body)
 }
 
 game_update :: proc(dt: f32) {
@@ -127,7 +126,7 @@ game_fixed_update :: proc(dt: f32) {
 	player_particles_step_update(&game.steps, dt)
 	engine.camera_follow(
 		&game.camera,
-		physics.body_center(&game.player.body),
+		engine.physics_body_center(&game.player.body),
 		{0, 0},
 		{game.level.world_w, game.level.world_h},
 		dt,

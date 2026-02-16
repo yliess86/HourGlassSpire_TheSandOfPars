@@ -1,6 +1,6 @@
 package game
 
-import physics "../physics"
+import engine "../engine"
 import "core:math"
 
 player_physics_apply_movement :: proc(player: ^Player, dt: f32) {
@@ -19,7 +19,7 @@ player_physics_update :: proc(player: ^Player, dt: f32) {
 	if player.fsm.current == .Dropping do player.body.flags += {.Dropping}
 	if player.fsm.current == .Grounded do player.body.flags += {.Grounded}
 
-	geom := physics.Static_Geometry {
+	geom := engine.Physics_Static_Geometry {
 		ground    = game.level.ground_colliders[:],
 		ceiling   = game.level.ceiling_colliders[:],
 		walls     = game.level.side_wall_colliders[:],
@@ -27,19 +27,19 @@ player_physics_update :: proc(player: ^Player, dt: f32) {
 		slopes    = game.level.slope_colliders[:],
 	}
 
-	cfg := physics.Solve_Config {
+	cfg := engine.Physics_Solve_Config {
 		step_height = PLAYER_STEP_HEIGHT,
 		sweep_skin  = PLAYER_SWEEP_SKIN,
 		slope_snap  = PLAYER_SLOPE_SNAP,
 		eps         = EPS,
 	}
 
-	physics.solve(&player.body, geom, cfg, dt)
+	engine.physics_solve(&player.body, geom, cfg, dt)
 }
 
 player_physics_debug :: proc(player: ^Player) {
 	if game.debug == .PLAYER || game.debug == .ALL {
-		rect := physics.body_rect(&player.body)
+		rect := engine.physics_body_rect(&player.body)
 		debug_collider_rect(rect)
 		debug_point(player.body.pos, DEBUG_COLOR_PLAYER)
 

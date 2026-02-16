@@ -1,7 +1,6 @@
 package game
 
 import engine "../engine"
-import physics "../physics"
 import "core:fmt"
 import "core:math"
 
@@ -42,7 +41,7 @@ Player_Graphics :: struct {
 }
 
 Player :: struct {
-	body:           physics.Body,
+	body:           engine.Physics_Body,
 	impact_pending: f32, // landing speed, consumed by sand_player_interact
 	abilities:      Player_Abilities,
 	graphics:       Player_Graphics,
